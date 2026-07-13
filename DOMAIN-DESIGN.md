@@ -49,6 +49,7 @@
 | createdAt | Instant | 필수 | 생성 시각(Auditing 자동 기록) |
 | updatedAt | Instant | 필수 | 수정 시각(Auditing 자동 기록) |
 | deletedAt | Instant | 선택 | 논리삭제(탈퇴) 시각 |
+| withdrawalReason | WithdrawalReason | 선택 | 탈퇴 사유(`delete` 시 세팅). 탈퇴분에서만 존재 |
 
 ### 상태 (MemberStatus)
 
@@ -70,7 +71,7 @@
 
 - 가입(register): 필수값은 email, name. 가입 즉시 주문·장바구니를 쓸 수 있다(별도 활성화 절차 없음).
 - 이메일 유니크: 활성 회원 사이에서 유니크. 탈퇴한 이메일은 재가입 가능 — DB에서 부분 유니크 인덱스(`WHERE deleted_at IS NULL`)로 강제한다.
-- 탈퇴(delete): `deletedAt` 세팅(논리삭제). 탈퇴 회원은 기본 조회에서 제외.
+- 탈퇴(delete): `deletedAt`·`withdrawalReason`(`NO_LONGER_USED`·`PRIVACY_CONCERN`·`DISSATISFIED`·`SWITCHED_SERVICE`) 세팅(논리삭제). 탈퇴 회원은 기본 조회에서 제외.
 - 주문 자격: 담기·주문은 자격 활성 회원만 — `status = ACTIVE` 이고 미탈퇴(`deletedAt IS NULL`). 체크아웃·담기에서 검증.
 - 활성 두 축 분리: 영속 활성(`deletedAt IS NULL`, SUSPENDED 포함 — 운영이 정지 회원을 조회·`reinstate`) vs 자격 활성(`status = ACTIVE`, 담기·체크아웃 자격). 조회는 정지 회원을 포함하고 자격 검증만 정지를 차단한다.
 - 탈퇴·정지 비연쇄: 탈퇴·정지해도 회원의 장바구니·발급 쿠폰·PENDING 주문은 그대로 남고, 다음 체크아웃·담기의 자격 검증에서만 차단한다(연쇄 정리 없음).
@@ -83,7 +84,7 @@
 | suspend | memberId, reason | ACTIVE→SUSPENDED, `suspensionReason` 세팅 | 미존재; 잘못된 전이 |
 | reinstate | memberId | SUSPENDED→ACTIVE, `suspensionReason` clear | 미존재; 잘못된 전이 |
 | rename | memberId, newName | `name` 갱신(`email` 불변) | 미존재 |
-| delete | memberId | `deletedAt` 세팅(논리삭제) | 미존재 |
+| delete | memberId, reason | `deletedAt`·`withdrawalReason` 세팅(논리삭제) | 미존재 |
 | getMember | memberId | 활성 회원 1행(SUSPENDED·suspensionReason 포함) | 미존재 |
 
 반환 형상(명령/조회)·거부의 예외 매핑은 `docs/coding-conventions.md`가 소유. 서비스 역할 배치·네이밍도 같은 문서가 소유한다.
@@ -124,6 +125,7 @@
 - 가격은 0원 불가.
 - 주문 가능 조건: status = ON_SALE 이고 삭제되지 않은 상품만. HIDDEN·삭제 상품은 주문 라인에 담기지 않는다.
 - 가격 변경은 이미 생성된 주문에는 영향이 없다(주문은 단가를 스냅샷으로 보관). 장바구니는 상품 현재가를 체크아웃 시점에 조회하므로 가격 변경이 반영된다.
+- 상품명·설명 변경은 등록 후 가능하다(`rename`·`changeDescription`). 이미 생성된 주문은 `productName` 스냅샷을 보관하므로 편집이 주문 내역에 소급 영향이 없다.
 - 논리삭제: `deletedAt`.
 
 ### 오퍼레이션
@@ -134,6 +136,8 @@
 | show | productId | HIDDEN→ON_SALE | 미존재; 잘못된 전이 |
 | hide | productId | ON_SALE→HIDDEN | 미존재; 잘못된 전이 |
 | changePrice | productId, newPrice | newPrice ≥ 1, 기존 주문 무영향 | 미존재; 가격 범위 미달 |
+| rename | productId, newName | `name` 갱신, 기존 주문 무영향(productName 스냅샷) | 미존재 |
+| changeDescription | productId, newDescription | `description` 갱신 | 미존재 |
 | delete | productId | `deletedAt` 세팅(논리삭제) | 미존재 |
 | getProduct(s) | productId(들) | 활성 상품 | 미존재 |
 
@@ -228,7 +232,7 @@
 - 담기 필수값: memberId, productId, quantity(≥1).
 - 담기 조건: 회원이 자격 활성(`status = ACTIVE`·미탈퇴)이고 상품이 ON_SALE 이며 삭제되지 않았을 것. 재고는 담기 시점에 검증하지 않는다(체크아웃 시점에 검증). 장바구니는 "구매 예정" 목록이다.
 - 동일 상품 재담기: 새 라인을 만들지 않고 기존 라인 수량을 합산한다(productId는 장바구니 내 유니크).
-- 수량 변경: `changeItemQuantity`는 qty ≥ 1만 허용한다(qty < 1 거부). 라인 제거는 `removeItem` 전용 — 수량 인자에 삭제 의도를 겹치지 않는다.
+- 수량 변경: `changeItemQuantity`는 qty ≥ 1만 허용한다(qty < 1 거부). 수량을 늘릴 때(newQty > 현재)는 담기와 동일 자격 게이트(회원 `status = ACTIVE`·미탈퇴 ∧ 상품 ON_SALE·미삭제)를 적용하고, 줄이거나 유지는 게이트 없이 허용한다(수요 미증가라 정지·탈퇴 회원의 정리도 가능). 라인 제거는 `removeItem` 전용 — 수량 인자에 삭제 의도를 겹치지 않는다.
 - 제거·비우기: 라인 개별 제거, 전체 비우기(clear).
 - 총액은 저장하지 않는다. 체크아웃 시 상품 현재가로 계산한다.
 - 주문 전환: 체크아웃은 장바구니 전체를 주문으로 전환한다(부분 주문 미지원). 결제 완료 후 주문된 라인을 비운다(비우기는 `OrderPaid` 이벤트 소비로 처리 — 크로스 도메인 정책 참조).
@@ -238,7 +242,7 @@
 | 연산 | 입력 | 강제 불변식 | 거부 |
 |---|---|---|---|
 | addItem | memberId, productId, qty | get-or-create, 상품 ON_SALE·미삭제, 동일 상품 수량 합산, qty ≥ 1 | 상품 미존재; 주문 불가 상품(HIDDEN·삭제); 회원 탈퇴 또는 정지 |
-| changeItemQuantity | memberId, productId, qty | qty ≥ 1로 설정 | 라인 미존재; 수량 범위 미달(qty < 1) |
+| changeItemQuantity | memberId, productId, qty | qty ≥ 1로 설정; 증량 시 담기 게이트(회원 자격 활성·상품 ON_SALE·미삭제) | 라인 미존재; 수량 범위 미달(qty < 1); (증량 시) 회원 탈퇴·정지·주문 불가 상품 |
 | removeItem | memberId, productId | 라인 제거 | 라인 미존재 |
 | clear | memberId | 전체 라인 제거 | — |
 | getCart | memberId | 회원당 장바구니 1개(없으면 빈 장바구니) | — |
@@ -372,6 +376,7 @@
 | paidAt | Instant | 선택 | 결제 완료 시각(`markPaid` 세팅) |
 | cancelledAt | Instant | 선택 | 취소 시각(`cancel` 세팅) |
 | cancellationReason | CancellationReason | 선택 | 취소 사유(`cancel` 세팅) |
+| holdReason | HoldReason | 선택 | 이행 보류 사유. ON_HOLD에서만 존재(`holdFulfillment` 세팅, `releaseFulfillment` clear) |
 | lines | Set\<OrderLine\> | 필수 | 1개 이상 |
 | createdAt | Instant | 필수 | 생성 시각(Auditing 자동 기록) |
 | updatedAt | Instant | 필수 | 수정 시각(Auditing 자동 기록) |
@@ -422,6 +427,7 @@
 | DELIVERED | 배송 완료 |
 
 - 전이: `NOT_STARTED → PREPARING → SHIPPED → DELIVERED`, `PREPARING ↔ ON_HOLD`(`holdFulfillment`/`releaseFulfillment`). 최초 NOT_STARTED. `markPaid`가 PENDING→PAID와 함께 NOT_STARTED→PREPARING을 전이한다. `ship`은 PREPARING에서만 유효(보류분은 해제 후 출고). 배송 추적·배송사 연동은 범위 밖(단일 배송·단일 이행).
+- 결제·이행 두 축은 저장상 직교하되 전이상 독립이 아니다: 모든 이행 전진은 `status == PAID`에서만 유효하고, 취소·미결제 주문의 `fulfillmentStatus`는 동결된다(취소 주문 출고 불가). `ON_HOLD ⇔ holdReason != null`(`FRAUD_REVIEW`·`ADDRESS_VERIFICATION`·`STOCK_DELAY`).
 
 ### 정책·불변식
 
@@ -431,7 +437,7 @@
 - price ≥ 1·quantity ≥ 1이라 totalAmount ≥ 1이 항상 성립한다(무료·0원 주문 없음). payAmount = 0은 전액 할인 ∧ shippingFee = 0일 때만이고(배송비가 있으면 payAmount > 0), 그 경우 결제는 PG를 생략하고 자동 승인한다.
 - 결제 완료(markPaid): PENDING에서만 PAID로. 함께 fulfillmentStatus NOT_STARTED→PREPARING, `paidAt` 세팅. 전이 후 `OrderPaid`를 커밋 후 발행한다.
 - 취소(cancel): PENDING 또는 PAID에서 CANCELLED로. PAID 취소는 `fulfillmentStatus ∈ {NOT_STARTED, PREPARING, ON_HOLD}`일 때만 허용하고 SHIPPED·DELIVERED면 거부한다(출고 이후는 반품 절차, 범위 밖). 전이 시 `cancelledAt`·`cancellationReason`(`PAYMENT_FAILED`·`STOCK_SHORTAGE`·`COUPON_CONFLICT`·`CUSTOMER_REQUEST`·`ADMIN_ACTION`)을 세팅한다. 전이는 1회만 유효하고, 후속 보상은 전이가 실제 일어난 호출에서만 태운다(중복 취소 무해). 보상 내용은 소스 상태에 따른다 — PENDING이면 재고·쿠폰 복원, PAID이면 환불 선행 후 재고·쿠폰 복원(크로스 도메인 정책 참조).
-- 이행(ship·confirmDelivery·holdFulfillment·releaseFulfillment): `ship`은 PREPARING→SHIPPED(+`shippedAt`), `confirmDelivery`는 SHIPPED→DELIVERED(+`deliveredAt`), `holdFulfillment`는 PREPARING→ON_HOLD, `releaseFulfillment`는 ON_HOLD→PREPARING(사기 심사·배송지 확인·입고 지연 중 출고 보류). 분할 배송·부분 이행·반품(RMA)은 범위 밖(단일 배송·단일 이행).
+- 이행(ship·confirmDelivery·holdFulfillment·releaseFulfillment): 모든 이행 전진은 `status == PAID`에서만 유효하다(취소·미결제 주문은 fulfillment 동결). `ship`은 PREPARING→SHIPPED(+`shippedAt`), `confirmDelivery`는 SHIPPED→DELIVERED(+`deliveredAt`), `holdFulfillment`는 PREPARING→ON_HOLD(+`holdReason`: 사기 심사·배송지 확인·입고 지연), `releaseFulfillment`는 ON_HOLD→PREPARING(`holdReason` clear). 분할 배송·부분 이행·반품(RMA)은 범위 밖(단일 배송·단일 이행).
 - 생성 후 라인 구성은 불변(수정 불가). 변경이 필요하면 취소 후 재주문.
 
 ### 오퍼레이션
@@ -441,10 +447,10 @@
 | place | memberId, 라인 스냅샷, shippingAddress, discountAmount, shippingFee | 라인 ≥ 1, `orderNumber` 생성, totalAmount 자기 계산, discountAmount ≤ totalAmount, `issuedCouponId ⟺ discount>0`, payAmount = total−discount+shippingFee, 최초 PENDING·NOT_STARTED | 빈 주문(라인 0); 회원 탈퇴 또는 정지; 할인 초과 |
 | markPaid | orderId | PENDING→PAID, 이행 NOT_STARTED→PREPARING, `paidAt` 세팅, `OrderPaid` 발행 | 미존재; 잘못된 전이 |
 | cancel | orderId, reason | PENDING·PAID → CANCELLED 1회(PAID는 이행 NOT_STARTED·PREPARING·ON_HOLD만), `cancelledAt`·`cancellationReason` 세팅, 보상은 소스 상태 함수 | 미존재; 잘못된 전이; 출고 이후(SHIPPED·DELIVERED) |
-| ship | orderId | PREPARING→SHIPPED, `shippedAt` 세팅 | 미존재; 잘못된 전이 |
-| confirmDelivery | orderId | SHIPPED→DELIVERED, `deliveredAt` 세팅 | 미존재; 잘못된 전이 |
-| holdFulfillment | orderId | PREPARING→ON_HOLD | 미존재; 잘못된 전이 |
-| releaseFulfillment | orderId | ON_HOLD→PREPARING | 미존재; 잘못된 전이 |
+| ship | orderId | `status == PAID` ∧ PREPARING→SHIPPED, `shippedAt` 세팅 | 미존재; 결제 축 PAID 아님(취소·미결제); 잘못된 전이 |
+| confirmDelivery | orderId | `status == PAID` ∧ SHIPPED→DELIVERED, `deliveredAt` 세팅 | 미존재; 결제 축 PAID 아님; 잘못된 전이 |
+| holdFulfillment | orderId, reason | `status == PAID` ∧ PREPARING→ON_HOLD, `holdReason` 세팅 | 미존재; 결제 축 PAID 아님; 잘못된 전이 |
+| releaseFulfillment | orderId | `status == PAID` ∧ ON_HOLD→PREPARING, `holdReason` clear | 미존재; 결제 축 PAID 아님; 잘못된 전이 |
 | getOrder | orderId | 주문 1행 | 미존재 |
 
 반환 형상·거부의 예외 매핑·서비스 역할 배치·네이밍은 `docs/coding-conventions.md`가 소유.
@@ -469,6 +475,8 @@
 | failureReason | FailureReason | 선택 | FAILED 사유. approve 실패 시 세팅 |
 | pgTransactionId | String | 선택 | PG 승인 거래 ID(승인 후 채워짐) |
 | pgCancelTransactionId | String | 선택 | PG 취소(환불) 거래 ID. cancel이 PG 환불 호출 시 세팅 |
+| approvedAt | Instant | 선택 | 승인 시각(approve 성공 시 세팅) |
+| cancelledAt | Instant | 선택 | 취소·환불 시각(cancel 세팅) |
 | createdAt | Instant | 필수 | 생성 시각(Auditing 자동 기록) |
 | updatedAt | Instant | 필수 | 수정 시각(Auditing 자동 기록) |
 
@@ -499,8 +507,8 @@
 | 연산 | 입력 | 강제 불변식 | 거부 |
 |---|---|---|---|
 | request | orderId, amount, method? | orderId 유니크, amount = 주문 payAmount, `amount>0 ⇔ method≠null`, 최초 REQUESTED | 주문당 결제 중복 |
-| approve | paymentId | REQUESTED→APPROVED(+pgTransactionId) 또는 FAILED(+failureReason); `payAmount == 0`이면 PG 생략 자동 승인 | 미존재; 잘못된 전이; 이미 승인된 결제 재요청 |
-| cancel | paymentId | APPROVED→CANCELLED; PG 환불 시 `pgCancelTransactionId` 세팅; `pgTransactionId == null`이면 PG 생략 | 미존재; 잘못된 전이 |
+| approve | paymentId | REQUESTED→APPROVED(+pgTransactionId·`approvedAt`) 또는 FAILED(+failureReason); `payAmount == 0`이면 PG 생략 자동 승인 | 미존재; 잘못된 전이; 이미 승인된 결제 재요청 |
+| cancel | paymentId | APPROVED→CANCELLED(+`cancelledAt`); PG 환불 시 `pgCancelTransactionId` 세팅; `pgTransactionId == null`이면 PG 생략 | 미존재; 잘못된 전이 |
 
 포트 `PaymentGateway`(approve·cancel)는 도메인이 소유하고 구현은 외부 어댑터다. 반환 형상·거부의 예외 매핑·서비스 역할 배치·네이밍은 `docs/coding-conventions.md`가 소유.
 
@@ -607,12 +615,12 @@
 
 앞선 설계·검증 리뷰를 반영한 결정이다.
 
-- 회원: `MemberStatus{ACTIVE, SUSPENDED}`(정지/해제 `suspend`/`reinstate`, 정지 사유 `suspensionReason`), 표시이름 변경 `rename`, 탈퇴는 deletedAt(status 아님), 자격 활성 = ACTIVE ∧ 미탈퇴, 가입 즉시 ACTIVE, 이메일 부분 유니크로 재가입 허용, 탈퇴·정지 비연쇄, 미배송 PAID 주문 있으면 탈퇴 거부(파사드 정책).
-- 상품: 등록 시 HIDDEN → 재고 시딩 후 `show()`로 ON_SALE, `hide`/`show` 의도 동사, 가격 1원 이상, 재고 생성은 앱 계층이 순차 조율(HIDDEN-first, 파괴적 보상 없음).
+- 회원: `MemberStatus{ACTIVE, SUSPENDED}`(정지/해제 `suspend`/`reinstate`, 정지 사유 `suspensionReason`), 표시이름 변경 `rename`, 탈퇴는 deletedAt(status 아님) + `withdrawalReason`, 자격 활성 = ACTIVE ∧ 미탈퇴, 가입 즉시 ACTIVE, 이메일 부분 유니크로 재가입 허용, 탈퇴·정지 비연쇄, 미배송 PAID 주문 있으면 탈퇴 거부(파사드 정책).
+- 상품: 등록 시 HIDDEN → 재고 시딩 후 `show()`로 ON_SALE, `hide`/`show` 의도 동사, 가격 1원 이상(`changePrice`), 상품명·설명 편집(`rename`/`changeDescription`, 주문 스냅샷 무영향), 재고 생성은 앱 계층이 순차 조율(HIDDEN-first, 파괴적 보상 없음).
 - 재고: `StockStatus{SELLABLE, SOLD_OUT, DISCONTINUED}`(수동 품절·단종을 quantity=0과 분리), 재입고 `increase`, 주문가능 = 상품 ON_SALE ∧ 재고 SELLABLE ∧ 수량, 즉시 차감(예약 모델 아님), 차감은 낙관락 가드·판매성은 체크아웃 게이트, 복원은 status 무관 가산·재시도 안전(멱등 아님, 전이 게이트로 1회 복원).
 - 쿠폰: 할인은 `Discount` 값 객체(sealed Fixed/Rate, 알고리즘·불변식 내재), `ValidityPeriod`는 발급 가능 기간, 발급분 사용 기한은 `IssuedCoupon.expiresAt`(발급시각 + `usageValidDays`)로 발급창과 분리, 정책 상태 ACTIVE↔DISABLED(`disable`/`enable`)로 발급 가능·중지, 발급은 ACTIVE·발급기간·회원당 1회, 사용은 주문 생성 이후 확정(정책 status 재검사 없음 — 발급분 자격만), 산출 할인 0이면 적용 거부, 만료는 `expiresAt` 판정(EXPIRED 상태 없음), 취소 시 복원.
-- 주문: 라인·배송지 스냅샷, `orderNumber`, 결제 축 status와 별도 이행 축 `fulfillmentStatus{NOT_STARTED→PREPARING→SHIPPED→DELIVERED, PREPARING↔ON_HOLD}`(`ship`/`confirmDelivery`/`holdFulfillment`/`releaseFulfillment`, markPaid가 PREPARING 전이), 출고 후 취소 금지, `paidAt`·`cancelledAt`·`cancellationReason` 시각·사유, 배송비 `shippingFee`(payAmount = total−discount+shippingFee), 불변식 `issuedCouponId ⟺ discountAmount>0`, totalAmount 자기 계산·discountAmount ≤ totalAmount 자기 강제, 할인·payAmount 서버 계산, 취소는 PENDING·PAID 모두(보상은 소스 상태 함수).
-- 결제: `@Version` 없음, 주문당 1행, `PaymentMethod{CARD, EASY_PAY, BANK_TRANSFER}`(동기 수단, `amount>0 ⇔ method≠null`), FAILED 사유 `failureReason`, 승인·취소 거래 ID 분리(`pgTransactionId`/`pgCancelTransactionId`), 0원은 PG 생략 자동 승인, 도메인 이벤트 없음.
+- 주문: 라인·배송지 스냅샷, `orderNumber`, 결제 축 status와 별도 이행 축 `fulfillmentStatus{NOT_STARTED→PREPARING→SHIPPED→DELIVERED, PREPARING↔ON_HOLD}`(`ship`/`confirmDelivery`/`holdFulfillment`/`releaseFulfillment`, markPaid가 PREPARING 전이, 이행 전진은 status=PAID에서만 — 취소 주문 출고 불가), 보류 사유 `holdReason`, 출고 후 취소 금지, `paidAt`·`cancelledAt`·`cancellationReason` 시각·사유, 배송비 `shippingFee`(payAmount = total−discount+shippingFee), 불변식 `issuedCouponId ⟺ discountAmount>0`, totalAmount 자기 계산·discountAmount ≤ totalAmount 자기 강제, 할인·payAmount 서버 계산, 취소는 PENDING·PAID 모두(보상은 소스 상태 함수).
+- 결제: `@Version` 없음, 주문당 1행, `PaymentMethod{CARD, EASY_PAY, BANK_TRANSFER}`(동기 수단, `amount>0 ⇔ method≠null`), FAILED 사유 `failureReason`, 승인·취소 거래 ID 분리(`pgTransactionId`/`pgCancelTransactionId`), 업무 시각 `approvedAt`/`cancelledAt`, 0원은 PG 생략 자동 승인, 도메인 이벤트 없음.
 - 정합: 핵심은 파사드 동기 조율 + 동기 보상, 주문 PENDING을 사가 앵커로 먼저 생성(order-first), 유일 이벤트는 `OrderPaid → 장바구니 비우기`.
 - 표기: 각 도메인에 오퍼레이션 카탈로그(연산·입력·강제 불변식·거부[도메인 표현])를 두고, 반환 형상·ErrorCode·HTTP status·동시성 메커니즘은 `docs/`가 소유(참조).
 - Money: `common-core` 순수 값 타입, 컨버터는 `common-jpa` 단일. 배송지 `Address`는 `@Embeddable`.
