@@ -91,61 +91,106 @@
 
 ## 2. 상품 (product)
 
-판매 상품의 카탈로그 정보·가격을 소유한다. 재고 수량은 별도 재고 도메인이 소유한다(여기 두지 않는다).
+판매 상품의 카탈로그 그룹(`Product`)과 그 판매·재고 단위인 상품변형(`ProductVariant`)을 소유한다. 카탈로그 정보는 `Product`가, 판매가·옵션은 변형이 소유하고, 재고 수량은 별도 재고 도메인이 소유한다. 그룹과 변형은 생명주기가 달라(변형은 시간차 추가·개별 비활성/은퇴·개별 가격) 서로 다른 애그리거트이고 `UUID productId`로 잇는다(coupon 정책·발급분과 같은 두 루트 구조).
 
-- 애그리거트 루트: `Product`
-- 스키마/테이블: `product` / `product`
+- 애그리거트 루트: `Product`(카탈로그 그룹), `ProductVariant`(판매·재고 단위)
+- 스키마/테이블: `product` / `product`, `product_variant`
 
-### 필드
+### Product 필드
 
 | 필드 | 타입 | 필수 | 제약·설명 |
 |---|---|---|---|
 | id | UUID | 필수 | PK, UUIDv7 |
 | name | String | 필수 | 상품명 |
 | description | String | 선택 | 상세 설명 |
-| price | Money(VO) | 필수 | 판매가. 1 이상(무료 상품 미지원) |
 | status | ProductStatus | 필수 | 아래 상태표 |
 | createdAt | Instant | 필수 | 생성 시각(Auditing 자동 기록) |
 | updatedAt | Instant | 필수 | 수정 시각(Auditing 자동 기록) |
 | deletedAt | Instant | 선택 | 논리삭제 시각 |
 
+- 판매가는 `Product`에 두지 않는다(변형이 소유). 카탈로그 대표가는 활성 변형 가격에서 파생하는 조회이며 저장하지 않는다(집계·가격대 최적화는 범위 밖).
+
 ### 상태 (ProductStatus)
 
 | 상태 | 의미 |
 |---|---|
-| ON_SALE | 판매중. 카탈로그 노출·주문 가능 |
-| HIDDEN | 숨김. 노출·주문 불가(관리자 일시 중지, 또는 재고 시딩 전 미게시) |
+| ON_SALE | 판매중. 카탈로그 노출(주문 가능 여부는 변형·재고에서 파생) |
+| HIDDEN | 숨김. 그룹 전체 노출·주문 불가(관리자 일시 중지, 또는 변형·재고 시딩 전 미게시) |
 
-- 전이: `ON_SALE ↔ HIDDEN`. 카탈로그 품절 표시는 재고 `quantity = 0` 또는 재고 `status ≠ SELLABLE`에서 파생한다(품절을 상품 상태로 두지 않는다).
+- 전이: `ON_SALE ↔ HIDDEN`. 카탈로그 노출은 `ON_SALE` ∧ 미삭제 ∧ ACTIVE 변형 1개 이상일 때다. ACTIVE 변형이 0(전부 DISABLED·RETIRED)이면 제공할 것이 없어 노출하지 않는다(품절과 구분). 품절 표시는 ACTIVE 변형이 모두 소진(각 변형 재고 `quantity = 0` 또는 재고 `status ≠ SELLABLE`)일 때 파생하며 상품은 계속 노출한다(품절을 상품 상태로 두지 않는다).
 
 ### 정책·불변식
 
-- 등록(register): 필수값 name, price(>0). 최초 상태 HIDDEN. 상품은 재고 파트너가 생기기 전엔 주문 가능하면 안 되므로, 앱 계층이 초기 재고 생성 성공 후 `show()`로 ON_SALE 전환한다(재고 도메인·크로스 도메인 정책 참조).
-- 노출 전환: `hide()`(ON_SALE→HIDDEN)·`show()`(HIDDEN→ON_SALE). HIDDEN은 관리자 일시 중지와 재고 시딩 전 미게시를 겸한다(별도 DRAFT 상태를 두지 않아 죽은 상태를 늘리지 않는다).
-- 가격은 0원 불가.
-- 주문 가능 조건: status = ON_SALE 이고 삭제되지 않은 상품만. HIDDEN·삭제 상품은 주문 라인에 담기지 않는다.
-- 가격 변경은 이미 생성된 주문에는 영향이 없다(주문은 단가를 스냅샷으로 보관). 장바구니는 상품 현재가를 체크아웃 시점에 조회하므로 가격 변경이 반영된다.
+- 등록(register): 필수값 name. 최초 상태 HIDDEN. 상품은 판매 가능한 변형·재고가 생기기 전엔 주문 가능하면 안 되므로, 앱 계층이 첫 변형 생성·재고 시딩·변형 활성화 성공 후 `show()`로 ON_SALE 전환한다(크로스 도메인 정책 참조).
+- 노출 전환: `hide()`(ON_SALE→HIDDEN)·`show()`(HIDDEN→ON_SALE). HIDDEN은 관리자 일시 중지와 변형·재고 시딩 전 미게시를 겸한다(별도 DRAFT 상태를 두지 않아 죽은 상태를 늘리지 않는다).
+- 주문 가능 조건은 상품 단독으로 정해지지 않는다: `ON_SALE` ∧ 미삭제 상품의 ACTIVE 변형 중 재고가 받쳐주는 것만 주문 라인에 담긴다(합성은 크로스 도메인 정책이 소유). HIDDEN·삭제 상품은 어떤 변형도 담기지 않는다.
 - 상품명·설명 변경은 등록 후 가능하다(`rename`·`changeDescription`). 이미 생성된 주문은 `productName` 스냅샷을 보관하므로 편집이 주문 내역에 소급 영향이 없다.
-- 논리삭제: `deletedAt`.
+- 논리삭제: `deletedAt`. 상품 소프트삭제는 변형을 연쇄 삭제하지 않는다(변형은 `deletedAt`이 없다). 삭제·HIDDEN 상품의 변형은 주문가능 합성의 상품 게이트가 거른다 — 모든 변형-가용성 조회(카탈로그·장바구니 표시·담기·체크아웃)가 변형의 상품 `ON_SALE`·미삭제를 교차 확인한다.
 
-### 오퍼레이션
+### Product 오퍼레이션
 
 | 연산 | 입력 | 강제 불변식 | 거부 |
 |---|---|---|---|
-| register | name, price, description? | price ≥ 1, 최초 HIDDEN | 가격 범위 미달 |
+| register | name, description? | 최초 HIDDEN | — |
 | show | productId | HIDDEN→ON_SALE | 미존재; 잘못된 전이 |
 | hide | productId | ON_SALE→HIDDEN | 미존재; 잘못된 전이 |
-| changePrice | productId, newPrice | newPrice ≥ 1, 기존 주문 무영향 | 미존재; 가격 범위 미달 |
 | rename | productId, newName | `name` 갱신, 기존 주문 무영향(productName 스냅샷) | 미존재 |
 | changeDescription | productId, newDescription | `description` 갱신 | 미존재 |
 | delete | productId | `deletedAt` 세팅(논리삭제) | 미존재 |
-| getProduct(s) | productId(들) | 활성 상품 | 미존재 |
+| getProduct(s) | productId(들) | 활성 상품(가격 미포함) | 미존재 |
+
+### ProductVariant 필드 (판매·재고 단위)
+
+| 필드 | 타입 | 필수 | 제약·설명 |
+|---|---|---|---|
+| id | UUID | 필수 | PK, UUIDv7 |
+| productId | UUID | 필수 | 소속 상품 참조(루트 간 ID 참조) |
+| price | Money(VO) | 필수 | 변형 판매가. 1 이상(무료 미지원) |
+| status | ProductVariantStatus | 필수 | 아래 상태표. 최초 DISABLED |
+| optionSignature | String | 필수 | 옵션 조합 정규화 키. 옵션 없으면 "". 아래 옵션 모델 |
+| optionLabel | String | 선택 | 표시 라벨("Red / L"). 옵션 없으면 null |
+| createdAt | Instant | 필수 | 생성 시각(Auditing 자동 기록) |
+| updatedAt | Instant | 필수 | 수정 시각(Auditing 자동 기록) |
+
+- 소프트삭제하지 않는다(은퇴는 RETIRED 상태). 낙관락(`@Version`)을 두지 않는다 — 가격·상태 변경은 관리자 저경합이라 기본(last-write-wins)을 따르고, 경합 민감한 수량 차감은 재고가 소유한다.
+
+### 상태 (ProductVariantStatus)
+
+| 상태 | 의미 |
+|---|---|
+| ACTIVE | 판매 제공(상품 ON_SALE·재고 SELLABLE·수량이면 주문 가능) |
+| DISABLED | 카탈로그 제공 중단(되돌릴 수 있음). 재고 시딩 전 초기 상태이자 일시 중단 |
+| RETIRED | 은퇴. 재제공·재가격·재전이 없는 종료 상태 |
+
+- 전이: `ACTIVE ↔ DISABLED`, `{ACTIVE, DISABLED} → RETIRED`(종료). 최초 DISABLED — 재고 시딩 후 `enable`로 ACTIVE 전환한다(크로스 도메인 정책 참조). RETIRED는 완전 종료라 `changePrice`·`enable`·`disable`·`retire`를 모두 거부한다.
+- 종료를 `deletedAt`이 아니라 status로 두는 것은 재고 `DISCONTINUED`와 같은 선택이다(소프트삭제하지 않는 루트의 종료). 조회가 은퇴 변형을 이력으로 반환해야 해 `deletedAt` 기반 소프트삭제 finder 규약을 피한다.
+- DISABLED(카탈로그측 제공 중단)와 재고 `SOLD_OUT`(운영측 판매 보류)은 소유자·사유가 다른 두 축이다(상품 `ON_SALE`·재고 `SELLABLE`이 이미 별 축인 것과 동형). RETIRED(카탈로그 은퇴)와 재고 `DISCONTINUED`(재입고 없음)도 서로 다른 도메인이 기록하는 다른 종료 의도이며 상호 파생되지 않아 별도로 둔다.
+
+### ProductVariant 정책·불변식
+
+- 생성(create): 필수값 productId, price(≥1), 옵션 목록(선택). 최초 DISABLED. `(product_id, option_signature)`에서 비-RETIRED 변형이 유니크하다. 옵션 조합은 생성 시 확정·불변이며 조합 변경은 새 변형이다(add-only).
+- 가격 변경(changePrice): newPrice ≥ 1. 이미 생성된 주문에는 영향이 없다(OrderLine이 단가를 스냅샷으로 보관). 장바구니는 변형 현재가를 체크아웃 시점에 조회한다. RETIRED는 거부.
+- 활성/비활성/은퇴(enable·disable·retire): 관리자 카탈로그 생명주기이며 놓인 PENDING·PAID 주문을 소급하지 않고 신규 주문만 막는다.
+- 유니크·재등록: 유니크는 부분(`status <> RETIRED`)이라 한 상품·한 옵션 조합에 비-RETIRED 변형이 최대 1개, RETIRED는 여럿 공존한다. 은퇴한 조합은 새 변형(새 variantId)으로 재등록할 수 있다(member.email 부분 유니크가 재가입을 허용하는 것과 같은 메커니즘). 시그니처 기준 조회와 생성 존재검사는 인덱스 술어와 같은 `status <> RETIRED`로 맞춘다.
+- 옵션 모델: 변형은 옵션을 optionSignature(유니크 키)와 optionLabel(표시)로 평탄 보관한다. 생성 입력(옵션명→값 목록)에서 파생·고정하며 구조적 옵션 목록·상품 단위 옵션 타입 스키마·옵션 카탈로그는 두지 않는다(범위 밖). optionSignature는 옵션명·값을 trim·case-fold(유니코드 정규화 포함)하고, 옵션명이 변형 내 유니크·비어있지 않으며, 구분자 문자를 값에서 금지하고(위반 시 예외), 옵션명 기준 정렬해 정규 문자열로 조인한다. 옵션이 없으면 "". 불변식 `optionSignature = "" ⟺ optionLabel = null`.
+- 재고 관계: 변형당 재고 1행(재고 도메인 소유). 은퇴는 재고 행을 건드리지 않는다(주문가능은 변형 ≠ ACTIVE로 이미 닫힘). 은퇴 조합을 재등록하면 새 변형에 새 재고 행이 생기고 옛 변형의 재고 행은 남는다(옛 주문 취소 복원용, "재고 행 소프트삭제 안 함"과 정합).
+
+### ProductVariant 오퍼레이션
+
+| 연산 | 입력 | 강제 불변식 | 거부 |
+|---|---|---|---|
+| create | productId, price, options? | price ≥ 1, 비-RETIRED `(product_id, option_signature)` 유니크, 옵션명 유니크·비어있지 않음, 최초 DISABLED | 상품 미존재; 옵션 조합 중복(비-RETIRED); 가격 미달; 옵션 입력 오류 |
+| enable | variantId | DISABLED→ACTIVE | 미존재; 잘못된 전이(RETIRED 포함) |
+| disable | variantId | ACTIVE→DISABLED | 미존재; 잘못된 전이(RETIRED 포함) |
+| changePrice | variantId, newPrice | newPrice ≥ 1, RETIRED 아님, 기존 주문 무영향(스냅샷) | 미존재; 가격 미달; RETIRED |
+| retire | variantId | {ACTIVE, DISABLED}→RETIRED | 미존재; 이미 은퇴 |
+| getVariant(s) | variantId(들) | 변형 조회(시그니처 조회는 `status <> RETIRED` 필터) | 미존재 |
 
 반환 형상·거부의 예외 매핑·서비스 역할 배치·네이밍은 `docs/coding-conventions.md`가 소유.
 
 ## 3. 재고 (stock)
 
-상품별 재고 수량과 그 차감·복원을 소유한다. 동시 주문 경합이 실재하는 도메인이라 낙관락(`@Version`)을 둔다.
+변형별 재고 수량과 그 차감·복원을 소유한다. 동시 주문 경합이 실재하는 도메인이라 낙관락(`@Version`)을 둔다.
 
 - 애그리거트 루트: `Stock`
 - 스키마/테이블: `stock` / `stock`
@@ -155,7 +200,7 @@
 | 필드 | 타입 | 필수 | 제약·설명 |
 |---|---|---|---|
 | id | UUID | 필수 | PK, UUIDv7 |
-| productId | UUID | 필수 | 상품 참조(유니크 — 상품당 재고 1행) |
+| variantId | UUID | 필수 | 변형 참조(유니크 — 변형당 재고 1행) |
 | quantity | int | 필수 | 가용 수량. 0 이상 |
 | status | StockStatus | 필수 | 아래 상태표 |
 | version | long | 필수 | 낙관락 버전(기본 0) |
@@ -174,27 +219,27 @@
 
 ### 정책·불변식
 
-- 생성(create): 상품 등록 시 초기 수량으로 1행 생성. 상품당 정확히 1행(productId 유니크). 초기 수량 0 이상, 최초 status SELLABLE.
+- 생성(create): 변형 생성 시 초기 수량으로 1행 생성. 변형당 정확히 1행(variantId 유니크). 초기 수량 0 이상, 최초 status SELLABLE.
 - 차감(deduct, n): quantity ≥ n 일 때만 quantity -= n. 부족하면 재고부족 도메인 예외(주문 중단). 동시 차감은 낙관락으로 직렬화되어 오버셀이 없다(충돌 응답·재시도 메커니즘은 `docs/entity-persistence.md` 소유).
 - 복원(restore, n): quantity += n. 주문 취소·결제 실패 보상에서 호출. status와 무관하게 항상 허용한다(SOLD_OUT·DISCONTINUED여도 물리 반환분을 복원). 복원은 가산이라 교환법칙이 성립하므로 낙관락 충돌 시 재시도해도 오버셀 위험이 없다(가산·재시도 안전, 멱등은 아님 — 크로스 도메인 정책 참조).
-- 주문 가능(orderability): 상품 `status = ON_SALE` ∧ 미삭제 ∧ 재고 `status = SELLABLE` ∧ `quantity ≥ 주문 수량`. SOLD_OUT·DISCONTINUED는 수량이 남아도 주문 불가. 판매성(`status = SELLABLE`) 검증은 체크아웃에서 게이트하고 `deduct`의 수량 가드는 그대로 둔다(deduct 불변식 미변경).
+- 주문 가능(orderability) 합성은 재고 단독이 아니다: 상품 `ON_SALE`·미삭제 ∧ 변형 `ACTIVE` ∧ 재고 `status = SELLABLE` ∧ `quantity ≥ 주문 수량`이며, 이 합성은 크로스 도메인 정책(체크아웃)이 소유한다. 재고는 자기 status·수량만 소유한다 — SOLD_OUT·DISCONTINUED는 수량이 남아도 판매 불가이고, 판매성(`status = SELLABLE`) 검증은 체크아웃 게이트가, `deduct`의 수량 가드는 그대로 둔다(deduct 불변식 미변경).
 - 상태 전이 비연쇄: `markSoldOut`·`markSellable`·`discontinue`는 이미 놓인 PENDING·PAID 주문을 소급하지 않고 신규 주문만 막는다.
 - quantity는 음수가 될 수 없다(차감 가드가 보장).
-- 재고 행은 소프트삭제하지 않는다. 상품이 나중에 삭제돼도 복원이 항상 대상 행을 찾으므로 취소·환불 보상이 성립한다.
+- 재고 행은 소프트삭제하지 않는다. 변형이 은퇴(RETIRED)하거나 상품이 삭제돼도 복원이 항상 대상 행(variantId)을 찾으므로 취소·환불 보상이 성립한다.
 - 재입고(increase, n): quantity += n. 신규 물량 입고로 취소 보상 반환(`restore`)과 별개 의도다. DISCONTINUED이면 거부(단종 재입고 불가). 자연 소진(`quantity = 0`, SELLABLE)이 영구 품절로 굳지 않게 한다.
 
 ### 오퍼레이션
 
 | 연산 | 입력 | 강제 불변식 | 거부 |
 |---|---|---|---|
-| create | productId, 초기수량 | productId 유니크, 수량 ≥ 0, 최초 SELLABLE | productId 중복 |
-| markSoldOut | productId | SELLABLE→SOLD_OUT | 미존재; 잘못된 전이 |
-| markSellable | productId | SOLD_OUT→SELLABLE | 미존재; 잘못된 전이 |
-| discontinue | productId | {SELLABLE, SOLD_OUT}→DISCONTINUED | 미존재; 이미 단종 |
-| increase | productId, n | quantity += n; DISCONTINUED이면 거부 | 미존재; 단종 |
-| deduct | productId, n | quantity ≥ n 일 때만 quantity -= n | 재고 부족 |
-| restore | productId, n | quantity += n (status 무관, 가산·재시도 안전, 멱등 아님) | — |
-| getByProductId | productId | 상품당 재고 1행 | 미존재 |
+| create | variantId, 초기수량 | variantId 유니크, 수량 ≥ 0, 최초 SELLABLE | variantId 중복 |
+| markSoldOut | variantId | SELLABLE→SOLD_OUT | 미존재; 잘못된 전이 |
+| markSellable | variantId | SOLD_OUT→SELLABLE | 미존재; 잘못된 전이 |
+| discontinue | variantId | {SELLABLE, SOLD_OUT}→DISCONTINUED | 미존재; 이미 단종 |
+| increase | variantId, n | quantity += n; DISCONTINUED이면 거부 | 미존재; 단종 |
+| deduct | variantId, n | quantity ≥ n 일 때만 quantity -= n | 재고 부족 |
+| restore | variantId, n | quantity += n (status 무관, 가산·재시도 안전, 멱등 아님) | — |
+| getByVariantId | variantId | 변형당 재고 1행 | 미존재 |
 
 반환 형상·거부의 예외 매핑·서비스 역할 배치·네이밍은 `docs/coding-conventions.md`가 소유.
 
@@ -221,7 +266,7 @@
 |---|---|---|---|
 | id | UUID | 필수 | PK, UUIDv7 |
 | (cart) | Cart | 필수 | 부모 참조(애그리거트 내부 연관) |
-| productId | UUID | 필수 | 상품 참조. 한 장바구니 내 유니크 |
+| variantId | UUID | 필수 | 변형 참조. 한 장바구니 내 유니크 |
 | quantity | int | 필수 | 1 이상 |
 | createdAt | Instant | 필수 | 생성 시각(Auditing 자동 기록) |
 | updatedAt | Instant | 필수 | 수정 시각(Auditing 자동 기록) |
@@ -229,21 +274,21 @@
 ### 정책·불변식
 
 - 회원당 장바구니 1개. 최초 담기 요청 시 없으면 생성한다(lazy get-or-create). 회원 가입과 결합하지 않는다.
-- 담기 필수값: memberId, productId, quantity(≥1).
-- 담기 조건: 회원이 자격 활성(`status = ACTIVE`·미탈퇴)이고 상품이 ON_SALE 이며 삭제되지 않았을 것. 재고는 담기 시점에 검증하지 않는다(체크아웃 시점에 검증). 장바구니는 "구매 예정" 목록이다.
-- 동일 상품 재담기: 새 라인을 만들지 않고 기존 라인 수량을 합산한다(productId는 장바구니 내 유니크).
-- 수량 변경: `changeItemQuantity`는 qty ≥ 1만 허용한다(qty < 1 거부). 수량을 늘릴 때(newQty > 현재)는 담기와 동일 자격 게이트(회원 `status = ACTIVE`·미탈퇴 ∧ 상품 ON_SALE·미삭제)를 적용하고, 줄이거나 유지는 게이트 없이 허용한다(수요 미증가라 정지·탈퇴 회원의 정리도 가능). 라인 제거는 `removeItem` 전용 — 수량 인자에 삭제 의도를 겹치지 않는다.
+- 담기 필수값: memberId, variantId, quantity(≥1).
+- 담기 조건: 회원이 자격 활성(`status = ACTIVE`·미탈퇴)이고 변형이 ACTIVE이며 변형의 상품이 ON_SALE·미삭제일 것. 재고는 담기 시점에 검증하지 않는다(체크아웃 시점에 검증). 장바구니는 "구매 예정" 목록이다.
+- 동일 변형 재담기: 새 라인을 만들지 않고 기존 라인 수량을 합산한다(variantId는 장바구니 내 유니크).
+- 수량 변경: `changeItemQuantity`는 qty ≥ 1만 허용한다(qty < 1 거부). 수량을 늘릴 때(newQty > 현재)는 담기와 동일 자격 게이트(회원 자격 활성 ∧ 변형 ACTIVE ∧ 변형의 상품 ON_SALE·미삭제)를 적용하고, 줄이거나 유지는 게이트 없이 허용한다(수요 미증가라 정지·탈퇴 회원, 비활성·은퇴 변형·삭제 상품 라인의 정리도 가능). 라인 제거는 `removeItem` 전용 — 수량 인자에 삭제 의도를 겹치지 않는다.
 - 제거·비우기: 라인 개별 제거, 전체 비우기(clear).
-- 총액은 저장하지 않는다. 체크아웃 시 상품 현재가로 계산한다.
+- 총액은 저장하지 않는다. 체크아웃 시 변형 현재가로 계산한다.
 - 주문 전환: 체크아웃은 장바구니 전체를 주문으로 전환한다(부분 주문 미지원). 결제 완료 후 주문된 라인을 비운다(비우기는 `OrderPaid` 이벤트 소비로 처리 — 크로스 도메인 정책 참조).
 
 ### 오퍼레이션
 
 | 연산 | 입력 | 강제 불변식 | 거부 |
 |---|---|---|---|
-| addItem | memberId, productId, qty | get-or-create, 상품 ON_SALE·미삭제, 동일 상품 수량 합산, qty ≥ 1 | 상품 미존재; 주문 불가 상품(HIDDEN·삭제); 회원 탈퇴 또는 정지 |
-| changeItemQuantity | memberId, productId, qty | qty ≥ 1로 설정; 증량 시 담기 게이트(회원 자격 활성·상품 ON_SALE·미삭제) | 라인 미존재; 수량 범위 미달(qty < 1); (증량 시) 회원 탈퇴·정지·주문 불가 상품 |
-| removeItem | memberId, productId | 라인 제거 | 라인 미존재 |
+| addItem | memberId, variantId, qty | get-or-create, 변형 ACTIVE·변형의 상품 ON_SALE·미삭제, 동일 변형 수량 합산, qty ≥ 1 | 변형 미존재; 주문 불가(변형 비활성·상품 HIDDEN·삭제); 회원 탈퇴 또는 정지 |
+| changeItemQuantity | memberId, variantId, qty | qty ≥ 1로 설정; 증량 시 담기 게이트(회원 자격 활성·변형 ACTIVE·상품 ON_SALE·미삭제) | 라인 미존재; 수량 범위 미달(qty < 1); (증량 시) 회원 탈퇴·정지·주문 불가 |
+| removeItem | memberId, variantId | 라인 제거 | 라인 미존재 |
 | clear | memberId | 전체 라인 제거 | — |
 | getCart | memberId | 회원당 장바구니 1개(없으면 빈 장바구니) | — |
 
@@ -351,7 +396,7 @@
 
 ## 6. 주문 (order)
 
-주문과 주문 라인을 소유한다. 라인은 주문 시점의 상품명·단가를, 배송지는 주문 시점 값을 스냅샷으로 보관한다(상품·회원 변경과 무관하게 내역을 보존). 정본 애그리거트 예시다.
+주문과 주문 라인을 소유한다. 라인은 주문 시점의 변형·상품명·옵션·단가를, 배송지는 주문 시점 값을 스냅샷으로 보관한다(상품·변형·회원 변경과 무관하게 내역을 보존). 정본 애그리거트 예시다.
 
 - 애그리거트 루트: `Order`, 자식: `OrderLine`
 - 스키마/테이블: `ordering` / `orders`, `order_line` (예약어 회피 divergence — 용어집 참조)
@@ -397,9 +442,11 @@
 |---|---|---|---|
 | id | UUID | 필수 | PK, UUIDv7 |
 | (order) | Order | 필수 | 부모 참조(애그리거트 내부 연관) |
-| productId | UUID | 필수 | 상품 참조 |
+| variantId | UUID | 필수 | 변형 참조. 재고 복원·SKU 식별 키 |
+| productId | UUID | 필수 | 상품 그룹 참조(자기완결 스냅샷) |
 | productName | String | 필수 | 주문 시점 상품명 스냅샷 |
-| unitPrice | Money | 필수 | 주문 시점 단가 스냅샷 |
+| optionLabel | String | 선택 | 주문 시점 변형 옵션 표시 스냅샷("Red / L"). 옵션 없으면 null |
+| unitPrice | Money | 필수 | 주문 시점 변형 단가 스냅샷 |
 | quantity | int | 필수 | 1 이상 |
 | createdAt | Instant | 필수 | 생성 시각(Auditing 자동 기록) |
 | updatedAt | Instant | 필수 | 수정 시각(Auditing 자동 기록) |
@@ -432,7 +479,7 @@
 ### 정책·불변식
 
 - 생성(place): 라인 1개 이상. 회원은 자격 활성(`status = ACTIVE`·미탈퇴). 배송지 필수. `orderNumber` 생성. 최초 status PENDING, fulfillmentStatus NOT_STARTED.
-- 각 라인은 주문 시점 상품명·단가를, 배송지는 주문 시점 값을 복사한다(스냅샷). 이후 상품·회원 변경이 주문 내역을 바꾸지 않는다.
+- 각 라인은 주문 시점 변형·상품명·옵션 표시·단가(variantId·productId·optionLabel·productName·unitPrice)를, 배송지는 주문 시점 값을 복사한다(스냅샷). 자기완결 스냅샷이라 이후 상품·변형·회원 변경이 주문 내역을 바꾸지 않고, 이력 조회가 변형·상품으로 fan-out하지 않는다. variantId는 재고 복원·SKU 식별 키다.
 - 금액 불변식: `Order.place`가 자기 라인에서 totalAmount = Σ(라인 unitPrice × quantity)를 계산한다. discountAmount는 서버가 쿠폰 정책으로 산출해 입력하되(클라이언트 전달값 불신), Order 루트가 `discountAmount ≤ totalAmount`와 `issuedCouponId != null ⟺ discountAmount > 0`(쿠폰 없는 유령 할인·쿠폰 있는 0원 할인 동시 배제)을 자기 강제한다(위반 시 도메인 예외). payAmount = totalAmount − discountAmount + shippingFee ≥ 0.
 - price ≥ 1·quantity ≥ 1이라 totalAmount ≥ 1이 항상 성립한다(무료·0원 주문 없음). payAmount = 0은 전액 할인 ∧ shippingFee = 0일 때만이고(배송비가 있으면 payAmount > 0), 그 경우 결제는 PG를 생략하고 자동 승인한다.
 - 결제 완료(markPaid): PENDING에서만 PAID로. 함께 fulfillmentStatus NOT_STARTED→PREPARING, `paidAt` 세팅. 전이 후 `OrderPaid`를 커밋 후 발행한다.
@@ -520,9 +567,9 @@
 
 전진 경로(파사드, 동기, 각 서비스 자기 트랜잭션):
 
-1. 검증(읽기): 회원 자격 활성(`status = ACTIVE`·미탈퇴); 장바구니가 비어 있지 않을 것; 각 상품 ON_SALE·미삭제; 각 재고 `status = SELLABLE` 이고 수량이 주문 수량 이상; 쿠폰이 있으면 본인·ISSUED·사용 기한(`expiresAt`)·(할인 전)최소주문금액·산출 할인 > 0 충족. 상품 ON_SALE(카탈로그 가시성)과 재고 SELLABLE(재고 가용성)은 직교한 두 게이트다. 할인액·payAmount 계산. 어느 라인이든 주문 불가·재고 부족이면 전체 체크아웃을 거부한다(부분 주문 없음). 문제 라인은 자동 제거하지 않으며 사용자가 장바구니에서 직접 뺀다.
-2. 주문 생성(PENDING): 라인·배송지 스냅샷, 서버 계산 할인 반영. Order가 totalAmount 자기 계산·discount ≤ total 가드. orderId 확정. 이 PENDING 주문이 이후 부작용의 사가 앵커다.
-3. 재고 차감: 라인별 `deduct`. 어느 라인이든 실패하면 앞서 차감한 라인을 복원 + 주문 취소(→CANCELLED) 후 중단.
+1. 검증(읽기): 회원 자격 활성(`status = ACTIVE`·미탈퇴); 장바구니가 비어 있지 않을 것; 각 라인의 변형 ACTIVE ∧ 변형의 상품 ON_SALE·미삭제 ∧ 재고 `status = SELLABLE`이고 수량이 주문 수량 이상; 쿠폰이 있으면 본인·ISSUED·사용 기한(`expiresAt`)·(할인 전)최소주문금액·산출 할인 > 0 충족. 상품 ON_SALE·변형 ACTIVE(카탈로그 가시성의 그룹·SKU 두 수준)과 재고 SELLABLE(재고 가용성)은 서로 다른 게이트다. 변형·상품·재고 조회의 부재·삭제·미시딩은 예외가 아니라 주문 불가로 강등한다. 할인액·payAmount 계산. 어느 라인이든 주문 불가·재고 부족이면 전체 체크아웃을 거부한다(부분 주문 없음). 문제 라인은 자동 제거하지 않으며 사용자가 장바구니에서 직접 뺀다.
+2. 주문 생성(PENDING): 파사드가 각 라인을 `variantId`→변형(단가·optionLabel·productId)→상품(상품명)으로 해소해 스냅샷을 만들고(단가는 변형 현재가로 서버가 채운다 — 클라이언트 값 불신), 배송지 스냅샷·서버 계산 할인과 함께 `place`에 넘긴다. `place`(order 도메인)는 변형을 로드하지 않는다(1TX 1애그리거트). Order가 totalAmount 자기 계산·discount ≤ total 가드. orderId 확정. 이 PENDING 주문이 이후 부작용의 사가 앵커다.
+3. 재고 차감: 라인별 `deduct(variantId, qty)`. 어느 라인이든 실패하면 앞서 차감한 라인을 복원 + 주문 취소(→CANCELLED) 후 중단.
 4. 쿠폰 확정(있으면): `use(issuedCouponId, orderId)` → ISSUED→USED. 실패(동시 사용 등) 시 재고 복원 + 주문 취소 후 중단.
 5. 결제: `payAmount == 0`이면 PG 생략·자동 APPROVED. 아니면 `PaymentGateway.approve`.
    - APPROVED → 결제 APPROVED 기록, `OrderProcessor.markPaid`(PENDING→PAID).
@@ -537,16 +584,18 @@
 
 사용자가 PAID 주문을 취소하는 흐름(파사드, 동기):
 
-- 이중 가드: 결제 취소(`Payment.cancel`, 가드 APPROVED→CANCELLED 1회)로 환불을 먼저 하고, 성공 시 주문 취소(`Order.cancel`, 가드 PAID→CANCELLED 1회)가 재고 복원 + 쿠폰 복원(USED→ISSUED)을 게이트한다. `pgTransactionId == null`(PG 미호출 승인) 결제는 환불 호출을 생략한다.
+- 이중 가드: 결제 취소(`Payment.cancel`, 가드 APPROVED→CANCELLED 1회)로 환불을 먼저 하고, 성공 시 주문 취소(`Order.cancel`, 가드 PAID→CANCELLED 1회)가 재고 복원(라인 `variantId`로) + 쿠폰 복원(USED→ISSUED)을 게이트한다. `pgTransactionId == null`(PG 미호출 승인) 결제는 환불 호출을 생략한다.
 - 환불이 복원의 선행조건이다: 환불 실패 시 주문은 PAID로 남고 복원하지 않는다(클라이언트 재시도). 이는 보상 코레오그래피이며 무손실 보장은 범위 밖이다.
 
-### 상품 등록 → 초기 재고 시딩
+### 상품 등록 → 첫 변형·재고 시딩
 
-상품 등록과 초기 재고 생성을 잇는 흐름(파사드, 동기):
+상품 등록과 첫 변형·초기 재고 생성을 잇는 흐름(파사드, 동기):
 
-- 상품 `register`는 HIDDEN으로 만든다 → 재고 `create(productId, 초기수량)` → 성공 시 상품 `show()`로 ON_SALE 전환.
-- 파괴적 보상이 없다: 재고 생성이 실패하면 HIDDEN 상품(노출·주문 불가)만 남고, `show()`가 실패해도 HIDDEN 상품 + 재고가 남는다 — 둘 다 안전한 종료 상태이며 재시도로 복구한다(상품 삭제 보상 없음).
-- 상품은 재고 파트너가 있고 나서만 ON_SALE이 되므로, 주문 가능 조건 판정(재고 조회 포함)이 재고 없는 상품을 만나지 않는다.
+- 상품 `register`(HIDDEN) → 변형 `create(productId, price, 옵션?)`(DISABLED) → 재고 `create(variantId, 초기수량)` → 변형 `enable`(ACTIVE) → 상품 `show()`(ON_SALE). 첫 변형이 상품의 옵션을 싣는다(옵션 없는 상품만 "" 기본 변형이라 옵션 상품에 유령 기본 변형이 생기지 않는다).
+- 변형을 DISABLED로 먼저 두는 이유: 담기 게이트에 재고 검사가 없어 재고 없는 ACTIVE 변형이 카탈로그·담기에 노출되는 것을 막는다. `enable`은 재고 존재를 검증하지 않고 시딩 순서가 보장하며, 체크아웃의 부재→주문 불가 강등이 방어적 심층이다.
+- 파괴적 보상이 없다: 실패 시 HIDDEN 상품·DISABLED 변형·재고가 남아 재시도로 복구한다(삭제 보상 없음). 중단 복구는 기존 변형에서 재개한다(재고 `create` + `enable`) — DISABLED 변형은 비-RETIRED라 같은 옵션으로 `create`를 다시 부르면 유니크에 막히므로 재생성이 아니라 재개다. 두 루트에 걸쳐 원자적이지 않다.
+- 추가 변형(이미 ON_SALE 상품): 변형 `create`(DISABLED) → 재고 `create(variantId)` → `enable`. enable 전까지 주문 불가라 재고 없는 ACTIVE 변형 창이 없다.
+- 변형은 재고 파트너가 있고 나서만 ACTIVE가 되므로, 주문 가능 조건 판정(재고 조회 포함)이 재고 없는 ACTIVE 변형을 만나지 않는다.
 
 ### 회원 탈퇴 가드 (미배송 주문)
 
@@ -569,9 +618,9 @@
 |---|---|---|
 | orderId | UUID | 결제 완료된 주문 |
 | memberId | UUID | 소비자가 비울 장바구니를 특정 |
-| orderedProductIds | Set\<UUID\> | 비울 라인의 상품들 |
+| orderedVariantIds | Set\<UUID\> | 비울 라인의 변형들 |
 
-- 최소 페이로드다: 소비자(`CartRemover.clear`)가 필요로 하는 것만 담는다. `orderedProductIds`는 체크아웃과 소비 사이에 사용자가 담은 라인을 보존하기 위함이다(부분 주문 미지원이라 그 외엔 전체 비우기와 같다). 소비 의미는 주문된 productId의 라인 전체 제거(수량 인지 아님).
+- 최소 페이로드다: 소비자(`CartRemover.clear`)가 필요로 하는 것만 담는다. `orderedVariantIds`는 체크아웃과 소비 사이에 사용자가 담은 라인을 보존하기 위함이다(부분 주문 미지원이라 그 외엔 전체 비우기와 같다). 소비 의미는 주문된 variantId의 라인 전체 제거(수량 인지 아님).
 - 발행 시점: 주문 PAID 전이 커밋 후. 커밋 전 발행은 롤백 시 장바구니를 잘못 비우므로 fail-safe 방향으로 커밋 후에 낸다.
 - 멱등: 집합 제거는 이미 제거된 라인 재삭제가 no-op이라 구조적으로 멱등이다(별도 처리 이력 불필요).
 - 이벤트 record 구조·발행 포트·커밋 후 발행 배선·멱등 소비 키 메커니즘은 `docs/architecture.md`가 소유한다.
@@ -582,6 +631,7 @@
 |---|---|
 | member | ACTIVE ↔ SUSPENDED. 탈퇴는 deletedAt |
 | product | ON_SALE ↔ HIDDEN. 논리삭제 deletedAt |
+| product_variant | ACTIVE ↔ DISABLED, {ACTIVE, DISABLED} → RETIRED. 최초 DISABLED |
 | stock | SELLABLE ↔ SOLD_OUT, {SELLABLE, SOLD_OUT} → DISCONTINUED. 소진은 수량 파생 |
 | cart | 상태 없음 |
 | coupon(정책) | ACTIVE ↔ DISABLED |
@@ -599,15 +649,15 @@
 | 주문 | `Order` | `ordering` | `orders` | `order`는 SQL 예약어. 스키마·테이블 모두 회피 |
 | 주문 라인 | `OrderLine` | `ordering` | `order_line` | — |
 
-나머지 6개 도메인(member·product·stock·cart·coupon·payment)은 예약어가 아니라 스키마·테이블이 도메인/엔티티명과 일치한다.
+나머지 6개 도메인(member·product·stock·cart·coupon·payment)은 예약어가 아니라 스키마·테이블이 도메인/엔티티명과 일치한다(product 스키마는 `product`·`product_variant` 두 테이블을 두며 둘 다 divergence가 없다).
 
 ## 영속·마이그레이션 유의 (구현 시 규칙이 강제)
 
 도메인 모델 확정 사항 중 빌드·기동이 강제하는 항목이다. 구현 계획이 이를 반영한다.
 
-- `@Version` 컬럼: `stock`·`issued_coupon`에 `version BIGINT DEFAULT 0`을 Flyway로 추가한다. `payment`는 `@Version`이 없으므로 version 컬럼을 두지 않는다(`ddl-auto=validate` 정합).
-- 논리 FK 인덱스: 모든 `xxx_id` 컬럼(stock.product_id, cart.member_id, cart_item.product_id, order.member_id·issued_coupon_id, order_line.product_id, issued_coupon.coupon_id·member_id·order_id, payment.order_id) 인덱스를 Flyway로 생성한다(물리 FK 없음).
-- 유니크 제약: member.email(부분 유니크 `WHERE deleted_at IS NULL`), stock.product_id, cart.member_id, cart_item(cart_id, product_id), issued_coupon(coupon_id, member_id), payment.order_id, orders.order_number를 Flyway로 강제한다.
+- `@Version` 컬럼: `stock`·`issued_coupon`에 `version BIGINT DEFAULT 0`을 Flyway로 추가한다. `payment`·`product_variant`는 `@Version`이 없으므로 version 컬럼을 두지 않는다(`ddl-auto=validate` 정합).
+- 논리 FK 인덱스: 모든 `xxx_id` 컬럼(product_variant.product_id, stock.variant_id, cart.member_id, cart_item.variant_id, order.member_id·issued_coupon_id, order_line.variant_id·product_id, issued_coupon.coupon_id·member_id·order_id, payment.order_id) 인덱스를 Flyway로 생성한다(물리 FK 없음).
+- 유니크 제약: member.email(부분 유니크 `WHERE deleted_at IS NULL`), product_variant(product_id, option_signature)(부분 유니크 `WHERE status <> 'RETIRED'` — 은퇴 조합 재등록 허용), stock.variant_id, cart.member_id, cart_item(cart_id, variant_id), issued_coupon(coupon_id, member_id), payment.order_id, orders.order_number를 Flyway로 강제한다. product_variant 부분 유니크 술어가 enum 문자열 `'RETIRED'`를 참조하므로 상태값을 바꿀 때 인덱스 술어도 함께 갱신한다.
 - 스키마 등록: 7개 도메인 스키마 각각을 `db/migration/{name}/`에 두고 `SchemaFlywayFactory`(common-jpa)에 등록한다.
 - 애그리거트 내부 연관(cart_item→cart, order_line→order)도 물리 FK 없이 `NO_CONSTRAINT`로 매핑한다.
 
@@ -616,10 +666,11 @@
 앞선 설계·검증 리뷰를 반영한 결정이다.
 
 - 회원: `MemberStatus{ACTIVE, SUSPENDED}`(정지/해제 `suspend`/`reinstate`, 정지 사유 `suspensionReason`), 표시이름 변경 `rename`, 탈퇴는 deletedAt(status 아님) + `withdrawalReason`, 자격 활성 = ACTIVE ∧ 미탈퇴, 가입 즉시 ACTIVE, 이메일 부분 유니크로 재가입 허용, 탈퇴·정지 비연쇄, 미배송 PAID 주문 있으면 탈퇴 거부(파사드 정책).
-- 상품: 등록 시 HIDDEN → 재고 시딩 후 `show()`로 ON_SALE, `hide`/`show` 의도 동사, 가격 1원 이상(`changePrice`), 상품명·설명 편집(`rename`/`changeDescription`, 주문 스냅샷 무영향), 재고 생성은 앱 계층이 순차 조율(HIDDEN-first, 파괴적 보상 없음).
-- 재고: `StockStatus{SELLABLE, SOLD_OUT, DISCONTINUED}`(수동 품절·단종을 quantity=0과 분리), 재입고 `increase`, 주문가능 = 상품 ON_SALE ∧ 재고 SELLABLE ∧ 수량, 즉시 차감(예약 모델 아님), 차감은 낙관락 가드·판매성은 체크아웃 게이트, 복원은 status 무관 가산·재시도 안전(멱등 아님, 전이 게이트로 1회 복원).
+- 상품: 카탈로그 그룹(가격 미소유), 등록 시 HIDDEN → 첫 변형·재고 시딩·변형 활성화 후 `show()`로 ON_SALE, `hide`/`show` 의도 동사, 상품명·설명 편집(`rename`/`changeDescription`, 주문 스냅샷 무영향), 시딩은 앱 계층이 순차 조율(HIDDEN-first, 파괴적 보상 없음).
+- 상품변형(SKU): product 도메인 독립 루트(productId로 연결), 판매·재고 단위. 가격 소유(≥1, `changePrice`), `ProductVariantStatus{ACTIVE, DISABLED, RETIRED}`(최초 DISABLED, 재고 시딩 후 `enable`, RETIRED 완전 종료), 옵션은 평탄 optionSignature·optionLabel(생성 시 불변), `(product_id, option_signature)` 부분 유니크(`status <> RETIRED`)로 은퇴 조합 재등록 허용, add-only·삭제 없음(deletedAt·@Version 없음).
+- 재고: `StockStatus{SELLABLE, SOLD_OUT, DISCONTINUED}`(수동 품절·단종을 quantity=0과 분리), 변형당 1행(variant_id 유니크), 재입고 `increase`, 주문가능 = 상품 ON_SALE ∧ 변형 ACTIVE ∧ 재고 SELLABLE ∧ 수량(합성은 체크아웃), 즉시 차감(예약 모델 아님), 차감은 낙관락 가드·판매성은 체크아웃 게이트, 복원은 status 무관 가산·재시도 안전(멱등 아님, 전이 게이트로 1회 복원).
 - 쿠폰: 할인은 `Discount` 값 객체(sealed Fixed/Rate, 알고리즘·불변식 내재), `ValidityPeriod`는 발급 가능 기간, 발급분 사용 기한은 `IssuedCoupon.expiresAt`(발급시각 + `usageValidDays`)로 발급창과 분리, 정책 상태 ACTIVE↔DISABLED(`disable`/`enable`)로 발급 가능·중지, 발급은 ACTIVE·발급기간·회원당 1회, 사용은 주문 생성 이후 확정(정책 status 재검사 없음 — 발급분 자격만), 산출 할인 0이면 적용 거부, 만료는 `expiresAt` 판정(EXPIRED 상태 없음), 취소 시 복원.
-- 주문: 라인·배송지 스냅샷, `orderNumber`, 결제 축 status와 별도 이행 축 `fulfillmentStatus{NOT_STARTED→PREPARING→SHIPPED→DELIVERED, PREPARING↔ON_HOLD}`(`ship`/`confirmDelivery`/`holdFulfillment`/`releaseFulfillment`, markPaid가 PREPARING 전이, 이행 전진은 status=PAID에서만 — 취소 주문 출고 불가), 보류 사유 `holdReason`, 출고 후 취소 금지, `paidAt`·`cancelledAt`·`cancellationReason` 시각·사유, 배송비 `shippingFee`(payAmount = total−discount+shippingFee), 불변식 `issuedCouponId ⟺ discountAmount>0`, totalAmount 자기 계산·discountAmount ≤ totalAmount 자기 강제, 할인·payAmount 서버 계산, 취소는 PENDING·PAID 모두(보상은 소스 상태 함수).
+- 주문: 라인(variantId·productId·optionLabel·상품명·단가)·배송지 스냅샷, `orderNumber`, 결제 축 status와 별도 이행 축 `fulfillmentStatus{NOT_STARTED→PREPARING→SHIPPED→DELIVERED, PREPARING↔ON_HOLD}`(`ship`/`confirmDelivery`/`holdFulfillment`/`releaseFulfillment`, markPaid가 PREPARING 전이, 이행 전진은 status=PAID에서만 — 취소 주문 출고 불가), 보류 사유 `holdReason`, 출고 후 취소 금지, `paidAt`·`cancelledAt`·`cancellationReason` 시각·사유, 배송비 `shippingFee`(payAmount = total−discount+shippingFee), 불변식 `issuedCouponId ⟺ discountAmount>0`, totalAmount 자기 계산·discountAmount ≤ totalAmount 자기 강제, 할인·payAmount 서버 계산, 취소는 PENDING·PAID 모두(보상은 소스 상태 함수).
 - 결제: `@Version` 없음, 주문당 1행, `PaymentMethod{CARD, EASY_PAY, BANK_TRANSFER}`(동기 수단, `amount>0 ⇔ method≠null`), FAILED 사유 `failureReason`, 승인·취소 거래 ID 분리(`pgTransactionId`/`pgCancelTransactionId`), 업무 시각 `approvedAt`/`cancelledAt`, 0원은 PG 생략 자동 승인, 도메인 이벤트 없음.
 - 정합: 핵심은 파사드 동기 조율 + 동기 보상, 주문 PENDING을 사가 앵커로 먼저 생성(order-first), 유일 이벤트는 `OrderPaid → 장바구니 비우기`.
 - 표기: 각 도메인에 오퍼레이션 카탈로그(연산·입력·강제 불변식·거부[도메인 표현])를 두고, 반환 형상·ErrorCode·HTTP status·동시성 메커니즘은 `docs/`가 소유(참조).
@@ -634,5 +685,9 @@
 - 실 PG·비동기 웹훅과 그에 따른 PENDING 리컨실·아웃박스(내구성 메시징).
 - 쿠폰 선착순 발급 한도.
 - 발급된 쿠폰의 회수·관리자 무효화(정책 DISABLED는 신규 발급만 막고 기발급분은 계속 사용 가능).
+- 상품변형 옵션의 구조 정규화: 옵션을 별도 엔티티·상품 단위 옵션 타입 스키마·글로벌 옵션 카탈로그·파셋 검색으로 두는 것(현재는 optionSignature·optionLabel 평탄 저장). 변형 간 옵션 타입 정합도 강제하지 않는다.
+- 상품 대표가·가격대 집계 읽기모델과 그 최적화(대표가는 활성 변형에서 파생하는 조회다).
+- 상품당 총재고 집계(변형 재고 합산 — admin/read-model).
+- 상인용 SKU 코드(`orderNumber` 같은 업무 식별자) — 변형 식별은 variantId로 충분하다.
 - 동시 "PENDING 주문 취소" 경로(최소 흐름의 주문 상태 전이는 체크아웃 스레드가 단독 소유). 동시 취소 경로 도입 시 필요한 동시성 제어는 `docs/entity-persistence.md`가 소유한다.
 - 체크아웃 동시 더블서밋 방어(멱등 필터는 추후 `common-web` 도입 시).
