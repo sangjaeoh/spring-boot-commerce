@@ -1,0 +1,36 @@
+[versions]
+java = "25"
+spring-boot = "4.1.0"
+spring-dependency-management = "1.1.7"
+spotless-plugin = "8.8.0"
+palantir-java-format = "2.94.0"
+jspecify = "1.0.0"
+nullaway = "0.13.7"
+errorprone-core = "2.50.0"
+errorprone-gradle-plugin = "5.1.0"
+querydsl = "7.4.0"
+archunit = "1.4.1"
+
+[libraries]
+# build-logic tooling — gradle plugin jars, consumed as regular dependencies in build-logic/build.gradle.kts
+spotless-gradle-plugin = { module = "com.diffplug.spotless:spotless-plugin-gradle", version.ref = "spotless-plugin" }
+errorprone-gradle-plugin = { module = "net.ltgt.gradle:gradle-errorprone-plugin", version.ref = "errorprone-gradle-plugin" }
+spring-boot-gradle-plugin = { module = "org.springframework.boot:spring-boot-gradle-plugin", version.ref = "spring-boot" }
+spring-dependency-management-gradle-plugin = { module = "io.spring.gradle:dependency-management-plugin", version.ref = "spring-dependency-management" }
+
+# convention.java-base — every module
+jspecify = { module = "org.jspecify:jspecify", version.ref = "jspecify" }
+nullaway = { module = "com.uber.nullaway:nullaway", version.ref = "nullaway" }
+errorprone-core = { module = "com.google.errorprone:error_prone_core", version.ref = "errorprone-core" }
+
+# convention.domain-module — version aligned by the Spring Boot BOM platform
+spring-boot-starter-data-jpa = { module = "org.springframework.boot:spring-boot-starter-data-jpa" }
+querydsl-jpa = { module = "io.github.openfeign.querydsl:querydsl-jpa", version.ref = "querydsl" }
+querydsl-apt = { module = "io.github.openfeign.querydsl:querydsl-apt", version.ref = "querydsl" }
+
+# app-api
+spring-boot-starter-web = { module = "org.springframework.boot:spring-boot-starter-web" }
+spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-starter-test" }
+
+# architecture test
+archunit-junit5 = { module = "com.tngtech.archunit:archunit-junit5", version.ref = "archunit" }
