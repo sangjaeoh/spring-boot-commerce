@@ -283,9 +283,9 @@
 - 담기 조건: 회원이 자격 활성(`status = ACTIVE`·미탈퇴)이고 변형이 ACTIVE이며 변형의 상품이 ON_SALE·미삭제일 것. 재고는 담기 시점에 검증하지 않는다(체크아웃 시점에 검증). 장바구니는 "구매 예정" 목록이다.
 - 동일 변형 재담기: 새 라인을 만들지 않고 기존 라인 수량을 합산한다(variantId는 장바구니 내 유니크).
 - 수량 변경: `changeItemQuantity`는 qty ≥ 1만 허용한다(qty < 1 거부). 수량을 늘릴 때(newQty > 현재)는 담기와 동일 자격 게이트(회원 자격 활성 ∧ 변형 ACTIVE ∧ 변형의 상품 ON_SALE·미삭제)를 적용하고, 줄이거나 유지는 게이트 없이 허용한다(수요 미증가라 정지·탈퇴 회원, 비활성·은퇴 변형·삭제 상품 라인의 정리도 가능). 라인 제거는 `removeItem` 전용 — 수량 인자에 삭제 의도를 겹치지 않는다.
-- 제거·비우기: 라인 개별 제거, 전체 비우기(clear).
+- 제거·비우기: 라인 개별 제거(`removeItem`), 주문된 변형 라인 일괄 제거(`removeItems`), 전체 비우기(`clear`).
 - 총액은 저장하지 않는다. 체크아웃 시 변형 현재가로 계산한다.
-- 주문 전환: 체크아웃은 장바구니 전체를 주문으로 전환한다(부분 주문 미지원). 결제 완료 후 주문된 라인을 비운다(비우기는 `OrderPaid` 이벤트 소비로 처리 — 크로스 도메인 정책 참조).
+- 주문 전환: 체크아웃은 장바구니 전체를 주문으로 전환한다(부분 주문 미지원). 결제 완료 후 주문된 변형 라인을 `removeItems`로 제거한다(`OrderPaid` 이벤트 소비 — 크로스 도메인 정책 참조).
 
 ### 오퍼레이션
 
@@ -294,6 +294,7 @@
 | addItem | memberId, variantId, qty | get-or-create, 회원 자격 활성, 변형 ACTIVE·변형의 상품 ON_SALE·미삭제, 동일 변형 수량 합산, qty ≥ 1 | 변형 미존재; 주문 불가(변형 비활성·상품 HIDDEN·삭제); 회원 탈퇴 또는 정지 |
 | changeItemQuantity | memberId, variantId, qty | qty ≥ 1로 설정; 증량 시 담기 게이트(회원 자격 활성·변형 ACTIVE·상품 ON_SALE·미삭제) | 라인 미존재; 수량 범위 미달(qty < 1); (증량 시) 회원 탈퇴·정지·주문 불가 |
 | removeItem | memberId, variantId | 라인 제거 | 라인 미존재 |
+| removeItems | memberId, variantIds | 주어진 변형 라인 일괄 제거(없는 라인 무시) | — |
 | clear | memberId | 전체 라인 제거 | — |
 | getCart | memberId | 회원당 장바구니 1개(없으면 빈 장바구니) | — |
 
@@ -411,7 +412,7 @@
 | 필드 | 타입 | 필수 | 제약·설명 |
 |---|---|---|---|
 | id | UUID | 필수 | PK, UUIDv7 |
-| orderNumber | String | 필수 | 사람이 읽는 주문번호(활성 유니크). `place` 시 생성. UUIDv7 PK와 분리된 고객·CS·정산 참조용 업무 식별자 |
+| orderNumber | String | 필수 | 사람이 읽는 주문번호(유니크). `place` 시 생성. UUIDv7 PK와 분리된 고객·CS·정산 참조용 업무 식별자 |
 | memberId | UUID | 필수 | 주문 회원 참조 |
 | status | OrderStatus | 필수 | 아래 상태표(결제 축) |
 | fulfillmentStatus | FulfillmentStatus | 필수 | 아래 이행 상태표(물리 이행 축). 최초 NOT_STARTED |
@@ -488,7 +489,7 @@
 - 금액 불변식: `Order.place`가 자기 라인에서 totalAmount = Σ(라인 unitPrice × quantity)를 계산한다. discountAmount는 서버가 쿠폰 정책으로 산출해 입력하되(클라이언트 전달값 불신), Order 루트가 `discountAmount ≤ totalAmount`와 `issuedCouponId != null ⟺ discountAmount > 0`(쿠폰 없는 유령 할인·쿠폰 있는 0원 할인 동시 배제)을 자기 강제한다(위반 시 도메인 예외). payAmount = totalAmount − discountAmount + shippingFee ≥ 0.
 - price ≥ 1·quantity ≥ 1이라 totalAmount ≥ 1이 항상 성립한다(무료·0원 주문 없음). payAmount = 0은 전액 할인 ∧ shippingFee = 0일 때만이고(배송비가 있으면 payAmount > 0), 그 경우 결제는 PG를 생략하고 자동 승인한다.
 - 결제 완료(markPaid): PENDING에서만 PAID로. 함께 fulfillmentStatus NOT_STARTED→PREPARING, `paidAt` 세팅. 전이 후 `OrderPaid`를 커밋 후 발행한다.
-- 취소(cancel): PENDING 또는 PAID에서 CANCELLED로. PAID 취소는 `fulfillmentStatus ∈ {NOT_STARTED, PREPARING, ON_HOLD}`일 때만 허용하고 SHIPPED·DELIVERED면 거부한다(출고 이후는 반품 절차, 범위 밖). 전이 시 `cancelledAt`·`cancellationReason`(`PAYMENT_FAILED`·`STOCK_SHORTAGE`·`COUPON_CONFLICT`·`CUSTOMER_REQUEST`·`ADMIN_ACTION`)을 세팅한다. 전이는 1회만 유효하고, 후속 보상은 전이가 실제 일어난 호출에서만 태운다(중복 취소 무해). 보상 내용은 소스 상태에 따른다 — PENDING이면 재고·쿠폰 복원, PAID이면 환불 선행 후 재고·쿠폰 복원(크로스 도메인 정책 참조).
+- 취소(cancel): PENDING 또는 PAID에서 CANCELLED로. PAID 취소는 `fulfillmentStatus ∈ {PREPARING, ON_HOLD}`일 때만 허용하고 SHIPPED·DELIVERED면 거부한다(출고 이후는 반품 절차, 범위 밖). PAID면 이행이 이미 최소 PREPARING이라 NOT_STARTED는 나타나지 않는다. 전이 시 `cancelledAt`·`cancellationReason`(`PAYMENT_FAILED`·`STOCK_SHORTAGE`·`COUPON_CONFLICT`·`CUSTOMER_REQUEST`·`ADMIN_ACTION`)을 세팅한다. 전이는 1회만 유효하고, 후속 보상은 전이가 실제 일어난 호출에서만 태운다(중복 취소 무해). 보상 내용은 소스 상태에 따른다 — PENDING이면 재고·쿠폰 복원, PAID이면 환불 선행 후 재고·쿠폰 복원(크로스 도메인 정책 참조).
 - 이행(ship·confirmDelivery·holdFulfillment·releaseFulfillment): 모든 이행 전진은 `status == PAID`에서만 유효하다(취소·미결제 주문은 fulfillment 동결). `ship`은 PREPARING→SHIPPED(+`shippedAt`), `confirmDelivery`는 SHIPPED→DELIVERED(+`deliveredAt`), `holdFulfillment`는 PREPARING→ON_HOLD(+`holdReason`: 사기 심사·배송지 확인·입고 지연), `releaseFulfillment`는 ON_HOLD→PREPARING(`holdReason` clear). 분할 배송·부분 이행·반품(RMA)은 범위 밖(단일 배송·단일 이행).
 - 생성 후 라인 구성은 불변(수정 불가). 변경이 필요하면 취소 후 재주문.
 
@@ -496,9 +497,9 @@
 
 | 연산 | 입력 | 강제 불변식 | 거부 |
 |---|---|---|---|
-| place | memberId, 라인 스냅샷, shippingAddress, discountAmount, shippingFee | 라인 ≥ 1, `orderNumber` 생성, totalAmount 자기 계산, discountAmount ≤ totalAmount, `issuedCouponId ⟺ discount>0`, payAmount = total−discount+shippingFee, 최초 PENDING·NOT_STARTED | 빈 주문(라인 0); 회원 탈퇴 또는 정지; 할인 초과 |
+| place | memberId, 라인 스냅샷, shippingAddress, discountAmount, shippingFee, issuedCouponId? | 라인 ≥ 1, `orderNumber` 생성, totalAmount 자기 계산, discountAmount ≤ totalAmount, `issuedCouponId ⟺ discount>0`, payAmount = total−discount+shippingFee, 최초 PENDING·NOT_STARTED | 빈 주문(라인 0); 회원 탈퇴 또는 정지; 할인 초과 |
 | markPaid | orderId | PENDING→PAID, 이행 NOT_STARTED→PREPARING, `paidAt` 세팅, `OrderPaid` 발행 | 미존재; 잘못된 전이 |
-| cancel | orderId, reason | PENDING·PAID → CANCELLED 1회(PAID는 이행 NOT_STARTED·PREPARING·ON_HOLD만), `cancelledAt`·`cancellationReason` 세팅, 보상은 소스 상태 함수 | 미존재; 잘못된 전이; 출고 이후(SHIPPED·DELIVERED) |
+| cancel | orderId, reason | PENDING·PAID → CANCELLED 1회(PAID는 이행 PREPARING·ON_HOLD만), `cancelledAt`·`cancellationReason` 세팅, 보상은 소스 상태 함수 | 미존재; 잘못된 전이; 출고 이후(SHIPPED·DELIVERED) |
 | ship | orderId | `status == PAID` ∧ PREPARING→SHIPPED, `shippedAt` 세팅 | 미존재; 결제 축 PAID 아님(취소·미결제); 잘못된 전이 |
 | confirmDelivery | orderId | `status == PAID` ∧ SHIPPED→DELIVERED, `deliveredAt` 세팅 | 미존재; 결제 축 PAID 아님; 잘못된 전이 |
 | holdFulfillment | orderId, reason | `status == PAID` ∧ PREPARING→ON_HOLD, `holdReason` 세팅 | 미존재; 결제 축 PAID 아님; 잘못된 전이 |
@@ -577,9 +578,9 @@
 3. 재고 차감: 라인별 `deduct(variantId, qty)`. 어느 라인이든 실패하면 앞서 차감한 라인을 복원 + 주문 취소(→CANCELLED) 후 중단.
 4. 쿠폰 확정(있으면): `use(issuedCouponId, orderId)` → ISSUED→USED. 실패(동시 사용 등) 시 재고 복원 + 주문 취소 후 중단.
 5. 결제: `payAmount == 0`이면 PG 생략·자동 APPROVED. 아니면 `PaymentGateway.approve`.
-   - APPROVED → 결제 APPROVED 기록, `OrderProcessor.markPaid`(PENDING→PAID).
+   - APPROVED → 결제 APPROVED 기록, `Order.markPaid`(PENDING→PAID).
    - FAILED/예외 → 동기 보상: 재고 복원 + 쿠폰 복원(USED→ISSUED) + 주문 취소(→CANCELLED). 결제 FAILED 기록.
-6. 주문 PAID 커밋 후 → `OrderPaid` 발행 → `CartRemover.clear`(주문된 라인) 리스너(멱등).
+6. 주문 PAID 커밋 후 → `OrderPaid` 발행 → 장바구니 `removeItems`(주문된 변형 라인) 리스너(멱등).
 
 - 주문 앵커: 주문 PENDING을 재고 차감 전에 만들어, 차감·쿠폰 사용 등 모든 부작용이 조회 가능한 orderId에 걸린다. 차감 후 크래시가 나도 유실이 관측·복구 가능하다(주문 없는 차감이 아니다).
 - 보상은 단일 소유다: 결제 성공 전 모든 실패(재고·쿠폰·결제)는 파사드가 그 콜스택에서 동기 보상한다. 이벤트 리스너와 파사드가 같은 실패를 경쟁 보상하는 이원화가 없다.
@@ -606,8 +607,8 @@
 
 회원 탈퇴 요청을 처리하는 흐름(파사드, 동기):
 
-- 파사드가 `OrderReader`로 해당 회원의 미배송 PAID 주문(status = PAID ∧ fulfillmentStatus ≠ DELIVERED ∧ 미취소) 존재를 확인하고, 있으면 탈퇴를 거부한다. 없을 때만 `MemberRemover.delete`를 호출한다. PENDING 주문은 막지 않는다(결제 전이라 방치 가능).
-- 이는 앱 계층 오케스트레이션 정책이지 member 도메인 불변식이 아니다 — member는 order에 컴파일 의존하지 않으므로(빌드 강제), 크로스 도메인 규칙은 파사드가 소유한다. 아웃바운드 포트가 아니라 파사드가 `OrderReader`를 읽어 게이트한다.
+- 파사드가 주문 조회로 해당 회원의 미배송 PAID 주문(status = PAID ∧ fulfillmentStatus ≠ DELIVERED ∧ 미취소) 존재를 확인하고, 있으면 탈퇴를 거부한다. 없을 때만 회원 `delete`를 호출한다. PENDING 주문은 막지 않는다(결제 전이라 방치 가능).
+- 이는 앱 계층 오케스트레이션 정책이지 member 도메인 불변식이 아니다 — member는 order에 컴파일 의존하지 않으므로(빌드 강제), 크로스 도메인 규칙은 파사드가 소유한다. 아웃바운드 포트가 아니라 파사드가 order 도메인을 조회해 게이트한다.
 - 탈퇴 비연쇄(회원 §1)와 양립한다 — 탈퇴가 주문을 연쇄 정리하지 않되, 미배송 주문이 있으면 탈퇴 자체를 선행 거부할 뿐이다.
 
 ### 정합·보장 수준
@@ -625,7 +626,7 @@
 | memberId | UUID | 소비자가 비울 장바구니를 특정 |
 | orderedVariantIds | Set\<UUID\> | 비울 라인의 변형들 |
 
-- 최소 페이로드다: 소비자(`CartRemover.clear`)가 필요로 하는 것만 담는다. `orderedVariantIds`는 체크아웃과 소비 사이에 사용자가 담은 라인을 보존하기 위함이다(부분 주문 미지원이라 그 외엔 전체 비우기와 같다). 소비 의미는 주문된 variantId의 라인 전체 제거(수량 인지 아님).
+- 최소 페이로드다: 소비자(장바구니 `removeItems`)가 필요로 하는 것만 담는다. `orderedVariantIds`는 체크아웃과 소비 사이에 사용자가 담은 라인을 보존하기 위함이다(부분 주문 미지원이라 그 외엔 전체 비우기와 같다). 소비 의미는 주문된 variantId의 라인 전체 제거(수량 인지 아님).
 - 발행 시점: 주문 PAID 전이 커밋 후. 커밋 전 발행은 롤백 시 장바구니를 잘못 비우므로 fail-safe 방향으로 커밋 후에 낸다.
 - 멱등: 집합 제거는 이미 제거된 라인 재삭제가 no-op이라 구조적으로 멱등이다(별도 처리 이력 불필요).
 - 이벤트 record 구조·발행 포트·커밋 후 발행 배선·멱등 소비 키 메커니즘은 `docs/architecture.md`가 소유한다.
