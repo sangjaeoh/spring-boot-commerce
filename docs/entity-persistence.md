@@ -56,6 +56,9 @@ public abstract class BaseTimeEntity<ID extends Serializable> implements Persist
   - 단일 컬럼 VO(`Email`·`Money` 등 값 하나)는 `AttributeConverter` + `@Convert`로 매핑한다.
   - 다중 컬럼 VO(`Address`=우편번호+도로명 등 여러 값)는 `@Embeddable` record + `@Embedded`로 매핑한다. `AttributeConverter`로 억지로 직렬화하지 않는다 — 컬럼별 조회·인덱싱이 막힌다.
     - `@Embeddable` record는 로드 시 canonical 생성자를 호출해 compact constructor 검증이 매 조회마다 돈다. 레거시 데이터가 현재 불변식을 어기면 조회가 예외로 깨진다.
+  - 판별 유니온 VO(형이 여럿이고 형마다 필드가 다른 값, `Discount`=Fixed/Rate 등)는 단일 `@Embeddable` record로 평탄화해 형 판별 enum 컬럼 + 형별 nullable 값 컬럼으로 매핑한다. 형↔필드 정합(불법 조합 배제)은 compact constructor가 강제하고 행위는 형 판별값으로 분기한다.
+    - sealed 하위 타입으로 나누지 않는다: sealed 인터페이스는 한 임베더블 필드에 매핑되지 않고(다형성), `AttributeConverter` 직렬화는 형별 컬럼 조회·인덱싱을 막으며, `@Inheritance`(엔티티 상속)는 값 객체를 엔티티로 승격시킨다. 평탄 유니온이 컬럼 조회와 VO 성격을 함께 지킨다.
+    - 형별 nullable 값 컬럼은 컬럼 하나가 뜻 하나이고 형 판별 컬럼이 형을 구분하므로 컬럼 오버로딩이 아니다.
 - VO·`AttributeConverter`의 패키지 배치는 → [architecture](architecture.md)의 도메인 모듈 구조가 소유한다.
 
 ### 상태 전이

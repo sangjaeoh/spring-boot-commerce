@@ -327,9 +327,9 @@
 | Fixed | amount: Money | 정액 할인. amount ≥ 1 |
 | Rate | percent: int, maxCap: Money 선택 | 정률 할인. percent ∈ [1,100]. maxCap은 있으면 > 0(없으면 무제한). Fixed는 maxCap을 가질 수 없다 |
 
-- sealed 2형(Fixed·Rate). 불법 상태(Fixed에 상한, percent 범위 밖, maxCap 0)를 타입·생성 검증으로 배제한다.
+- 판별 형 2종(Fixed·Rate)을 가진 단일 값 객체다. 형은 `type` 판별값으로 구분하고, 불법 조합(Fixed에 상한, percent 범위 밖, maxCap 0)을 생성 검증(compact constructor)으로 배제한다.
 - 행위 `applyTo(orderAmount) → Money`: Fixed는 `min(amount, orderAmount)`. Rate는 `floor(orderAmount × percent / 100)`(곱한 뒤 나눔), maxCap 있으면 그 값으로 상한, 마지막에 `min(·, orderAmount)`로 clamp. 결과는 항상 주문금액 이하(결제금액 음수 불가).
-- sealed 타입→컬럼 매핑(discriminator·값 컬럼)은 `docs/entity-persistence.md`가 소유한다.
+- 판별 유니온 VO의 컬럼 매핑(형 판별 enum + 형별 nullable 값 컬럼)은 `docs/entity-persistence.md`가 소유한다.
 
 ### 값 객체 (ValidityPeriod)
 
@@ -674,7 +674,7 @@
 - 상품: 카탈로그 그룹(가격 미소유), 등록 시 HIDDEN → 첫 변형·재고 시딩·변형 활성화 후 `show()`로 ON_SALE, `hide`/`show` 의도 동사, 상품명·설명 편집(`rename`/`changeDescription`, 주문 스냅샷 무영향), 시딩은 앱 계층이 순차 조율(HIDDEN-first, 파괴적 보상 없음).
 - 상품변형(SKU): product 도메인 독립 루트(productId로 연결), 판매·재고 단위. 가격 소유(≥1, `changePrice`), `ProductVariantStatus{ACTIVE, DISABLED, RETIRED}`(최초 DISABLED, 재고 시딩 후 `enable`, RETIRED 완전 종료), 옵션은 평탄 optionSignature·optionLabel(생성 시 불변), `(product_id, option_signature)` 부분 유니크(`status <> RETIRED`)로 은퇴 조합 재등록 허용, add-only·삭제 없음(deletedAt·@Version 없음).
 - 재고: `StockStatus{SELLABLE, SOLD_OUT, DISCONTINUED}`(수동 품절·단종을 quantity=0과 분리), 변형당 1행(variant_id 유니크), 재입고 `increase`, 주문가능 = 상품 ON_SALE·미삭제 ∧ 변형 ACTIVE ∧ 재고 SELLABLE ∧ 수량(합성은 체크아웃), 즉시 차감(예약 모델 아님), 차감은 낙관락 가드·판매성은 체크아웃 게이트, 복원은 status 무관 가산·재시도 안전(멱등 아님, 전이 게이트로 1회 복원).
-- 쿠폰: 할인은 `Discount` 값 객체(sealed Fixed/Rate, 알고리즘·불변식 내재), `ValidityPeriod`는 발급 가능 기간, 발급분 사용 기한은 `IssuedCoupon.expiresAt`(발급시각 + `usageValidDays`)로 발급창과 분리, 정책 상태 ACTIVE↔DISABLED(`disable`/`enable`)로 발급 가능·중지, 발급은 ACTIVE·발급기간·회원당 1회, 사용은 주문 생성 이후 확정(정책 status 재검사 없음 — 발급분 자격만), 산출 할인 0이면 적용 거부, 만료는 `expiresAt` 판정(EXPIRED 상태 없음), 취소 시 복원.
+- 쿠폰: 할인은 `Discount` 값 객체(판별형 Fixed/Rate 단일 VO, 알고리즘·불변식 내재), `ValidityPeriod`는 발급 가능 기간, 발급분 사용 기한은 `IssuedCoupon.expiresAt`(발급시각 + `usageValidDays`)로 발급창과 분리, 정책 상태 ACTIVE↔DISABLED(`disable`/`enable`)로 발급 가능·중지, 발급은 ACTIVE·발급기간·회원당 1회, 사용은 주문 생성 이후 확정(정책 status 재검사 없음 — 발급분 자격만), 산출 할인 0이면 적용 거부, 만료는 `expiresAt` 판정(EXPIRED 상태 없음), 취소 시 복원.
 - 주문: 라인(variantId·productId·productName·optionLabel·unitPrice)·배송지 스냅샷, `orderNumber`, 결제 축 status와 별도 이행 축 `fulfillmentStatus{NOT_STARTED→PREPARING→SHIPPED→DELIVERED, PREPARING↔ON_HOLD}`(`ship`/`confirmDelivery`/`holdFulfillment`/`releaseFulfillment`, markPaid가 PREPARING 전이, 이행 전진은 status=PAID에서만 — 취소 주문 출고 불가), 보류 사유 `holdReason`, 출고 후 취소 금지, `paidAt`·`cancelledAt`·`cancellationReason` 시각·사유, 배송비 `shippingFee`(payAmount = total−discount+shippingFee), 불변식 `issuedCouponId ⟺ discountAmount>0`, totalAmount 자기 계산·discountAmount ≤ totalAmount 자기 강제, 할인·payAmount 서버 계산, 취소는 PENDING·PAID 모두(보상은 소스 상태 함수).
 - 결제: `@Version` 없음, 주문당 1행, `PaymentMethod{CARD, EASY_PAY, BANK_TRANSFER}`(동기 수단, `amount>0 ⇔ method≠null`), FAILED 사유 `failureReason`, 승인·취소 거래 ID 분리(`pgTransactionId`/`pgCancelTransactionId`), 업무 시각 `approvedAt`/`cancelledAt`, 0원은 PG 생략 자동 승인, 도메인 이벤트 없음.
 - 정합: 핵심은 파사드 동기 조율 + 동기 보상, 주문 PENDING을 사가 앵커로 먼저 생성(order-first), 유일 이벤트는 `OrderPaid → 장바구니 비우기`.
