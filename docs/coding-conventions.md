@@ -26,6 +26,7 @@
   | 서비스·파사드·설정 | class — `final` 필드 + 생성자 주입 | 상태 없는 협력자 |
 
 - 커스텀 예외는 경계에 도달하는(핸들러까지 전파되는) 예외만 `BaseException`을 상속한다. 국소에서 잡아 처리하는 예외는 JDK 관용구(`IllegalArgumentException` 등)로 둔다.
+  - 값 범위·불변식 위반은 설계 오퍼레이션 표의 "거부"에 오르면(클라이언트·관리자 입력이 도달) `{Name}ErrorCode` 도메인 예외로, 거부에 없는 호출자 보장 선행조건이면 `IllegalArgumentException`으로 둔다. 후자가 propagate하면 서버 버그(500)이지 클라이언트 400이 아니다.
   - `BaseException`은 `ErrorCode`를 받는 생성자(`BaseException(ErrorCode)`) 하나를 노출한다. 커스텀 예외는 이를 그대로 전달한다(`super(errorCode)`).
   - 도메인마다 `{Name}ErrorCode` enum이 `common-core`의 `ErrorCode` 인터페이스를 구현한다. `ErrorCode`는 코드 문자열·메시지·HTTP 상태를 노출하고(`code()`·`message()`·`status()`), enum 상수가 이 값을 채운다. ProblemDetail 핸들러가 이 계약으로 응답을 만든다.
 
@@ -110,6 +111,7 @@
 - Javadoc은 API 계약이다. 공개(`public`·`protected`) 타입·멤버에 호출자가 알아야 할 계약(무엇을 보장하나)을 적고 구현 방식(How)은 적지 않는다.
   - 첫 문장은 3인칭 서술형 요약(`사용자를 등록한다`), 마침표로 끝낸다.
   - 명령형(`~하라`)·장황한 주어형(`이 메서드는 …을 반환한다`)은 피한다. 자명한 접근자·오버라이드는 생략한다.
+  - 주석은 문서화 대상 자신의 계약만 적는다. 그 대상이 호출하는 다른 계층·다른 도메인의 동작 등 대상 밖 관심사는 넣지 않는다.
   - Javadoc 구조(요약·태그 유효성)는 빌드가 강제한다 → [code-quality](code-quality.md)
 - 구현 주석은 비자명한 "왜"만 적는다. 코드가 이미 말하는 것(What)을 되풀이하지 않는다.
   - 시점 없는 사실로 쓴다("우리가 …를 택했다"가 아니라 "…이므로 …한다").

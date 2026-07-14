@@ -88,6 +88,7 @@ public abstract class BaseTimeEntity<ID extends Serializable> implements Persist
 - 애그리거트 내부 연관은 자식→부모 `@ManyToOne` 단방향이 기본이다(자식이 FK 소유).
 - 부모→자식 캐스케이드 생명주기가 필요하면 정규형은 `mappedBy` 양방향이다(부모 `@OneToMany(mappedBy=...)`, 자식 `@ManyToOne` FK 소유).
   - 단방향 `@OneToMany` + `@JoinColumn`은 쓰지 않는다 — 자식 INSERT 후 FK UPDATE가 추가로 발생하고 NOT NULL 제약과 충돌한다.
+  - 자식의 FK 소유 필드(`@ManyToOne`)는 자바 코드가 읽지 않아(매핑·`mappedBy` 대상 전용) Error Prone `UnusedVariable`에 걸린다 — 필드 스코프 `@SuppressWarnings("UnusedVariable")`로 사유와 함께 억제한다(getter로 상향 탐색을 열지 않는다).
 - `@OneToMany` 컬렉션 필드는 `Set`으로 선언한다. 순서가 도메인 의미면 `@OrderColumn`으로 명시한다.
   - `List`는 자식 일부 삭제 시 delete-all-reinsert를 유발하고, 두 개 이상 `List` 연관을 동시 fetch join하면 `MultipleBagFetchException`이 난다.
 - `@ManyToMany`를 금지한다. 조인 테이블에 컬럼을 못 붙이고 쿼리·캐스케이드가 불투명하다. 연결 테이블을 독립 `@Entity`로 승격한다.
