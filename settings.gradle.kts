@@ -16,6 +16,7 @@ dependencyResolutionManagement {
 
 include("module-common:common-core")
 include("module-common:common-jpa")
+include("module-common:common-messaging")
 include("module-domains:domain-member")
 include("module-domains:domain-product")
 include("module-domains:domain-stock")

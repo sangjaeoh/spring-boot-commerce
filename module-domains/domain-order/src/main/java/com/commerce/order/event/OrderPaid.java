@@ -1,5 +1,6 @@
 package com.commerce.order.event;
 
+import com.commerce.messaging.event.DomainEvent;
 import java.util.Set;
 import java.util.UUID;
 
@@ -8,7 +9,7 @@ import java.util.UUID;
  *
  * @param orderedVariantIds 비울 라인의 변형들
  */
-public record OrderPaid(UUID orderId, UUID memberId, Set<UUID> orderedVariantIds) {
+public record OrderPaid(UUID orderId, UUID memberId, Set<UUID> orderedVariantIds) implements DomainEvent {
 
     public OrderPaid {
         orderedVariantIds = Set.copyOf(orderedVariantIds);

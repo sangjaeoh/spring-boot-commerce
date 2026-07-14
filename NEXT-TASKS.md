@@ -33,11 +33,11 @@
 - 배선: `@Component` — P2의 `com.commerce` 컴포넌트스캔이 도메인 `@Service`와 함께 어댑터도 자동 포함(별도 @Bean 불필요). spring-context만 의존(JPA 불필요).
 - 검증 완료: `StubPaymentGatewayTest`(승인 성공·거래 ID 유일·취소 ID 반환), `./gradlew build` 그린. external-module 컨벤션이 대상 도메인+common 외 프로젝트 의존을 차단함도 확인.
 
-### 3. common-messaging (`MessagePublisher` 발행 포트)
+### 3. common-messaging (`MessagePublisher` 발행 포트) — 완료
 
-- 목표: 벤더 중립 발행 포트. `convention.common-module` 적용. transport 구현은 infra(추후).
-- 소비자: order의 `OrderPaid`(이미 정의됨) 커밋 후 발행.
-- 설계: `docs/architecture.md`(common 배치·발행 포트), `DOMAIN-DESIGN.md` §도메인 이벤트 명세.
+- 구현: `module-common/common-messaging`, `convention.common-module`(프로젝트 의존 0 — 포트·마커가 common-core 타입도 참조 안 함). `com.commerce.messaging.publish.MessagePublisher`(벤더 중립 발행 포트, `void publish(DomainEvent)`) + `com.commerce.messaging.event.DomainEvent`(발행 페이로드 마커 인터페이스). 페이로드 타입은 마커(A) 채택 — `publish(Object)`(B)는 타입 중심 DDD에서 유일한 느슨한 경계라 기각.
+- 배선: `domain-order`가 common-messaging 의존(`convention.domain-module` 화이트리스트에 이미 등재) + `OrderPaid implements DomainEvent`(마커 고아 방지·이벤트 계약 확립). transport 어댑터·아웃박스·멱등 소비 지원은 범위 밖(infra·추후). 실제 발행 호출 배선(markPaid 커밋 후 발행)·커밋 후 리스너는 P2 #6·#8·#9.
+- 검증 완료: 테스트 없음(순수 인터페이스 — 실행할 행위 없음). `./gradlew :module-common:common-messaging:spotlessApply build` 그린, `./gradlew build` 전 모듈 그린(도메인 Testcontainers 슬라이스 포함).
 
 ### 4. common-web (경계 공통)
 
