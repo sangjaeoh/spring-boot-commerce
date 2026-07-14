@@ -21,7 +21,8 @@
 - 결정: (a+). ArchUnit 규칙 대상을 `..entity..` 패키지 의존 → `@Entity`·`@MappedSuperclass` 애노테이션 클래스 의존으로 교체(String 오버로드 `annotatedWith("jakarta.persistence.Entity")` — app-api 테스트 클래스패스에 `jakarta.persistence-api`가 없어 Class 오버로드 불가). 값 타입(enum·record·`@Embeddable` VO)은 경계 계약(명령 입력·Info·포트)으로 통과 허용. `that()` 제외 목록은 유지. 반영: `ArchitectureTest.java`, `docs/architecture.md`(:79·:166), `docs/entity-persistence.md`(추출 시 @Embeddable 애노테이션 스트립 부채 한 줄).
 - 근거: 규칙이 막는 실제 해악(LazyInit·dirty·API-엔티티 결합)은 `@Entity`에만 발생. JPA가 도메인 컨벤션에서 `implementation` 스코프라 @Embeddable가 넘어도 `jakarta.persistence`가 app 컴파일 클래스패스에 안 샌다. `Address`(@Embeddable)가 이미 `OrderAppender.place` 명령 입력으로 넘는 선례. 상세·기각안(b·c·d)은 메모리 `commerce-p0-boundary-rule-decision`.
 - 검증 완료: app-api에 domain-order 임시 의존 + 메인 소스 픽스처로, 생 `Order`(@Entity) 참조는 규칙 실패(param+return 2건)·`OrderStatus`(enum)+`OrderInfo` 참조는 통과 확인 후 임시물 전량 원복. `./gradlew :module-apps:app-api:spotlessCheck :module-apps:app-api:test` 그린.
-- 남음: 소프트삭제 base finder(`findById` 등) 직접 호출 금지 ArchUnit 규칙 배선(member 리뷰 지적, `docs/architecture.md` "빌드가 강제하는 불변식" 등재)은 이 결정과 독립이라 별도 커밋으로 미룸. 규칙의 비공허 강제는 app-api가 도메인을 의존하는 P2에서 활성화된다(지금은 스캔 대상 0 → 공허 통과).
+- 활성화됨(P2): app-api가 도메인을 의존해 두 규칙(엔티티 경계·앱→리포지토리 금지)이 비공허 강제로 돌아간다. 리포지토리 규칙 대상은 `com.commerce..repository..`로 좁혔다(위 P2 #9 배선 참조).
+- 남음: 소프트삭제 base finder(`findById` 등) 직접 호출 금지 ArchUnit 규칙 배선(member 리뷰 지적, `docs/architecture.md` "빌드가 강제하는 불변식" 등재)은 여전히 별도 커밋 대기. 소프트삭제 엔티티는 Member·Product뿐이고 현 리더가 이미 `...DeletedAtIsNull` 파생을 쓰므로 회귀 방지용 가드다(현 코드는 준수). "소프트삭제 엔티티에 한해 상속 base finder 호출 금지"를 ArchUnit으로 표현하려면 커스텀 조건이 필요해(엔티티의 `deletedAt` 유무 판정) 파사드 작업과 직교하는 독립 커밋으로 둔다.
 
 ---
 
@@ -60,35 +61,43 @@
 
 ## P2 — app-api 계층 (크로스 도메인 정책)
 
-설계의 핵심 흐름을 파사드가 조율한다. 파사드는 트랜잭션을 열지 않고 도메인 서비스를 조립하며, 각 서비스가 자기 트랜잭션을 소유한다(`docs/architecture.md` 트랜잭션 경계).
+설계의 핵심 흐름을 파사드가 조율한다. 파사드는 트랜잭션을 열지 않고 도메인 서비스를 조립하며, 각 서비스가 자기 트랜잭션을 소유한다(`docs/architecture.md` 트랜잭션 경계). 이번 세션은 파사드 계층(#6·#8·#9)을 완성했고 컨트롤러(#7)는 다음 세션으로 남겼다. `./gradlew build` 그린, 170 테스트.
 
-### 6. 파사드 (`facade`)
+### 포크 결정(질문)
 
-- 체크아웃(주문 생성→결제): `DOMAIN-DESIGN.md` §크로스 도메인(체크아웃 6단계). 검증(회원 자격·변형/상품/재고 주문가능·쿠폰) → 주문 PENDING 생성(사가 앵커) → 재고 차감 → 쿠폰 확정 → 결제(0원 PG 생략) → PAID + `OrderPaid` 발행. 실패 시 동기 보상.
-- 취소·환불: §크로스 도메인(취소). 이중 가드(결제 취소 선행 → 주문 취소가 재고·쿠폰 복원 게이트).
-- 상품 등록→첫 변형·재고 시딩: §크로스 도메인(상품 등록). HIDDEN → 변형 DISABLED → 재고 → enable → show.
-- 회원 탈퇴 가드: §회원 탈퇴 가드. 미배송 PAID 주문 있으면 탈퇴 거부(파사드가 order 조회로 게이트).
-- 전제: P1(external-payment·common-messaging), P0(파사드가 Info를 읽고 명령 입력을 구성).
+- 범위: 파사드 4개 + 발행 배선 + 리스너 + 최소 도메인 read + 배선 + 경계 활성화를 한 단위로 완성. 컨트롤러/DTO는 다음 세션(실컨텍스트 MockMvc 하네스가 별도 관심사).
+- 발행 구현 위치: `module-infra/infra-messaging` 신설(`InProcessMessagePublisher`가 `ApplicationEventPublisher`로 위임). 근거 `MessagePublisher` Javadoc "transport 구현은 infra"·external-payment 선례. 저장소 첫 infra 모듈.
+- 도메인 read: 최소 추가·규칙은 도메인에. `Coupon.calculateDiscount` minOrderAmount 플로어(미달→0), `PaymentReader.getByOrderId` 신설, `OrderReader.hasUndeliveredPaidOrder` 신설.
+- 검증 하네스: 실 PostgreSQL 통합 슬라이스(Testcontainers). 결제 실패는 declined 반환 테스트 더블, 재고·쿠폰 중간 실패는 spy 결함주입.
 
-### 7. 컨트롤러 + 요청/응답 DTO (`presentation/v1`)
+### 6. 파사드 (`facade`) — 완료
+
+- 구현: `CheckoutFacade`·`OrderCancellationFacade`·`ProductRegistrationFacade`·`MemberWithdrawalFacade`. 전부 `@Component`, `@Transactional` 없음 — 각 도메인 쓰기가 자기 트랜잭션을 소유하고 파사드는 동기 보상만 한다.
+- 체크아웃: 검증(회원 자격·주문가능 합성·쿠폰 적용성) → 주문 PENDING(사가 앵커) → 재고 차감 → 쿠폰 확정 → 결제(0원 PG 생략) → `markPaid`. 실패 지점별 보상(차감분만/전체 재고·쿠폰 복원 + 주문 취소). 체크아웃 보상은 §체크아웃 step5 순서(복원 후 취소 — 단독 소유라 정확히-1회), 사용자 취소는 §취소 순서(취소 선행이 복원 게이트).
+- 크로스 도메인 거부는 `com.commerce.api.exception.ApiErrorCode`가 소유(단일 도메인에 속하지 않는 조율 규칙): MEMBER_NOT_ELIGIBLE·EMPTY_CART·NOT_ORDERABLE·INSUFFICIENT_STOCK·COUPON_NOT_APPLICABLE·PAYMENT_METHOD_REQUIRED·PAYMENT_DECLINED·ORDER_NOT_CANCELLABLE·WITHDRAWAL_BLOCKED. 변형·상품·재고 조회의 부재/삭제/미시딩은 예외를 잡아 NOT_ORDERABLE로 강등.
+- 검증: 세 보상 분기(재고·쿠폰·결제) 전부 취소 호출·사유까지 확인. 결제 실패는 declined 게이트웨이, 재고·쿠폰 중간 실패는 `@MockitoSpyBean` 결함주입(`doThrow`)+`verify(cancel)`.
+
+### 7. 컨트롤러 + 요청/응답 DTO (`presentation/v1`) — 남음 (다음 세션)
 
 - 목표: REST 엔드포인트, 요청 DTO(Bean Validation), 응답 DTO(Info→Response 변환은 앱이 소유). ID는 문자열로 전송.
-- 전제: P1(common-web).
+- 전제: P1(common-web). app-api에 common-web 의존·컴포넌트스캔 배선(ProblemDetail 핸들러·멱등 필터), 실컨텍스트(`@SpringBootTest`+MockMvc) 웹 하네스. 파사드가 완성돼 컨트롤러는 얇은 위임+DTO 변환이다.
 
-### 8. `OrderPaid` 리스너 (`event/listener`)
+### 8. `OrderPaid` 리스너 (`event/listener`) — 완료
 
-- 목표: `OrderPaid` 커밋 후 소비 → 장바구니 `removeItems`(멱등). `DOMAIN-DESIGN.md` §도메인 이벤트 명세.
-- 전제: P1(common-messaging), 6(발행 배선).
+- 구현: `OrderPaidListener`가 `@TransactionalEventListener(AFTER_COMMIT)` + `@Transactional(REQUIRES_NEW)`로 `cartModifier.removeItems`를 소비(멱등·실패 삼킴). 발행은 `OrderModifier.markPaid`가 트랜잭션 안에서 `OrderPaid`를 내고 in-process transport가 `ApplicationEventPublisher`로 재발행 → 커밋 후에만 통지(롤백 시 발행 없음).
+- 하드윈: AFTER_COMMIT 단계에는 방금 커밋된 트랜잭션 동기화가 아직 살아 있어, `REQUIRED` 소비가 그 죽은 트랜잭션에 합류하면 delete가 재커밋되지 않아 유실된다. `REQUIRES_NEW`가 필수. 통합 테스트("체크아웃 후 장바구니 비움")가 이 유실을 잡았다.
 
-### 9. 배선
+### 9. 배선 — 완료
 
-- `JpaAuditingConfig` import, 이벤트 발행 배선, 컴포넌트 스캔 등. app 실행 앱 설정 불변식(`open-in-view: false`, `ddl-auto: validate`)은 이미 `application.yml`에 있음.
+- `ApiApplication`: `@SpringBootApplication(scanBasePackages = "com.commerce")` + `@EntityScan("com.commerce")` + `@EnableJpaRepositories("com.commerce")` + `@Import(JpaAuditingConfig.class)`. 도메인 `@Service`·external·infra `@Component`를 전역 스캔으로 조립하고, 엔티티·리포지토리 스캔도 `com.commerce`로 넓혀야 도메인 매핑·저장소가 잡힌다.
+- 경계 활성화: app-api가 도메인을 의존해 두 ArchUnit 규칙이 비공허해졌다. 엔티티 경계는 통과(파사드가 값 타입·Info만 참조). 리포지토리 규칙 대상을 `com.commerce..repository..`로 좁혔다 — Spring Data 자신의 `org.springframework.data.jpa.repository.config`(@EnableJpaRepositories)까지 `..repository..`가 잡던 것을 배제(비활성 시절엔 드러나지 않던 과대 매칭).
+- 하드윈: `@EntityScan`은 Boot 4에서 `org.springframework.boot.persistence.autoconfigure`로 이동. app-api 통합 테스트는 정적 컨테이너+`SchemaFlywayFactory.migrateAll`을 컨텍스트 생성 전에 실행해 `ddl-auto=validate` 부팅을 태운다(롤백 없이 — 커밋 후 리스너가 실제로 돌게).
 
 ---
 
 ## P3 — 후속 (소비자 도입 시)
 
-- 도메인 read 보강: `getCoupon`/`CouponInfo`(체크아웃이 minOrderAmount 필요), payment `getByOrderId`(취소 파사드), `OrderInfo`에 이행/취소 이력 필드(paidAt·cancelledAt·reason 등, 주문 상세 뷰 도입 시).
+- 도메인 read 보강(남은 것): `OrderInfo`에 이행/취소 이력 필드(paidAt·cancelledAt·reason 등, 주문 상세 뷰 도입 시), 회원별 주문 목록 리더(주문 이력 엔드포인트·컨트롤러 #7 도입 시). P2에서 해소분: 체크아웃 minOrderAmount는 `Coupon.calculateDiscount` 플로어로, 취소 파사드의 payment 조회는 `PaymentReader.getByOrderId`로 처리했다(별도 `getCoupon`/`CouponInfo`는 불필요 — 쿠폰 적용성이 도메인에 남는다).
 - 실 PG 이중청구 방어: 현재 PG 호출이 `@Transactional` 안이라 동기 stub 기준에선 무해하나 실 PG면 승인 후 롤백 시 재청구 위험. 멱등키·tx 밖 호출·리컨실 중 택. (payment 리뷰 m2)
 - Testcontainers `org.testcontainers.containers.PostgreSQLContainer`(2.x에서 deprecated) → `org.testcontainers.postgresql.PostgreSQLContainer` 정리. 동작에는 문제없음.
 
