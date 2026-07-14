@@ -27,11 +27,11 @@
 
 ## P1 — 지원 인프라 (app 계층의 전제)
 
-### 2. external-payment (`PaymentGateway` stub 어댑터)
+### 2. external-payment (`PaymentGateway` stub 어댑터) — 완료
 
-- 목표: `domain-payment`의 `com.commerce.payment.port.PaymentGateway`를 구현하는 연습용 동기 stub. `convention.external-module` 적용, `externalModule { targetDomain.set("domain-payment") }` 설정.
-- 전제: P0 (포트가 노출하는 `PaymentMethod`/`FailureReason`가 external에서 접근 가능해야 함).
-- 설계: `DOMAIN-DESIGN.md` §7, §크로스 도메인(결제 5단계). approve는 성공/실패를 동기 반환, cancel은 취소 거래 ID 반환.
+- 구현: `module-external/external-payment`, `convention.external-module` + `externalModule { targetDomain.set("domain-payment") }`. `com.commerce.external.payment.StubPaymentGateway`가 `PaymentGateway` 구현 — approve는 항상 성공 승인 + 거래 ID 발급, cancel은 취소 거래 ID 반환. 상태 미보관·실패 시뮬레이션 없음(동기 stub 기준선; 실패·보상 경로는 P2 파사드가 테스트 더블로 검증).
+- 배선: `@Component` — P2의 `com.commerce` 컴포넌트스캔이 도메인 `@Service`와 함께 어댑터도 자동 포함(별도 @Bean 불필요). spring-context만 의존(JPA 불필요).
+- 검증 완료: `StubPaymentGatewayTest`(승인 성공·거래 ID 유일·취소 ID 반환), `./gradlew build` 그린. external-module 컨벤션이 대상 도메인+common 외 프로젝트 의존을 차단함도 확인.
 
 ### 3. common-messaging (`MessagePublisher` 발행 포트)
 
