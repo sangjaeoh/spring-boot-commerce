@@ -1,0 +1,12 @@
+package com.commerce.coupon.exception;
+
+import com.commerce.core.exception.BaseException;
+import com.commerce.core.exception.ErrorCode;
+
+/** 사용 기한이 지난 발급 쿠폰을 사용하려 할 때 던진다. */
+public class CouponExpiredException extends BaseException {
+
+    public CouponExpiredException(ErrorCode errorCode) {
+        super(errorCode);
+    }
+}
