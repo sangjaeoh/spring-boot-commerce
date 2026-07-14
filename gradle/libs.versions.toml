@@ -22,6 +22,7 @@ spring-dependency-management-gradle-plugin = { module = "io.spring.gradle:depend
 jspecify = { module = "org.jspecify:jspecify", version.ref = "jspecify" }
 nullaway = { module = "com.uber.nullaway:nullaway", version.ref = "nullaway" }
 errorprone-core = { module = "com.google.errorprone:error_prone_core", version.ref = "errorprone-core" }
+errorprone-annotations = { module = "com.google.errorprone:error_prone_annotations", version.ref = "errorprone-core" }
 
 # convention.domain-module — version aligned by the Spring Boot BOM platform
 spring-boot-starter-data-jpa = { module = "org.springframework.boot:spring-boot-starter-data-jpa" }

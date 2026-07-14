@@ -4,6 +4,7 @@ import com.commerce.core.id.UuidV7Generator;
 import com.commerce.core.money.Money;
 import com.commerce.jpa.converter.MoneyConverter;
 import com.commerce.jpa.entity.BaseTimeEntity;
+import com.google.errorprone.annotations.Keep;
 import jakarta.persistence.Column;
 import jakarta.persistence.ConstraintMode;
 import jakarta.persistence.Convert;
@@ -30,7 +31,7 @@ public class OrderLine extends BaseTimeEntity<UUID> {
     private UUID id;
 
     // Order.lines의 mappedBy 대상이자 FK(order_id) 소유 필드다. Hibernate가 리플렉션으로 읽으나 자바 코드에선 읽지 않는다.
-    @SuppressWarnings("UnusedVariable")
+    @Keep
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "order_id", foreignKey = @ForeignKey(ConstraintMode.NO_CONSTRAINT))
     private Order order;

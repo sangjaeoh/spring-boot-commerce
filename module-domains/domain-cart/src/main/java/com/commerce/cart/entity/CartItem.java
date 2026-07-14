@@ -4,6 +4,7 @@ import com.commerce.cart.exception.CartErrorCode;
 import com.commerce.cart.exception.InvalidCartItemException;
 import com.commerce.core.id.UuidV7Generator;
 import com.commerce.jpa.entity.BaseTimeEntity;
+import com.google.errorprone.annotations.Keep;
 import jakarta.persistence.Column;
 import jakarta.persistence.ConstraintMode;
 import jakarta.persistence.Entity;
@@ -28,7 +29,7 @@ public class CartItem extends BaseTimeEntity<UUID> {
     private UUID id;
 
     // Cart.items의 mappedBy 대상이자 FK(cart_id) 소유 필드다. Hibernate가 리플렉션으로 읽으나 자바 코드에선 읽지 않는다.
-    @SuppressWarnings("UnusedVariable")
+    @Keep
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "cart_id", foreignKey = @ForeignKey(ConstraintMode.NO_CONSTRAINT))
     private Cart cart;

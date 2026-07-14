@@ -24,6 +24,7 @@ spotless {
 
 dependencies {
     "implementation"(libs.findLibrary("jspecify").get())
+    "compileOnly"(libs.findLibrary("errorprone-annotations").get())
     "errorprone"(libs.findLibrary("errorprone-core").get())
     "errorprone"(libs.findLibrary("nullaway").get())
 }
