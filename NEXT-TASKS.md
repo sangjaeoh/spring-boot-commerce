@@ -83,7 +83,7 @@
 - 포크 결정(질문): API 표면 = 파사드 4개 write 엔드포인트만(조회·단일도메인 쓰기는 P3 소비자 도입 시). ID는 원생 문자열이 아니라 타입된 입력(`UUID`·enum)으로 바인딩 — 잘못된 값이 프레임워크 400으로 깨끗이 떨어지고 도메인 선행조건이 버그 백스톱(500)으로 남게(`docs/coding-conventions.md`:30). 배선: common-web는 `runtimeOnly`(스캔 조립·코드 참조 없음), `@Valid` 트리거용 `spring-boot-starter-validation` 추가.
 - 검증: 실컨텍스트 `@SpringBootTest`+`@AutoConfigureMockMvc`+Testcontainers 웹 하네스(`WebIntegrationTest`), 12 테스트. 두 경계 배선을 실제로 증명 — `API_EMPTY_CART` 등 problem+json `code`는 `ProblemDetailHandler` 컴포넌트스캔이, `DUPLICATE_REQUEST` 409는 멱등 필터 자동등록이 활성일 때만 통과(끊기면 500·201로 실패). 콜드 리뷰 2인 반영: 옵션 배열 null 원소를 `List<@NotNull OptionRequest>`로 400 강제(미수정 시 client→500, must-fix), 체크아웃 해피패스에 쿠폰·배송비 매핑 검증(discount·payAmount·issuedCouponId), 멱등키 랜덤화, 응답 `from` Javadoc·옵션 라벨·problem+json content-type 단언 보강.
 - 하드윈(Boot 4.1): `@AutoConfigureMockMvc`가 `org.springframework.boot.webmvc.test.autoconfigure`로 이동(`spring-boot-starter-webmvc-test` 필요, `starter-test`에 미포함). Jackson 3(`tools.jackson.databind.ObjectMapper`) 단독 — Jackson 2 databind 미존재. `spring-boot-starter-web`은 hibernate-validator를 안 끌어와 `@Valid`엔 `starter-validation` 별도 필요. presentation 서브패키지는 `package-info.java` 불필요(NullAway `AnnotatedPackages=com.commerce` 접두 재귀).
-- 남음(선택): app-api 웹 하네스와 파사드 하네스가 각자 Testcontainers 컨테이너를 띄운다(마이그레이션 2회). 공유 홀더로 1개로 줄일 수 있으나 기존 `FacadeIntegrationTest`를 건드려야 해 미룸(마이그레이션 테스트도 독립 컨테이너라 그룹별 패턴과 일관).
+- 하네스 컨테이너 공유(완료): 웹·파사드 하네스가 각자 띄우던 컨테이너를 `SharedPostgresContainer`(app-api 테스트 홀더) 하나로 합쳐 마이그레이션이 1회만 돈다. 두 하네스는 자기 `@SpringBootTest` 설정을 유지한 채 `@DynamicPropertySource`에서 `SharedPostgresContainer.INSTANCE`를 참조하고, 홀더가 정적 초기화로 컨테이너 1개 기동 + `migrateAll` 1회를 소유한다(app-api 테스트가 단일 JVM 포크라 공유됨 — `useJUnitPlatform`만, fork 지시 없음). app-migration 테스트는 독립 컨테이너 유지(모듈 경계).
 
 ### 8. `OrderPaid` 리스너 (`event/listener`) — 완료
 
@@ -102,7 +102,7 @@
 
 - 도메인 read 보강(남은 것): `OrderInfo`에 이행/취소 이력 필드(paidAt·cancelledAt·reason 등, 주문 상세 뷰 도입 시), 회원별 주문 목록 리더(주문 이력 엔드포인트·컨트롤러 #7 도입 시). P2에서 해소분: 체크아웃 minOrderAmount는 `Coupon.calculateDiscount` 플로어로, 취소 파사드의 payment 조회는 `PaymentReader.getByOrderId`로 처리했다(별도 `getCoupon`/`CouponInfo`는 불필요 — 쿠폰 적용성이 도메인에 남는다).
 - 실 PG 이중청구 방어: 현재 PG 호출이 `@Transactional` 안이라 동기 stub 기준에선 무해하나 실 PG면 승인 후 롤백 시 재청구 위험. 멱등키·tx 밖 호출·리컨실 중 택. (payment 리뷰 m2)
-- Testcontainers `org.testcontainers.containers.PostgreSQLContainer`(2.x에서 deprecated) → `org.testcontainers.postgresql.PostgreSQLContainer` 정리. 동작에는 문제없음.
+- Testcontainers deprecated `org.testcontainers.containers.PostgreSQLContainer` → `org.testcontainers.postgresql.PostgreSQLContainer` 전 모듈 정리(완료). 신클래스는 비제네릭이라(구클래스는 `PostgreSQLContainer<SELF>`) 임포트만 바꾸면 컴파일 실패 — 선언부의 `<?>`·생성자 `<>` 다이아몬드도 제거해야 한다. `@ServiceConnection`은 Boot 4.1 `JdbcContainerConnectionDetailsFactory`가 `JdbcDatabaseContainer<?>`로 매칭해 그대로 유효하다(신클래스가 그 하위).
 
 ---
 
