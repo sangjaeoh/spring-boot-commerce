@@ -14,4 +14,6 @@ dependencyResolutionManagement {
     }
 }
 
+include("module-common:common-core")
+include("module-common:common-jpa")
 include("module-apps:app-api")
