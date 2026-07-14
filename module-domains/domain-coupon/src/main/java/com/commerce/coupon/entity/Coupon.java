@@ -107,8 +107,11 @@ public class Coupon extends BaseTimeEntity<UUID> {
         }
     }
 
-    /** 주문 금액에 대한 할인액을 산출한다. */
+    /** 주문 금액에 대한 할인액을 산출한다. 최소주문금액 미달이면 0을 반환한다. */
     public Money calculateDiscount(Money orderAmount) {
+        if (orderAmount.isLessThan(minOrderAmount)) {
+            return Money.ZERO;
+        }
         return discount.applyTo(orderAmount);
     }
 

@@ -3,6 +3,7 @@ package com.commerce.order;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.commerce.core.money.Money;
+import com.commerce.messaging.publish.MessagePublisher;
 import com.commerce.order.entity.Address;
 import com.commerce.order.entity.FulfillmentStatus;
 import com.commerce.order.entity.OrderLineSnapshot;
@@ -20,7 +21,9 @@ import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.TestConstructor;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -43,7 +46,7 @@ import org.testcontainers.utility.DockerImageName;
         })
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Testcontainers
-@Import({OrderAppender.class, OrderReader.class, OrderModifier.class})
+@Import({OrderAppender.class, OrderReader.class, OrderModifier.class, OrderPersistenceTest.NoOpMessagingConfig.class})
 @ImportAutoConfiguration(FlywayAutoConfiguration.class)
 @TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 class OrderPersistenceTest {
@@ -107,5 +110,14 @@ class OrderPersistenceTest {
         OrderInfo order = orderReader.getOrder(orderId);
         assertThat(order.status()).isEqualTo(OrderStatus.PAID);
         assertThat(order.fulfillmentStatus()).isEqualTo(FulfillmentStatus.DELIVERED);
+    }
+
+    @TestConfiguration
+    static class NoOpMessagingConfig {
+
+        @Bean
+        MessagePublisher messagePublisher() {
+            return event -> {};
+        }
     }
 }

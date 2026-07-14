@@ -116,6 +116,19 @@ class CouponPersistenceTest {
     }
 
     @Test
+    @DisplayName("주문 금액이 최소주문금액 미달이면 산출 할인은 0 — 체크아웃 게이트")
+    void calculateDiscountBelowMinOrderIsZero() {
+        UUID couponId = createRateCoupon();
+        em.flush();
+        UUID issuedId = issuedCouponAppender.issue(couponId, UUID.randomUUID());
+        em.flush();
+        em.clear();
+
+        assertThat(issuedCouponReader.calculateDiscount(issuedId, Money.of(9999L)))
+                .isEqualTo(Money.ZERO);
+    }
+
+    @Test
     @DisplayName("회원당 동일 쿠폰 중복 발급은 거부된다")
     void duplicateIssuanceRejected() {
         UUID couponId = createRateCoupon();

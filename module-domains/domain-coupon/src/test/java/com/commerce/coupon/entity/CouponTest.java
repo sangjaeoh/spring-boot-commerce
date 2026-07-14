@@ -69,8 +69,9 @@ class CouponTest {
     }
 
     @Test
-    @DisplayName("할인 산출은 할인 정책에 위임한다")
-    void calculateDiscountDelegates() {
-        assertThat(activeCoupon().calculateDiscount(Money.of(5000L))).isEqualTo(Money.of(500L));
+    @DisplayName("주문금액이 최소주문금액 이상이면 할인 정책에 위임하고, 미달이면 0")
+    void calculateDiscountFloorsAtMinOrderAmount() {
+        assertThat(activeCoupon().calculateDiscount(Money.of(50000L))).isEqualTo(Money.of(5000L));
+        assertThat(activeCoupon().calculateDiscount(Money.of(5000L))).isEqualTo(Money.ZERO);
     }
 }

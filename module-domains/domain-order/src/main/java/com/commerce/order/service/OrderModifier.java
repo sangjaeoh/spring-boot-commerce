@@ -1,8 +1,10 @@
 package com.commerce.order.service;
 
+import com.commerce.messaging.publish.MessagePublisher;
 import com.commerce.order.entity.CancellationReason;
 import com.commerce.order.entity.HoldReason;
 import com.commerce.order.entity.Order;
+import com.commerce.order.event.OrderPaid;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderNotFoundException;
 import com.commerce.order.exception.OrderStatusException;
@@ -16,15 +18,23 @@ import org.springframework.transaction.annotation.Transactional;
 public class OrderModifier {
 
     private final OrderRepository orderRepository;
+    private final MessagePublisher messagePublisher;
 
-    public OrderModifier(OrderRepository orderRepository) {
+    public OrderModifier(OrderRepository orderRepository, MessagePublisher messagePublisher) {
         this.orderRepository = orderRepository;
+        this.messagePublisher = messagePublisher;
     }
 
-    /** 결제를 완료한다. */
+    /**
+     * 결제를 완료하고 {@link OrderPaid}를 발행한다.
+     *
+     * <p>발행은 이 트랜잭션 안에서 일어나므로 커밋 후 소비 리스너가 커밋 후에만 통지받는다.
+     */
     @Transactional
     public void markPaid(UUID orderId) {
-        find(orderId).markPaid();
+        Order order = find(orderId);
+        order.markPaid();
+        messagePublisher.publish(new OrderPaid(order.getId(), order.getMemberId(), order.getOrderedVariantIds()));
     }
 
     /**
