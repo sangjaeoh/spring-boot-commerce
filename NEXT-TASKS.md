@@ -39,11 +39,15 @@
 - 배선: `domain-order`가 common-messaging 의존(`convention.domain-module` 화이트리스트에 이미 등재) + `OrderPaid implements DomainEvent`(마커 고아 방지·이벤트 계약 확립). transport 어댑터·아웃박스·멱등 소비 지원은 범위 밖(infra·추후). 실제 발행 호출 배선(markPaid 커밋 후 발행)·커밋 후 리스너는 P2 #6·#8·#9.
 - 검증 완료: 테스트 없음(순수 인터페이스 — 실행할 행위 없음). `./gradlew :module-common:common-messaging:spotlessApply build` 그린, `./gradlew build` 전 모듈 그린(도메인 Testcontainers 슬라이스 포함).
 
-### 4. common-web (경계 공통)
+### 4. common-web (경계 공통) — 완료
 
-- 목표: ProblemDetail 핸들러(`BaseException.getErrorCode()`의 `status()`→HTTP, 그 외 `IllegalArgumentException` 등은 500), 요청 DTO Bean Validation 승격처, 더블서밋 멱등 필터.
-- 근거: Option C가 전제하는 "핸들러가 `BaseException`은 매핑, IAE는 500"을 실제 배선하는 곳. cart get-or-create 경합·체크아웃 더블서밋 방어(설계 범위 밖으로 미뤄둔 것)도 여기 멱등 필터가 담당.
-- 설계: `docs/architecture.md`(common-web), `docs/coding-conventions.md`(ErrorCode 계약).
+- 구현: `module-common/common-web`, `convention.common-module`(common-core만 의존; auth는 이번 범위 밖). 슬림 스프링 웹(`spring-webmvc`+`spring-orm`, 서블릿 API는 `compileOnly`)만 의존해 임베디드 서버 스타터를 안 끌어온다.
+  - `error/ProblemDetailHandler`(`@RestControllerAdvice` extends `ResponseEntityExceptionHandler`): `BaseException`→`ErrorCode.status()`, `MethodArgumentNotValidException`→400+필드·global 오류(`code`/`errors`), `ObjectOptimisticLockingFailureException`→409(entity-persistence.md:107), 그 외→500. 표준 MVC 예외(405·415·본문 파싱)는 상위 클래스가 각 상태로 처리해 500 폴백이 안 삼킨다.
+  - `idempotency/IdempotencyStore`(포트) + `InMemoryIdempotencyStore`(인메모리 구현) + `IdempotencyFilter`(`OncePerRequestFilter`). `Idempotency-Key` 헤더·unsafe 메서드 한정, 중복→problem+json 409. 저장소는 in-flight 락(넉넉한 TTL)과 완료 후 dedup 창(짧은 TTL)을 분리해, 요청이 창보다 오래 걸리거나 타임아웃 재시도가 와도 원본 처리 중엔 새로 획득 못 한다.
+- 포크 결정(질문): 멱등 저장소 = 포트+인메모리 구현(Redis-ready seam), 웹 테스트 = 최소 부트 웹 컨텍스트(`@SpringBootTest`+`webAppContextSetup`으로 실제 필터 체인), auth = 이번 범위 제외(common-auth 미의존).
+- 배선: 핸들러·필터가 스프링 스테레오타입(`@RestControllerAdvice`/`@Component`)이라 P2 `com.commerce` 컴포넌트스캔이 자동 포함한다(app-api 배선 자체는 P2). `convention.common-module`이 이미 common-web를 화이트리스트(common-core·common-auth)에 두고 있었다.
+- 검증 완료: 15개 테스트(핸들러 6·필터 5·저장소 4) — 4매핑·프레임워크 4xx 비삼킴·잘못된 본문 400·멱등 중복 거부·64스레드 단일승자·in-flight 락 지속. `./gradlew build` 전 모듈 그린(총 153 테스트). 콜드 서브에이전트 2인 리뷰 반영: in-flight/창 TTL 분리(양쪽 독립 지적), 스레드 경합 테스트·global 검증 오류·409 content-type·blank 헤더·잘못된 본문 테스트 추가. param-level 검증 매핑·코드 문자열 중앙화는 소비처 없음·과설계로 기각.
+- 남음: P2 app-api가 이 핸들러·필터를 컴포넌트스캔으로 배선하고, 요청 DTO(`presentation/v1`)에 Bean Validation 애노테이션을 붙인다.
 
 ### 5. SchemaFlywayFactory (common-jpa) + `app-migration` 앱 — 완료
 
