@@ -45,10 +45,12 @@
 - 근거: Option C가 전제하는 "핸들러가 `BaseException`은 매핑, IAE는 500"을 실제 배선하는 곳. cart get-or-create 경합·체크아웃 더블서밋 방어(설계 범위 밖으로 미뤄둔 것)도 여기 멱등 필터가 담당.
 - 설계: `docs/architecture.md`(common-web), `docs/coding-conventions.md`(ErrorCode 계약).
 
-### 5. SchemaFlywayFactory (common-jpa) + `app-migration` 앱
+### 5. SchemaFlywayFactory (common-jpa) + `app-migration` 앱 — 완료
 
-- 목표: 7개 스키마(`member`·`product`·`stock`·`cart`·`coupon`·`ordering`·`payment`)의 Flyway를 스키마별로 실행하는 팩토리와 독립 실행 앱. 마이그레이션 SQL은 각 도메인 `src/main/resources/db/migration/{name}/`에 이미 있다.
-- 근거: 전 도메인을 한 DB에 올려 `ddl-auto=validate`로 앱을 기동·검증하려면 필요. `docs/architecture.md`(스키마 등록·app-migration).
+- 구현: `com.commerce.jpa.migration.SchemaFlywayFactory`(common-jpa) — 스키마별 Flyway 인스턴스(각자 `flyway_schema_history`). 모든 마이그레이션이 `V1__`이라 단일 Flyway로 로케이션을 합치면 버전 충돌 → 스키마별 실행이 필수. flyway는 common-jpa에 `compileOnly`(도메인 런타임에 전파 안 함), 소비자 app-migration이 런타임 제공.
+- `app-migration`(`module-apps/app-migration`): 얇은 부트 앱. `ApplicationRunner`가 `SchemaFlywayFactory.migrateAll(dataSource)` 실행, 도메인은 `runtimeOnly`(마이그레이션 리소스·엔티티만). `spring.flyway.enabled=false`(Boot 기본 Flyway가 `db/migration`을 재귀 스캔해 7개 V1 충돌하는 것 차단).
+- 검증 완료: `SchemaMigrationValidationTest`(Testcontainers) — `migrateAll` 후 7개 도메인 엔티티를 한 EMF로 `validate` 부팅해 전부 통과(Member·Product·Stock·Cart·Coupon·Order·Payment). `./gradlew build` 그린(전 모듈).
+- 유의: 수동 EMF는 Boot 기본 물리 네이밍(`CamelCaseToUnderscoresNamingStrategy`)을 명시해야 파생 컬럼(created_at 등)이 DDL과 맞는다. app-migration 표준 기동(`ddl-auto=validate`)은 app-api가 도메인 엔티티를 스캔하는 P2에서 이뤄진다.
 
 ---
 
