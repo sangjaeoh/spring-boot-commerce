@@ -16,15 +16,12 @@
 
 ## P0 — 먼저 결정할 것 (app 계층을 막는 경계 정책)
 
-### 1. 아키텍처 테스트의 엔티티 경계 규칙 정제
+### 1. 아키텍처 테스트의 엔티티 경계 규칙 정제 — 완료 ((a+) 채택)
 
-- 문제: `app-api/.../ArchitectureTest.java`의 규칙이 `..entity..` "패키지"에 의존하는 모든 클래스를 막는다. 그런데 각 도메인 `Info`는 `entity` 패키지의 상태 enum(MemberStatus·OrderStatus 등)을 노출하고, `place`/`variant create` 등의 명령 입력 타입(`OrderLineSnapshot`·`ProductOption`·coupon의 `Discount`/`ValidityPeriod`)도 `entity`에 있으며, `PaymentGateway` 포트는 `entity` enum(PaymentMethod·FailureReason)을 노출한다. app-api가 도메인을 의존하고 파사드·컨트롤러가 Info를 읽거나 명령을 구성하는 순간, 그리고 external-payment가 포트를 구현하는 순간 이 규칙이 깨진다. 지금은 app-api가 도메인을 의존하지 않아 규칙이 공허 통과 중이라 잠복해 있다.
-- 결정 필요: 아래 중 택1(권장 (a)). 이 결정 없이는 아래 P1·P2가 곧바로 아키텍처 테스트에 막힌다.
-  - (a) 규칙 대상을 `..entity..` 패키지 → `@Entity`/`@MappedSuperclass` 애노테이션 클래스로 바꾼다. 값 타입(enum·record·VO)은 경계 통과를 허용한다. 설계의 "엔티티 시그니처 등장 금지"(= JPA 엔티티) 의도에 부합하고, 세 이슈를 일괄 해소한다.
-  - (b) 상태 enum·명령 입력 타입을 비-`entity` 패키지로 옮긴다.
-  - (c) Info가 enum을 문자열로 평탄화한다.
-- 함께: 소프트삭제 base finder(`findById` 등) 직접 호출 금지 ArchUnit 규칙을 이때 배선한다(member 리뷰 지적). `docs/architecture.md`의 "빌드가 강제하는 불변식"에 등재된 항목이다.
-- 검증: app-api가 도메인을 의존하게 한 뒤 아키텍처 테스트가 실제로 위반을 잡는지 확인(현재는 도메인이 스캔되지 않아 공허 통과).
+- 결정: (a+). ArchUnit 규칙 대상을 `..entity..` 패키지 의존 → `@Entity`·`@MappedSuperclass` 애노테이션 클래스 의존으로 교체(String 오버로드 `annotatedWith("jakarta.persistence.Entity")` — app-api 테스트 클래스패스에 `jakarta.persistence-api`가 없어 Class 오버로드 불가). 값 타입(enum·record·`@Embeddable` VO)은 경계 계약(명령 입력·Info·포트)으로 통과 허용. `that()` 제외 목록은 유지. 반영: `ArchitectureTest.java`, `docs/architecture.md`(:79·:166), `docs/entity-persistence.md`(추출 시 @Embeddable 애노테이션 스트립 부채 한 줄).
+- 근거: 규칙이 막는 실제 해악(LazyInit·dirty·API-엔티티 결합)은 `@Entity`에만 발생. JPA가 도메인 컨벤션에서 `implementation` 스코프라 @Embeddable가 넘어도 `jakarta.persistence`가 app 컴파일 클래스패스에 안 샌다. `Address`(@Embeddable)가 이미 `OrderAppender.place` 명령 입력으로 넘는 선례. 상세·기각안(b·c·d)은 메모리 `commerce-p0-boundary-rule-decision`.
+- 검증 완료: app-api에 domain-order 임시 의존 + 메인 소스 픽스처로, 생 `Order`(@Entity) 참조는 규칙 실패(param+return 2건)·`OrderStatus`(enum)+`OrderInfo` 참조는 통과 확인 후 임시물 전량 원복. `./gradlew :module-apps:app-api:spotlessCheck :module-apps:app-api:test` 그린.
+- 남음: 소프트삭제 base finder(`findById` 등) 직접 호출 금지 ArchUnit 규칙 배선(member 리뷰 지적, `docs/architecture.md` "빌드가 강제하는 불변식" 등재)은 이 결정과 독립이라 별도 커밋으로 미룸. 규칙의 비공허 강제는 app-api가 도메인을 의존하는 P2에서 활성화된다(지금은 스캔 대상 0 → 공허 통과).
 
 ---
 

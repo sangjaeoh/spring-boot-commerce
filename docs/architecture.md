@@ -76,7 +76,7 @@
 ### 도메인 모듈 구조 (`domain-{name}/`)
 
 - 도메인 모듈은 아래 서브 패키지로 구성한다.
-  - `entity` — JPA 엔티티·값 객체(VO)·그 `AttributeConverter`(설계·연관·생명주기·VO 매핑은 → [entity-persistence](entity-persistence.md)). 모듈 밖 시그니처 등장 금지.
+  - `entity` — JPA 엔티티·값 객체(VO)·그 `AttributeConverter`(설계·연관·생명주기·VO 매핑은 → [entity-persistence](entity-persistence.md)). JPA 매핑 클래스(`@Entity`·`@MappedSuperclass`)는 모듈 밖 시그니처 등장 금지, 값 타입(enum·record·`@Embeddable` VO)은 경계 계약(명령 입력·Info·포트)으로 통과 허용.
   - `info` — 경계용 불변 record(`Info` 정의는 → [coding-conventions](coding-conventions.md)).
   - `repository` — Spring Data + QueryDSL(배치·접근 범위는 아래 리포지토리 접근 범위).
   - `service` — Reader·Appender·Modifier·Remover·Processor·Validator(역할 접미사는 → [coding-conventions](coding-conventions.md)).
@@ -163,6 +163,6 @@
 
 - 아래는 리뷰가 아니라 빌드가 막는 경계다. 에이전트는 코드 생성 후 이 목록으로 자기검증하고, 채택 팀은 이 목록으로 강제 장치 구현 완료를 대조한다(각 항목에 강제 장치를 매핑). 강제 장치(컨벤션 플러그인·아키텍처 테스트) 자체는 빌드 하네스가 소유한다.
   - 계층 의존 방향(모듈 지도) — 컨벤션 플러그인(컴파일 시점).
-  - 엔티티의 모듈 밖 시그니처 등장 금지·타입 위치·apps의 리포지토리 직접 접근 금지·base `JpaRepository` finder 직접 호출 금지(소프트삭제 엔티티에 한함) — 아키텍처 테스트(테스트 시점).
+  - JPA 매핑 클래스(`@Entity`·`@MappedSuperclass`)의 모듈 밖 시그니처 등장 금지·타입 위치·apps의 리포지토리 직접 접근 금지·base `JpaRepository` finder 직접 호출 금지(소프트삭제 엔티티에 한함) — 아키텍처 테스트(테스트 시점).
   - 각 모듈 베이스 패키지 `@NullMarked`·null 계약·포맷·정적분석 — Spotless·NullAway·Error Prone(→ [code-quality](code-quality.md)).
   - 금지 의존성(Lombok·H2) — 컨벤션 플러그인.

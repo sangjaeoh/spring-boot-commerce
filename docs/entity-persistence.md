@@ -62,6 +62,7 @@ public abstract class BaseTimeEntity<ID extends Serializable> implements Persist
     - sealed 하위 타입 + `AttributeConverter`(JSON 등) 직렬화는 컬럼 안에 직렬화 포맷을 소유하는 비용(스키마 진화·불투명·다형 역직렬화 설정)을 지운다. 형·필드가 많아 평탄 테이블이 넓고 희소해질 때만 감수하고, 작은 유니온에선 평탄화가 낫다.
     - sealed 계층을 그대로 쓰지 못하는 이유: 임베더블은 다형성이 없어 sealed 인터페이스를 타입 컬럼으로 매핑할 수 없고, `@Inheritance`(엔티티 상속)는 값 객체를 엔티티로 승격시킨다.
 - VO·`AttributeConverter`의 패키지 배치는 → [architecture](architecture.md)의 도메인 모듈 구조가 소유한다.
+- 경계 계약(명령 입력·포트·Info)에 등장하는 `@Embeddable` VO는 매핑 애노테이션(`@Embeddable`·`@Column`·`@Convert`)을 지녀, MSA 추출로 발행 계약을 분리할 때 이 애노테이션을 스트립한다(record 선언 한 곳에 국소한 변환). enum·순수 record는 애노테이션이 없어 무변형 발행된다.
 
 ### 상태 전이
 
