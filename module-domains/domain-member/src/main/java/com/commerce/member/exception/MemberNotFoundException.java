@@ -1,0 +1,12 @@
+package com.commerce.member.exception;
+
+import com.commerce.core.exception.BaseException;
+import com.commerce.core.exception.ErrorCode;
+
+/** 활성 회원을 찾지 못했을 때 던진다. */
+public class MemberNotFoundException extends BaseException {
+
+    public MemberNotFoundException(ErrorCode errorCode) {
+        super(errorCode);
+    }
+}

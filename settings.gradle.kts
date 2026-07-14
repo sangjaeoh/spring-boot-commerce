@@ -16,4 +16,5 @@ dependencyResolutionManagement {
 
 include("module-common:common-core")
 include("module-common:common-jpa")
+include("module-domains:domain-member")
 include("module-apps:app-api")
