@@ -1,0 +1,52 @@
+package com.commerce.product.service;
+
+import com.commerce.product.entity.ProductVariant;
+import com.commerce.product.exception.ProductErrorCode;
+import com.commerce.product.exception.ProductVariantNotFoundException;
+import com.commerce.product.info.ProductVariantInfo;
+import com.commerce.product.repository.ProductVariantRepository;
+import java.util.Collection;
+import java.util.List;
+import java.util.UUID;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+/** 상품 변형 조회를 담당한다. */
+@Service
+public class ProductVariantReader {
+
+    private final ProductVariantRepository variantRepository;
+
+    public ProductVariantReader(ProductVariantRepository variantRepository) {
+        this.variantRepository = variantRepository;
+    }
+
+    /**
+     * 변형을 조회한다.
+     *
+     * @throws ProductVariantNotFoundException 변형이 없으면
+     */
+    @Transactional(readOnly = true)
+    public ProductVariantInfo getVariant(UUID variantId) {
+        ProductVariant variant = variantRepository
+                .findById(variantId)
+                .orElseThrow(() -> new ProductVariantNotFoundException(ProductErrorCode.VARIANT_NOT_FOUND));
+        return ProductVariantInfo.from(variant);
+    }
+
+    /** 주어진 ID들의 변형을 조회한다. */
+    @Transactional(readOnly = true)
+    public List<ProductVariantInfo> getVariants(Collection<UUID> variantIds) {
+        return variantRepository.findAllById(variantIds).stream()
+                .map(ProductVariantInfo::from)
+                .toList();
+    }
+
+    /** 상품의 변형 목록을 조회한다. 없으면 빈 목록이다. */
+    @Transactional(readOnly = true)
+    public List<ProductVariantInfo> getByProductId(UUID productId) {
+        return variantRepository.findByProductId(productId).stream()
+                .map(ProductVariantInfo::from)
+                .toList();
+    }
+}

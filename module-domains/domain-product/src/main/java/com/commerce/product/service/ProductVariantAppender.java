@@ -1,0 +1,63 @@
+package com.commerce.product.service;
+
+import com.commerce.core.money.Money;
+import com.commerce.product.entity.NormalizedOptions;
+import com.commerce.product.entity.ProductOption;
+import com.commerce.product.entity.ProductVariant;
+import com.commerce.product.entity.ProductVariantStatus;
+import com.commerce.product.exception.DuplicateVariantOptionException;
+import com.commerce.product.exception.ProductErrorCode;
+import com.commerce.product.exception.ProductNotFoundException;
+import com.commerce.product.repository.ProductRepository;
+import com.commerce.product.repository.ProductVariantRepository;
+import java.util.List;
+import java.util.UUID;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+/** 상품 변형 생성을 담당한다. */
+@Service
+public class ProductVariantAppender {
+
+    private final ProductRepository productRepository;
+    private final ProductVariantRepository variantRepository;
+
+    public ProductVariantAppender(ProductRepository productRepository, ProductVariantRepository variantRepository) {
+        this.productRepository = productRepository;
+        this.variantRepository = variantRepository;
+    }
+
+    /**
+     * 변형을 비활성 상태로 생성하고 새 변형 ID를 반환한다.
+     *
+     * <ol>
+     *   <li>소속 상품 존재 검사
+     *   <li>옵션 정규화
+     *   <li>비-RETIRED 옵션 조합 중복 검사
+     *   <li>변형 저장
+     * </ol>
+     *
+     * @throws ProductNotFoundException 활성 상품이 없으면
+     * @throws DuplicateVariantOptionException 비-RETIRED 변형과 옵션 조합이 겹칠 때
+     */
+    @Transactional
+    public UUID create(UUID productId, Money price, List<ProductOption> options) {
+        if (!productRepository.existsByIdAndDeletedAtIsNull(productId)) {
+            throw new ProductNotFoundException(ProductErrorCode.PRODUCT_NOT_FOUND);
+        }
+        NormalizedOptions normalized = NormalizedOptions.of(options);
+        if (variantRepository.existsByProductIdAndOptionSignatureAndStatusNot(
+                productId, normalized.signature(), ProductVariantStatus.RETIRED)) {
+            throw new DuplicateVariantOptionException(ProductErrorCode.DUPLICATE_VARIANT_OPTION);
+        }
+        try {
+            return variantRepository
+                    .saveAndFlush(ProductVariant.create(productId, price, normalized))
+                    .getId();
+        } catch (DataIntegrityViolationException e) {
+            // 선검사와 저장 사이 동시 생성 경합 방어
+            throw new DuplicateVariantOptionException(ProductErrorCode.DUPLICATE_VARIANT_OPTION);
+        }
+    }
+}
