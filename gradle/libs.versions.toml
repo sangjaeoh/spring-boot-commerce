@@ -41,6 +41,7 @@ spring-webmvc = { module = "org.springframework:spring-webmvc" }
 spring-orm = { module = "org.springframework:spring-orm" }
 jakarta-servlet-api = { module = "jakarta.servlet:jakarta.servlet-api" }
 spring-boot-starter-validation = { module = "org.springframework.boot:spring-boot-starter-validation" }
+spring-boot-starter-webmvc-test = { module = "org.springframework.boot:spring-boot-starter-webmvc-test" }
 
 # test runtime — version managed by the Spring Boot BOM (no dependency-management plugin on common/domain modules)
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }

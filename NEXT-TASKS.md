@@ -61,7 +61,7 @@
 
 ## P2 — app-api 계층 (크로스 도메인 정책)
 
-설계의 핵심 흐름을 파사드가 조율한다. 파사드는 트랜잭션을 열지 않고 도메인 서비스를 조립하며, 각 서비스가 자기 트랜잭션을 소유한다(`docs/architecture.md` 트랜잭션 경계). 이번 세션은 파사드 계층(#6·#8·#9)을 완성했고 컨트롤러(#7)는 다음 세션으로 남겼다. `./gradlew build` 그린, 170 테스트.
+설계의 핵심 흐름을 파사드가 조율한다. 파사드는 트랜잭션을 열지 않고 도메인 서비스를 조립하며, 각 서비스가 자기 트랜잭션을 소유한다(`docs/architecture.md` 트랜잭션 경계). 파사드 계층(#6·#8·#9)과 컨트롤러(#7)로 P2를 완성했다. `./gradlew build` 그린, 182 테스트.
 
 ### 포크 결정(질문)
 
@@ -77,10 +77,13 @@
 - 크로스 도메인 거부는 `com.commerce.api.exception.ApiErrorCode`가 소유(단일 도메인에 속하지 않는 조율 규칙): MEMBER_NOT_ELIGIBLE·EMPTY_CART·NOT_ORDERABLE·INSUFFICIENT_STOCK·COUPON_NOT_APPLICABLE·PAYMENT_METHOD_REQUIRED·PAYMENT_DECLINED·ORDER_NOT_CANCELLABLE·WITHDRAWAL_BLOCKED. 변형·상품·재고 조회의 부재/삭제/미시딩은 예외를 잡아 NOT_ORDERABLE로 강등.
 - 검증: 세 보상 분기(재고·쿠폰·결제) 전부 취소 호출·사유까지 확인. 결제 실패는 declined 게이트웨이, 재고·쿠폰 중간 실패는 `@MockitoSpyBean` 결함주입(`doThrow`)+`verify(cancel)`.
 
-### 7. 컨트롤러 + 요청/응답 DTO (`presentation/v1`) — 남음 (다음 세션)
+### 7. 컨트롤러 + 요청/응답 DTO (`presentation/v1`) — 완료
 
-- 목표: REST 엔드포인트, 요청 DTO(Bean Validation), 응답 DTO(Info→Response 변환은 앱이 소유). ID는 문자열로 전송.
-- 전제: P1(common-web). app-api에 common-web 의존·컴포넌트스캔 배선(ProblemDetail 핸들러·멱등 필터), 실컨텍스트(`@SpringBootTest`+MockMvc) 웹 하네스. 파사드가 완성돼 컨트롤러는 얇은 위임+DTO 변환이다.
+- 구현: `presentation/v1`에 컨트롤러 3개(`OrderController` 체크아웃+취소·`ProductController` 등록·`MemberController` 탈퇴)와 요청/응답 DTO(`request/`·`response/`). 파사드 4개에 얇게 위임(요청 DTO→도메인 입력, 결과 ID→응답 DTO). 엔드포인트: `POST /api/v1/orders`(201 orderId)·`POST /api/v1/orders/{id}/cancel`(204)·`POST /api/v1/products`(201 productId)·`DELETE /api/v1/members/{id}?reason=`(204).
+- 포크 결정(질문): API 표면 = 파사드 4개 write 엔드포인트만(조회·단일도메인 쓰기는 P3 소비자 도입 시). ID는 원생 문자열이 아니라 타입된 입력(`UUID`·enum)으로 바인딩 — 잘못된 값이 프레임워크 400으로 깨끗이 떨어지고 도메인 선행조건이 버그 백스톱(500)으로 남게(`docs/coding-conventions.md`:30). 배선: common-web는 `runtimeOnly`(스캔 조립·코드 참조 없음), `@Valid` 트리거용 `spring-boot-starter-validation` 추가.
+- 검증: 실컨텍스트 `@SpringBootTest`+`@AutoConfigureMockMvc`+Testcontainers 웹 하네스(`WebIntegrationTest`), 12 테스트. 두 경계 배선을 실제로 증명 — `API_EMPTY_CART` 등 problem+json `code`는 `ProblemDetailHandler` 컴포넌트스캔이, `DUPLICATE_REQUEST` 409는 멱등 필터 자동등록이 활성일 때만 통과(끊기면 500·201로 실패). 콜드 리뷰 2인 반영: 옵션 배열 null 원소를 `List<@NotNull OptionRequest>`로 400 강제(미수정 시 client→500, must-fix), 체크아웃 해피패스에 쿠폰·배송비 매핑 검증(discount·payAmount·issuedCouponId), 멱등키 랜덤화, 응답 `from` Javadoc·옵션 라벨·problem+json content-type 단언 보강.
+- 하드윈(Boot 4.1): `@AutoConfigureMockMvc`가 `org.springframework.boot.webmvc.test.autoconfigure`로 이동(`spring-boot-starter-webmvc-test` 필요, `starter-test`에 미포함). Jackson 3(`tools.jackson.databind.ObjectMapper`) 단독 — Jackson 2 databind 미존재. `spring-boot-starter-web`은 hibernate-validator를 안 끌어와 `@Valid`엔 `starter-validation` 별도 필요. presentation 서브패키지는 `package-info.java` 불필요(NullAway `AnnotatedPackages=com.commerce` 접두 재귀).
+- 남음(선택): app-api 웹 하네스와 파사드 하네스가 각자 Testcontainers 컨테이너를 띄운다(마이그레이션 2회). 공유 홀더로 1개로 줄일 수 있으나 기존 `FacadeIntegrationTest`를 건드려야 해 미룸(마이그레이션 테스트도 독립 컨테이너라 그룹별 패턴과 일관).
 
 ### 8. `OrderPaid` 리스너 (`event/listener`) — 완료
 

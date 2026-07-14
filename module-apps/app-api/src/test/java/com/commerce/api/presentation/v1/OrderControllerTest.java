@@ -1,0 +1,183 @@
+package com.commerce.api.presentation.v1;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import com.commerce.api.facade.ProductRegistrationFacade;
+import com.commerce.api.presentation.v1.request.AddressRequest;
+import com.commerce.api.presentation.v1.request.CheckoutRequest;
+import com.commerce.api.presentation.v1.response.CheckoutResponse;
+import com.commerce.cart.service.CartAppender;
+import com.commerce.core.money.Money;
+import com.commerce.coupon.entity.Discount;
+import com.commerce.coupon.entity.ValidityPeriod;
+import com.commerce.coupon.service.CouponAppender;
+import com.commerce.coupon.service.IssuedCouponAppender;
+import com.commerce.member.service.MemberAppender;
+import com.commerce.order.entity.OrderStatus;
+import com.commerce.order.info.OrderInfo;
+import com.commerce.order.service.OrderModifier;
+import com.commerce.order.service.OrderReader;
+import com.commerce.payment.entity.PaymentMethod;
+import com.commerce.product.service.ProductVariantReader;
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.TestConstructor;
+import org.springframework.test.web.servlet.MockMvc;
+import tools.jackson.databind.ObjectMapper;
+
+@TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
+class OrderControllerTest extends WebIntegrationTest {
+
+    private final MockMvc mvc;
+    private final ObjectMapper objectMapper;
+    private final MemberAppender memberAppender;
+    private final CartAppender cartAppender;
+    private final ProductRegistrationFacade productRegistrationFacade;
+    private final ProductVariantReader variantReader;
+    private final CouponAppender couponAppender;
+    private final IssuedCouponAppender issuedCouponAppender;
+    private final OrderReader orderReader;
+    private final OrderModifier orderModifier;
+
+    OrderControllerTest(
+            MockMvc mvc,
+            ObjectMapper objectMapper,
+            MemberAppender memberAppender,
+            CartAppender cartAppender,
+            ProductRegistrationFacade productRegistrationFacade,
+            ProductVariantReader variantReader,
+            CouponAppender couponAppender,
+            IssuedCouponAppender issuedCouponAppender,
+            OrderReader orderReader,
+            OrderModifier orderModifier) {
+        this.mvc = mvc;
+        this.objectMapper = objectMapper;
+        this.memberAppender = memberAppender;
+        this.cartAppender = cartAppender;
+        this.productRegistrationFacade = productRegistrationFacade;
+        this.variantReader = variantReader;
+        this.couponAppender = couponAppender;
+        this.issuedCouponAppender = issuedCouponAppender;
+        this.orderReader = orderReader;
+        this.orderModifier = orderModifier;
+    }
+
+    @Test
+    @DisplayName("쿠폰·배송비 체크아웃이 201로 주문을 결제하고 할인·결제금액·쿠폰을 반영한다")
+    void checkoutAppliesCouponShippingAndReturnsPaidOrder() throws Exception {
+        UUID memberId = registerMember();
+        UUID variantId = seedProduct(50);
+        cartAppender.addItem(memberId, variantId, 2);
+        UUID couponId = couponAppender.create("10% 할인", Discount.rate(10), Money.of(10000L), validity(), 30);
+        UUID issuedId = issuedCouponAppender.issue(couponId, memberId);
+        CheckoutRequest request = new CheckoutRequest(memberId, addressRequest(), 3000L, issuedId, PaymentMethod.CARD);
+
+        String body = mvc.perform(post("/api/v1/orders")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.orderId").exists())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        UUID orderId = UUID.fromString(
+                objectMapper.readValue(body, CheckoutResponse.class).orderId());
+        OrderInfo order = orderReader.getOrder(orderId);
+        assertThat(order.status()).isEqualTo(OrderStatus.PAID);
+        assertThat(order.discountAmount()).isEqualTo(Money.of(2000L));
+        assertThat(order.payAmount()).isEqualTo(Money.of(21000L));
+        assertThat(order.issuedCouponId()).isEqualTo(issuedId);
+    }
+
+    @Test
+    @DisplayName("회원 ID가 없는 체크아웃 요청은 400 problem+json으로 거부된다")
+    void checkoutRejectsInvalidRequest() throws Exception {
+        String json = """
+                {"shippingAddress":{"recipientName":"홍길동","zipCode":"04524",\
+                "roadAddress":"서울특별시 중구 세종대로 110","phone":"010-1234-5678"},"shippingFee":0}""";
+
+        mvc.perform(post("/api/v1/orders")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.errors").isNotEmpty());
+    }
+
+    @Test
+    @DisplayName("빈 장바구니 체크아웃은 409 API_EMPTY_CART로 거부된다")
+    void checkoutRejectsEmptyCart() throws Exception {
+        UUID memberId = registerMember();
+        CheckoutRequest request = new CheckoutRequest(memberId, addressRequest(), 0L, null, PaymentMethod.CARD);
+
+        mvc.perform(post("/api/v1/orders")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("API_EMPTY_CART"));
+    }
+
+    @Test
+    @DisplayName("결제 완료 주문 취소는 204로 성공하고 주문을 CANCELLED로 만든다")
+    void cancelSucceedsForPaidOrder() throws Exception {
+        UUID orderId = checkoutViaHttp();
+
+        mvc.perform(post("/api/v1/orders/{orderId}/cancel", orderId)).andExpect(status().isNoContent());
+
+        assertThat(orderReader.getOrder(orderId).status()).isEqualTo(OrderStatus.CANCELLED);
+    }
+
+    @Test
+    @DisplayName("배송 완료 주문 취소는 409 API_ORDER_NOT_CANCELLABLE로 거부된다")
+    void cancelRejectsDeliveredOrder() throws Exception {
+        UUID orderId = checkoutViaHttp();
+        orderModifier.ship(orderId);
+        orderModifier.confirmDelivery(orderId);
+
+        mvc.perform(post("/api/v1/orders/{orderId}/cancel", orderId))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("API_ORDER_NOT_CANCELLABLE"));
+    }
+
+    private UUID checkoutViaHttp() throws Exception {
+        UUID memberId = registerMember();
+        UUID variantId = seedProduct(50);
+        cartAppender.addItem(memberId, variantId, 1);
+        CheckoutRequest request = new CheckoutRequest(memberId, addressRequest(), 0L, null, PaymentMethod.CARD);
+
+        String body = mvc.perform(post("/api/v1/orders")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        return UUID.fromString(
+                objectMapper.readValue(body, CheckoutResponse.class).orderId());
+    }
+
+    private UUID registerMember() {
+        return memberAppender.register("user-" + UUID.randomUUID() + "@example.com", "테스터");
+    }
+
+    private UUID seedProduct(int quantity) {
+        UUID productId = productRegistrationFacade.registerProduct("상품", null, Money.of(10000L), List.of(), quantity);
+        return variantReader.getByProductId(productId).get(0).id();
+    }
+
+    private static AddressRequest addressRequest() {
+        return new AddressRequest("홍길동", "04524", "서울특별시 중구 세종대로 110", "3층", "010-1234-5678");
+    }
+
+    private static ValidityPeriod validity() {
+        return ValidityPeriod.of(Instant.parse("2020-01-01T00:00:00Z"), Instant.parse("2030-01-01T00:00:00Z"));
+    }
+}
