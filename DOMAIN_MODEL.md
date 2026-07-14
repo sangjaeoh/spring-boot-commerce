@@ -1,8 +1,10 @@
-# 커머스 도메인 설계
+# 커머스 도메인 모델 (Domain Model)
 
-이 문서는 커머스 최소 구현의 도메인 모델을 소유한다 — 어떤 도메인이 있고, 각 도메인이 어떤 필드·상태·정책·불변식을 갖는지. 모듈 구조·빌드 순서 같은 "어떻게 세우는가"는 이 문서의 범위가 아니다(그것은 아키텍처 규칙 문서 `docs/`와 구현 계획이 소유한다).
+이 문서는 커머스 최소 구현의 도메인 모델을 소유한다 — 어떤 도메인이 있고, 각 도메인이 어떤 엔티티·필드·상태·정책·불변식·오퍼레이션을 갖는지. 즉 "실제로 무엇을 만드는가"를 필드 수준까지 고정한다.
 
-설계 규칙(ID·연관·상태 전이·소프트삭제 등)은 `docs/architecture.md`·`docs/entity-persistence.md`·`docs/coding-conventions.md`를 따른다. 이 문서는 그 규칙을 이 앱의 7개 도메인에 적용한 결과다.
+- 요구사항(*무엇을*)은 [`REQUIREMENTS.md`](./REQUIREMENTS.md)가 소유한다. 이 문서는 그 요구사항을 실현하는 모델을 소유한다.
+- 설계 규칙(ID·연관·상태 전이·소프트삭제 등)은 `docs/architecture.md`·`docs/entity-persistence.md`·`docs/coding-conventions.md`를 따른다. 이 문서는 그 규칙을 이 앱의 7개 도메인에 적용한 결과다.
+- 모듈 구조·빌드 순서 같은 "어떻게 세우는가"는 이 문서의 범위가 아니다(아키텍처 규칙 문서 `docs/`와 구현 계획이 소유).
 
 범위는 7개 도메인: 회원(member) · 상품(product) · 재고(stock) · 장바구니(cart) · 쿠폰(coupon) · 주문(order) · 결제(payment).
 
@@ -684,6 +686,8 @@
 - Money: `common-core` 순수 값 타입, 컨버터는 `common-jpa` 단일. 배송지 `Address`는 `@Embeddable`.
 
 ## 명시적 범위 밖
+
+능력 범위(포함·제외·향후 확장)는 [`REQUIREMENTS.md`](./REQUIREMENTS.md)가 소유한다. 아래는 그 범위 밖 결정이 모델에 남기는 함의다.
 
 - 배송 추적·배송사(택배) 연동·운송장 번호(이행 상태 SHIPPED·DELIVERED 자체는 범위 내).
 - 부분 취소·부분 환불·부분 선택 주문.
