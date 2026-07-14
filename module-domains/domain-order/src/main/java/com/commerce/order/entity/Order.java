@@ -293,6 +293,30 @@ public class Order extends BaseTimeEntity<UUID> {
         return shippingAddress;
     }
 
+    public @Nullable Instant getPaidAt() {
+        return paidAt;
+    }
+
+    public @Nullable Instant getShippedAt() {
+        return shippedAt;
+    }
+
+    public @Nullable Instant getDeliveredAt() {
+        return deliveredAt;
+    }
+
+    public @Nullable Instant getCancelledAt() {
+        return cancelledAt;
+    }
+
+    public @Nullable CancellationReason getCancellationReason() {
+        return cancellationReason;
+    }
+
+    public @Nullable HoldReason getHoldReason() {
+        return holdReason;
+    }
+
     public Set<OrderLine> getLines() {
         return Collections.unmodifiableSet(lines);
     }

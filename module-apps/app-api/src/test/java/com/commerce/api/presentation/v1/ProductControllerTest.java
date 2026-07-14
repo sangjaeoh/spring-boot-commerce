@@ -1,6 +1,7 @@
 package com.commerce.api.presentation.v1;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -82,6 +83,53 @@ class ProductControllerTest extends WebIntegrationTest {
                         .content(json))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+    }
+
+    @Test
+    @DisplayName("상품 상세 조회는 200으로 ACTIVE 변형·주문가능·대표가를 싣는다")
+    void getProductReturnsDetailWithOrderableVariant() throws Exception {
+        UUID productId = registerProductViaHttp("셔츠", 10000L, 50);
+
+        mvc.perform(get("/api/v1/products/{productId}", productId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ON_SALE"))
+                .andExpect(jsonPath("$.soldOut").value(false))
+                .andExpect(jsonPath("$.fromPrice").value(10000))
+                .andExpect(jsonPath("$.variants.length()").value(1))
+                .andExpect(jsonPath("$.variants[0].orderable").value(true));
+    }
+
+    @Test
+    @DisplayName("없는 상품 상세 조회는 404 PRODUCT_NOT_FOUND로 거부된다")
+    void getProductReturns404ForMissingProduct() throws Exception {
+        mvc.perform(get("/api/v1/products/{productId}", UUID.randomUUID()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("PRODUCT_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("재고 없는 ACTIVE 변형만 있으면 상세가 품절로 표시된다")
+    void getProductShowsSoldOutWhenNoStock() throws Exception {
+        UUID productId = registerProductViaHttp("셔츠", 10000L, 0);
+
+        mvc.perform(get("/api/v1/products/{productId}", productId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.soldOut").value(true))
+                .andExpect(jsonPath("$.variants[0].orderable").value(false));
+    }
+
+    private UUID registerProductViaHttp(String name, long price, int initialQuantity) throws Exception {
+        ProductRegistrationRequest request =
+                new ProductRegistrationRequest(name, null, price, List.of(), initialQuantity);
+        String body = mvc.perform(post("/api/v1/products")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        return UUID.fromString(
+                objectMapper.readValue(body, ProductRegistrationResponse.class).productId());
     }
 
     @Test

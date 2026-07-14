@@ -1,6 +1,7 @@
 package com.commerce.api.presentation.v1;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -147,8 +148,81 @@ class OrderControllerTest extends WebIntegrationTest {
                 .andExpect(jsonPath("$.code").value("API_ORDER_NOT_CANCELLABLE"));
     }
 
-    private UUID checkoutViaHttp() throws Exception {
+    @Test
+    @DisplayName("주문 상세 조회는 200으로 결제 축·이행 축 상태와 결제 시각을 싣는다")
+    void getOrderReturnsDetailWithPaidTimeline() throws Exception {
+        UUID orderId = checkoutViaHttp();
+
+        mvc.perform(get("/api/v1/orders/{orderId}", orderId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(orderId.toString()))
+                .andExpect(jsonPath("$.status").value("PAID"))
+                .andExpect(jsonPath("$.fulfillmentStatus").value("PREPARING"))
+                .andExpect(jsonPath("$.paidAt").exists())
+                .andExpect(jsonPath("$.cancelledAt").doesNotExist())
+                .andExpect(jsonPath("$.payAmount").value(10000))
+                .andExpect(jsonPath("$.orderNumber").exists())
+                .andExpect(jsonPath("$.lines.length()").value(1));
+    }
+
+    @Test
+    @DisplayName("없는 주문 상세 조회는 404 ORDER_NOT_FOUND로 거부된다")
+    void getOrderReturns404ForMissingOrder() throws Exception {
+        mvc.perform(get("/api/v1/orders/{orderId}", UUID.randomUUID()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("ORDER_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("취소된 주문 상세는 취소 시각·사유를 싣는다")
+    void getOrderShowsCancellationAfterCancel() throws Exception {
+        UUID orderId = checkoutViaHttp();
+        mvc.perform(post("/api/v1/orders/{orderId}/cancel", orderId)).andExpect(status().isNoContent());
+
+        mvc.perform(get("/api/v1/orders/{orderId}", orderId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CANCELLED"))
+                .andExpect(jsonPath("$.cancelledAt").exists())
+                .andExpect(jsonPath("$.cancellationReason").value("CUSTOMER_REQUEST"));
+    }
+
+    @Test
+    @DisplayName("회원 주문 목록 조회는 200으로 최신순 주문을 싣는다")
+    void getOrdersReturnsMemberOrdersNewestFirst() throws Exception {
         UUID memberId = registerMember();
+        UUID first = checkoutForMember(memberId);
+        UUID second = checkoutForMember(memberId);
+
+        mvc.perform(get("/api/v1/orders").param("memberId", memberId.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].id").value(second.toString()))
+                .andExpect(jsonPath("$[1].id").value(first.toString()));
+    }
+
+    @Test
+    @DisplayName("여러 라인 주문 목록은 주문 중복 없이 라인을 모두 싣는다")
+    void getOrdersFetchesMultiLineOrderWithoutDuplication() throws Exception {
+        UUID memberId = registerMember();
+        cartAppender.addItem(memberId, seedProduct(50), 1);
+        cartAppender.addItem(memberId, seedProduct(50), 2);
+        CheckoutRequest request = new CheckoutRequest(memberId, addressRequest(), 0L, null, PaymentMethod.CARD);
+        mvc.perform(post("/api/v1/orders")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated());
+
+        mvc.perform(get("/api/v1/orders").param("memberId", memberId.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].lines.length()").value(2));
+    }
+
+    private UUID checkoutViaHttp() throws Exception {
+        return checkoutForMember(registerMember());
+    }
+
+    private UUID checkoutForMember(UUID memberId) throws Exception {
         UUID variantId = seedProduct(50);
         cartAppender.addItem(memberId, variantId, 1);
         CheckoutRequest request = new CheckoutRequest(memberId, addressRequest(), 0L, null, PaymentMethod.CARD);

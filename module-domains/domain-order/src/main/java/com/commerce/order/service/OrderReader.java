@@ -7,6 +7,7 @@ import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderNotFoundException;
 import com.commerce.order.info.OrderInfo;
 import com.commerce.order.repository.OrderRepository;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,5 +44,13 @@ public class OrderReader {
     public boolean hasUndeliveredPaidOrder(UUID memberId) {
         return orderRepository.existsByMemberIdAndStatusAndFulfillmentStatusNot(
                 memberId, OrderStatus.PAID, FulfillmentStatus.DELIVERED);
+    }
+
+    /** 회원의 주문 목록을 최신순으로 조회한다. 없으면 빈 목록이다. 같은 생성 시각은 id로 결정적 순서를 둔다. */
+    @Transactional(readOnly = true)
+    public List<OrderInfo> getOrdersByMember(UUID memberId) {
+        return orderRepository.findByMemberIdOrderByCreatedAtDescIdDesc(memberId).stream()
+                .map(OrderInfo::from)
+                .toList();
     }
 }

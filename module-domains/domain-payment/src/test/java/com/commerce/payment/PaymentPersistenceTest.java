@@ -2,16 +2,20 @@ package com.commerce.payment;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.doReturn;
 
 import com.commerce.core.money.Money;
 import com.commerce.payment.entity.Payment;
 import com.commerce.payment.entity.PaymentMethod;
 import com.commerce.payment.entity.PaymentStatus;
 import com.commerce.payment.exception.DuplicatePaymentException;
+import com.commerce.payment.exception.PaymentStatusException;
 import com.commerce.payment.info.PaymentInfo;
+import com.commerce.payment.repository.PaymentRepository;
 import com.commerce.payment.service.PaymentAppender;
 import com.commerce.payment.service.PaymentProcessor;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -24,6 +28,7 @@ import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.TestConstructor;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
@@ -58,6 +63,9 @@ class PaymentPersistenceTest {
     private final StubPaymentGateway gateway;
     private final TestEntityManager em;
 
+    @MockitoSpyBean
+    private PaymentRepository paymentRepository;
+
     PaymentPersistenceTest(
             PaymentAppender paymentAppender,
             PaymentProcessor paymentProcessor,
@@ -90,6 +98,7 @@ class PaymentPersistenceTest {
 
         assertThat(result.status()).isEqualTo(PaymentStatus.APPROVED);
         assertThat(result.pgTransactionId()).isNotNull();
+        assertThat(gateway.cancelCalled).isFalse();
     }
 
     @Test
@@ -146,6 +155,41 @@ class PaymentPersistenceTest {
 
         assertThat(gateway.cancelCalled).isFalse();
         assertThat(reload(paymentId).getStatus()).isEqualTo(PaymentStatus.CANCELLED);
+    }
+
+    @Test
+    @DisplayName("이미 승인된 결제 재요청은 PG를 청구하지 않고 상태 가드로 거부한다(원 승인 불변)")
+    void rejectsReapprovalWithoutCharging() {
+        UUID paymentId = paymentAppender.request(UUID.randomUUID(), Money.of(10000L), PaymentMethod.CARD);
+        em.flush();
+        PaymentInfo first = paymentProcessor.approve(paymentId);
+        em.flush();
+        gateway.reset();
+
+        assertThatThrownBy(() -> paymentProcessor.approve(paymentId)).isInstanceOf(PaymentStatusException.class);
+
+        assertThat(gateway.cancelCalled).isFalse();
+        Payment reloaded = reload(paymentId);
+        assertThat(reloaded.getStatus()).isEqualTo(PaymentStatus.APPROVED);
+        assertThat(reloaded.getPgTransactionId()).isEqualTo(first.pgTransactionId());
+    }
+
+    @Test
+    @DisplayName("청구 성공 후 결과 영속이 실패하면 그 고아 청구를 환불한다 — PG 호출이 트랜잭션 밖이라 보상이 가능하다")
+    void refundsOrphanedChargeWhenPersistFails() {
+        UUID paymentId = paymentAppender.request(UUID.randomUUID(), Money.of(10000L), PaymentMethod.CARD);
+        em.flush();
+        Payment requested = paymentRepository.findById(paymentId).orElseThrow();
+        // 트랜잭션 밖 선조회는 통과시키고, 결과 영속 안의 재조회에서 인프라 실패를 주입한다.
+        doReturn(Optional.of(requested))
+                .doThrow(new IllegalStateException("persist boom"))
+                .when(paymentRepository)
+                .findById(paymentId);
+        gateway.reset();
+
+        assertThatThrownBy(() -> paymentProcessor.approve(paymentId)).isInstanceOf(IllegalStateException.class);
+
+        assertThat(gateway.cancelCalled).isTrue();
     }
 
     @Test

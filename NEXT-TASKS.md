@@ -98,11 +98,29 @@
 
 ---
 
-## P3 — 후속 (소비자 도입 시)
+## P3 — 조회 표면 + 실 PG 이중청구 방어 (완료)
 
-- 도메인 read 보강(남은 것): `OrderInfo`에 이행/취소 이력 필드(paidAt·cancelledAt·reason 등, 주문 상세 뷰 도입 시), 회원별 주문 목록 리더(주문 이력 엔드포인트·컨트롤러 #7 도입 시). P2에서 해소분: 체크아웃 minOrderAmount는 `Coupon.calculateDiscount` 플로어로, 취소 파사드의 payment 조회는 `PaymentReader.getByOrderId`로 처리했다(별도 `getCoupon`/`CouponInfo`는 불필요 — 쿠폰 적용성이 도메인에 남는다).
-- 실 PG 이중청구 방어: 현재 PG 호출이 `@Transactional` 안이라 동기 stub 기준에선 무해하나 실 PG면 승인 후 롤백 시 재청구 위험. 멱등키·tx 밖 호출·리컨실 중 택. (payment 리뷰 m2)
-- Testcontainers deprecated `org.testcontainers.containers.PostgreSQLContainer` → `org.testcontainers.postgresql.PostgreSQLContainer` 전 모듈 정리(완료). 신클래스는 비제네릭이라(구클래스는 `PostgreSQLContainer<SELF>`) 임포트만 바꾸면 컴파일 실패 — 선언부의 `<?>`·생성자 `<>` 다이아몬드도 제거해야 한다. `@ServiceConnection`은 Boot 4.1 `JdbcContainerConnectionDetailsFactory`가 `JdbcDatabaseContainer<?>`로 매칭해 그대로 유효하다(신클래스가 그 하위).
+두 단위로 완료했다. 각 단위 `./gradlew build` 그린 + 콜드 서브에이전트 리뷰 2인, 타당한 지적만 반영.
+
+### 10. 조회 엔드포인트 (composed reads + 주문 이력) — 완료
+
+- 범위(포크 결정): 합성 조회 채택. 상품 상세 = Product + ACTIVE 변형 + 재고 파생(주문가능·품절·대표가), 장바구니 = 라인 + 변형 현재가·소계·총액. 주문은 단일도메인(자기완결 스냅샷)이라 합성 없음.
+- 구현: 읽기 파사드 신설 `ProductDetailFacade`(→`ProductView`·`ProductVariantView`)·`CartViewFacade`(→`CartView`·`CartLineView`) — write-only였던 파사드층의 첫 읽기 합성(트랜잭션 없음, 각 도메인 Reader가 자기 readOnly 트랜잭션에서 Info 변환). 주문 상세·회원별 목록은 컨트롤러가 `OrderReader`를 직접 주입(app-api 접근 규칙 "Reader·Facade 경유"). 엔드포인트: `GET /api/v1/orders/{id}`·`GET /api/v1/orders?memberId=`·`GET /api/v1/products/{id}`·`GET /api/v1/carts?memberId=`. 응답 DTO는 `presentation/v1/response`(파사드 결과·Info → Response.from). 인증 범위 밖이라 memberId는 경로/쿼리·소유권 미검사.
+- 도메인 read 보강: `OrderInfo`에 이행/취소 이력 전체 타임라인(paidAt·shippedAt·deliveredAt·cancelledAt·cancellationReason·holdReason) + `Order` getter. `OrderReader.getOrdersByMember`(회원별 목록, `@EntityGraph("lines")`로 N+1 회피, `createdAt DESC, id DESC` 결정적 순서). 별도 도메인 read는 불필요(합성이 기존 Reader 조립).
+- 콜드 리뷰 반영: `*Response` List 필드 방어적 복사(`List.copyOf` compact constructor — coding-conventions.md:41), 합성 read 레코드 접미사 `*View`로 통일(Detail/Availability 혼재 해소), 응답 리스트 결정적 정렬(변형=대표가·변형ID, 라인=변형ID) + 목록 id 타이브레이커, 커버리지 4종(ACTIVE 변형 0=대표가 null·품절 아님, 최저가 변형 품절, 재고 SOLD_OUT·수량>0, HIDDEN 상품, 다중 라인 목록 무중복). `@EntityGraph` 루트 중복은 Boot 4.1/Hibernate 7이 dedup함을 리뷰가 실증(무해).
+- 의식적 유지(인증 도입 시 재검토): 회원별 목록이 요약이 아닌 전체 주문(라인 포함, 무페이징) — 버그 아니고 read-model 최적화는 설계상 후순위. `holdReason`(FRAUD_REVIEW 등 운영 사유) 고객 응답 노출 — 무인증이라 역할 구분 없음. 둘 다 auth 라운드에서 재검토.
+
+### 11. 실 PG 이중청구 방어 (tx 밖 호출) — 완료
+
+- 범위(포크 결정): tx 밖 호출 채택(멱등키·리컨실 대비 지적 위험을 가장 직접 해소). 실 PG는 설계상 범위 밖이나 동기 stub 위에 seam을 모델링.
+- 구현: `PaymentProcessor.approve`를 비-`@Transactional`로 — PG 청구를 트랜잭션 밖에서 하고 결과만 `TransactionTemplate`으로 좁혀 영속한다. 청구 성공 후 영속이 실패하면 그 고아 청구를 즉시 환불(`gateway.cancel`)하고 예외를 다시 던진다(체크아웃 파사드의 기존 보상이 재정합). 콜드 리뷰 반영: 선-청구 상태 가드(`REQUESTED` 아니면 PG 호출 전 거부 — 설계 "재요청은 상태 가드로 거부" 충실, 재요청이 청구되지 않음), 환불 실패 시 원인 보존(`addSuppressed`). 규약 예외(외부 부작용 쓰기는 프로그램적 트랜잭션)를 `architecture.md` 트랜잭션 경계에 등재.
+- 검증: `PaymentPersistenceTest` — 재요청 선-청구 거부(원 승인 불변), 청구 후 영속 실패 시 환불(`@MockitoSpyBean`으로 결과 영속 재조회에 인프라 실패 주입), 정상 승인은 환불 없음. 옛 `@Transactional` 코드면 이 환불 테스트가 실패(비-tautological).
+- 남은 위험(실 PG 도입 시): `cancel`은 여전히 `@Transactional` 안에서 환불 호출 — 재시도 시 이중 환불 위험(대칭). approve 방식이 안 통함(환불을 되돌릴 수 없어 게이트웨이 멱등 필요). gateway가 청구 후 예외(응답 타임아웃)·인-다우트 커밋은 상태 조회/리컨실 스윕이 필요 — 전부 실 PG 번들(웹훅·멱등·리컨실)로 미룸.
+- 결정: `approve` 하드닝 + `cancel`은 멱등 필요로 문서화만(대칭 아닌 중간 상태를 의식적으로 채택 — approve 방식이 cancel에 부적합하므로).
+
+### 정리 (완료)
+
+- Testcontainers deprecated `org.testcontainers.containers.PostgreSQLContainer` → `org.testcontainers.postgresql.PostgreSQLContainer` 전 모듈 정리. 신클래스는 비제네릭이라(구클래스는 `PostgreSQLContainer<SELF>`) 임포트만 바꾸면 컴파일 실패 — 선언부의 `<?>`·생성자 `<>` 다이아몬드도 제거해야 한다. `@ServiceConnection`은 Boot 4.1 `JdbcContainerConnectionDetailsFactory`가 `JdbcDatabaseContainer<?>`로 매칭해 그대로 유효하다(신클래스가 그 하위).
 
 ---
 
