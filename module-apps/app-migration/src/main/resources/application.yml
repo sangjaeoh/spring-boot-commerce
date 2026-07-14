@@ -1,8 +1,9 @@
 spring:
   application:
     name: app-migration
-  # 스키마별 Flyway 실행은 SchemaFlywayFactory가 프로그램적으로 담당한다. Boot 기본 Flyway는
-  # classpath:db/migration을 재귀 스캔해 7개 V1__ 스크립트를 버전 충돌로 읽으므로 반드시 끈다.
+  # 스키마별 Flyway 실행은 SchemaFlywayFactory가 프로그램적으로 담당한다. 현재 Boot Flyway 오토컨피그
+  # (spring-boot-flyway)는 클래스패스에 없어 무효과지만, starter-flyway가 (전이로) 들어오면 기본 Flyway가
+  # classpath:db/migration을 재귀 스캔해 7개 V1__를 버전 충돌로 읽으므로 방어적으로 끈다.
   flyway:
     enabled: false
   jpa:

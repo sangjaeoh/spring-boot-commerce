@@ -14,13 +14,13 @@ import org.flywaydb.core.Flyway;
 public final class SchemaFlywayFactory {
 
     /** 등록된 도메인 스키마. {@code db/migration/{name}/} 로케이션 규약과 1:1 대응한다. */
-    public static final List<String> SCHEMAS =
+    private static final List<String> SCHEMAS =
             List.of("member", "product", "stock", "cart", "coupon", "ordering", "payment");
 
     private SchemaFlywayFactory() {}
 
     /** 한 스키마의 Flyway를 구성한다. 기본 스키마·로케이션·이력 배치를 그 스키마로 고정한다. */
-    public static Flyway forSchema(DataSource dataSource, String schema) {
+    private static Flyway forSchema(DataSource dataSource, String schema) {
         return Flyway.configure()
                 .dataSource(dataSource)
                 .schemas(schema)

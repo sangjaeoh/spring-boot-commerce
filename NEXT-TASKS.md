@@ -49,8 +49,8 @@
 
 - 구현: `com.commerce.jpa.migration.SchemaFlywayFactory`(common-jpa) — 스키마별 Flyway 인스턴스(각자 `flyway_schema_history`). 모든 마이그레이션이 `V1__`이라 단일 Flyway로 로케이션을 합치면 버전 충돌 → 스키마별 실행이 필수. flyway는 common-jpa에 `compileOnly`(도메인 런타임에 전파 안 함), 소비자 app-migration이 런타임 제공.
 - `app-migration`(`module-apps/app-migration`): 얇은 부트 앱. `ApplicationRunner`가 `SchemaFlywayFactory.migrateAll(dataSource)` 실행, 도메인은 `runtimeOnly`(마이그레이션 리소스·엔티티만). `spring.flyway.enabled=false`(Boot 기본 Flyway가 `db/migration`을 재귀 스캔해 7개 V1 충돌하는 것 차단).
-- 검증 완료: `SchemaMigrationValidationTest`(Testcontainers) — `migrateAll` 후 7개 도메인 엔티티를 한 EMF로 `validate` 부팅해 전부 통과(Member·Product·Stock·Cart·Coupon·Order·Payment). `./gradlew build` 그린(전 모듈).
-- 유의: 수동 EMF는 Boot 기본 물리 네이밍(`CamelCaseToUnderscoresNamingStrategy`)을 명시해야 파생 컬럼(created_at 등)이 DDL과 맞는다. app-migration 표준 기동(`ddl-auto=validate`)은 app-api가 도메인 엔티티를 스캔하는 P2에서 이뤄진다.
+- 검증 완료: `MigrationApplicationTest`(Testcontainers) — 앱을 `@SpringBootTest`로 부팅해 실 배선(DataSource→`ApplicationRunner`→`migrateAll`)을 태우고, (1) 7개 스키마 대표 테이블 존재, (2) 전 도메인 엔티티(루트 7 + 자식 4)가 마이그레이션 DDL에 `validate` 통과를 확인. validate는 테이블·컬럼·타입 정합만 본다(인덱스·유니크·`@Version` 의미 검증은 도메인별 슬라이스 테스트 소유). `./gradlew build` 그린(전 모듈).
+- 유의: 검증 EMF는 Boot 기본 물리 네이밍(`CamelCaseToUnderscoresNamingStrategy`)을 명시해야 파생 컬럼(created_at 등)이 DDL과 맞는다. app-migration 표준 기동(`ddl-auto=validate` 엔티티 검증)은 app-api가 도메인 엔티티를 스캔하는 P2에서 이뤄진다.
 
 ---
 

@@ -36,6 +36,6 @@ class StubPaymentGatewayTest {
     void cancelReturnsCancelTransactionId() {
         String cancelTransactionId = gateway.cancel("STUB-APPROVE-abc");
 
-        assertThat(cancelTransactionId).isNotBlank();
+        assertThat(cancelTransactionId).startsWith("STUB-CANCEL-");
     }
 }

@@ -29,14 +29,11 @@ class ArchitectureTest {
                 .as("@Entity 또는 @MappedSuperclass 매핑 클래스");
         ArchRule rule = noClasses()
                 .that()
-                .resideOutsideOfPackages(
-                        "..entity..",
-                        "..info..",
-                        "..service..",
-                        "..repository..",
-                        "..event..",
-                        "..exception..",
-                        "..port..")
+                // @Entity를 정당하게 참조하는 4개 패키지만 제외한다(entity 상호참조, Info.from(Entity),
+                // service·repository). port·event·exception은 값 타입만 참조하므로(PaymentGateway→enum,
+                // OrderPaid→UUID) 제외하지 않는다 — 제외하면 앱 event/listener 등이 생 엔티티를 참조해도
+                // 못 잡는 구멍이 생긴다.
+                .resideOutsideOfPackages("..entity..", "..info..", "..service..", "..repository..")
                 .should()
                 .dependOnClassesThat(jpaMapped)
                 .because("JPA 엔티티(@Entity·@MappedSuperclass)는 소유 도메인 모듈 내부에서만 접근한다"
