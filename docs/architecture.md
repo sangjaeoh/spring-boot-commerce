@@ -128,8 +128,8 @@
 - 자식 엔티티 리포지토리의 성능 예외는 조회와 벌크에만 좁게 연다.
   - 자식 엔티티 직접 조회는 불변식을 깨지 않으므로 부모 전체 로딩 OOM·N+1을 피하려 리포지토리·QueryDSL로 직접 조회한다.
   - 자식 리포지토리를 통한 벌크 `UPDATE`·`DELETE`·대용량 `INSERT`도 허용한다. 막는 것은 자식 단건 `INSERT`뿐이다(신규 자식 생성 메커니즘은 → [entity-persistence](entity-persistence.md)).
-- 소프트삭제(`deletedAt`) 엔티티는 base `JpaRepository` finder(`findById`·`findAll`·`count`) 직접 호출을 금지한다.
-  - 삭제분까지 반환하므로 빌드가 막는다. 활성-only 파생 쿼리는 이름에 활성 필터를 담는다(`...DeletedAtIsNull`). 삭제분을 일부러 포함하는 조회만 이름에 `IncludingDeleted`를 붙인다.
+- 소프트삭제(`deletedAt`) 엔티티는 삭제 여부를 거르지 않는 base `JpaRepository` finder 직접 호출을 금지한다(`findById`·`existsById`·`findAll`·`findAllById`·`count`·`getReferenceById`).
+  - 삭제분을 거르지 않으므로 빌드가 막는다. 활성-only 파생 쿼리는 이름에 활성 필터를 담는다(`...DeletedAtIsNull`). 삭제분을 일부러 포함하는 조회만 이름에 `IncludingDeleted`를 붙인다.
   - `deletedAt`이 없는(소프트삭제 미지원) 엔티티는 base `findById` 등을 그대로 쓴다 — 삭제분 노출 위험이 없다.
 - 리포지토리 조회는 아래 순서로 표현 가능한 최소 단계를 쓴다. 아래로 갈수록 표현력은 늘고 이름-스펙성·가독성은 준다.
   1. 파생 쿼리 메서드(`findBy…`) — 정적 단순 조건(등호·`And`/`Or`·정렬·활성 필터). 이름이 곧 스펙이라 우선한다.
