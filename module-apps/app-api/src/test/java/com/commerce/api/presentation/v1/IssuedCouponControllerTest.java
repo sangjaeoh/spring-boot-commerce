@@ -62,6 +62,22 @@ class IssuedCouponControllerTest extends WebIntegrationTest {
                 .andExpect(jsonPath("$.code").value("ISSUED_COUPON_NOT_FOUND"));
     }
 
+    @Test
+    @DisplayName("발급 쿠폰 목록 조회는 본인 발급분만 최신순으로 싣는다")
+    void getIssuedCouponsReturnsOnlyOwnCouponsNewestFirst() throws Exception {
+        UUID ownerId = registerMember();
+        UUID otherId = registerMember();
+        UUID firstIssuedId = issuedCouponAppender.issue(createCoupon(), ownerId);
+        UUID secondIssuedId = issuedCouponAppender.issue(createCoupon(), ownerId);
+        issuedCouponAppender.issue(createCoupon(), otherId);
+
+        mvc.perform(get("/api/v1/issued-coupons").param("memberId", ownerId.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].id").value(secondIssuedId.toString()))
+                .andExpect(jsonPath("$[1].id").value(firstIssuedId.toString()));
+    }
+
     private UUID registerMember() {
         return memberAppender.register("user-" + UUID.randomUUID() + "@example.com", "테스터");
     }

@@ -19,7 +19,7 @@
 
 - [x] **5. 상품 관리 API** — 노출·숨김(show/hide), 이름·설명 편집, 논리삭제 미노출.
 - [x] **6. 회원 관리 API** — 정지·해제(suspend/reinstate), 이름 변경(rename) 미노출.
-- [ ] **7. 쿠폰 정책 전환 + 내 발급 쿠폰 목록 API** — 정책 발급 가능·중지(disable/enable) 미노출. 회원별 발급 쿠폰 목록이 없어 체크아웃에서 쿠폰 ID를 쓸 연결 고리가 없다(IssuedCouponReader에 목록 메서드부터 없음).
+- [x] **7. 쿠폰 정책 전환 + 내 발급 쿠폰 목록 API** — 정책 발급 가능·중지(disable/enable) 미노출. 회원별 발급 쿠폰 목록이 없어 체크아웃에서 쿠폰 ID를 쓸 연결 고리가 없다(IssuedCouponReader에 목록 메서드부터 없음).
 - [ ] **8. 결제 거래 추적 노출** — "승인·취소(환불) 거래를 각각 식별·추적" 요구가 API로 불충족. PaymentReader.getByOrderId는 이미 있어 얇은 노출만 필요.
 
 ## P3 — 프로젝트 완성도

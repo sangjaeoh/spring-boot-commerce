@@ -1,22 +1,33 @@
 package com.commerce.api.presentation.v1;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.commerce.api.facade.CheckoutFacade;
+import com.commerce.api.facade.ProductRegistrationFacade;
 import com.commerce.api.presentation.v1.request.CouponCreationRequest;
 import com.commerce.api.presentation.v1.request.CouponIssuanceRequest;
 import com.commerce.api.presentation.v1.request.DiscountRequest;
 import com.commerce.api.presentation.v1.response.CouponCreationResponse;
+import com.commerce.cart.service.CartAppender;
 import com.commerce.core.money.Money;
 import com.commerce.coupon.entity.Discount;
 import com.commerce.coupon.entity.DiscountType;
+import com.commerce.coupon.entity.IssuedCouponStatus;
 import com.commerce.coupon.entity.ValidityPeriod;
 import com.commerce.coupon.service.CouponAppender;
+import com.commerce.coupon.service.IssuedCouponAppender;
+import com.commerce.coupon.service.IssuedCouponReader;
 import com.commerce.member.entity.SuspensionReason;
 import com.commerce.member.service.MemberAppender;
 import com.commerce.member.service.MemberModifier;
+import com.commerce.order.entity.Address;
+import com.commerce.payment.entity.PaymentMethod;
+import com.commerce.product.service.ProductVariantReader;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -34,20 +45,38 @@ class CouponControllerTest extends WebIntegrationTest {
     private final MockMvc mvc;
     private final ObjectMapper objectMapper;
     private final CouponAppender couponAppender;
+    private final IssuedCouponAppender issuedCouponAppender;
+    private final IssuedCouponReader issuedCouponReader;
     private final MemberAppender memberAppender;
     private final MemberModifier memberModifier;
+    private final CartAppender cartAppender;
+    private final ProductRegistrationFacade productRegistrationFacade;
+    private final ProductVariantReader variantReader;
+    private final CheckoutFacade checkoutFacade;
 
     CouponControllerTest(
             MockMvc mvc,
             ObjectMapper objectMapper,
             CouponAppender couponAppender,
+            IssuedCouponAppender issuedCouponAppender,
+            IssuedCouponReader issuedCouponReader,
             MemberAppender memberAppender,
-            MemberModifier memberModifier) {
+            MemberModifier memberModifier,
+            CartAppender cartAppender,
+            ProductRegistrationFacade productRegistrationFacade,
+            ProductVariantReader variantReader,
+            CheckoutFacade checkoutFacade) {
         this.mvc = mvc;
         this.objectMapper = objectMapper;
         this.couponAppender = couponAppender;
+        this.issuedCouponAppender = issuedCouponAppender;
+        this.issuedCouponReader = issuedCouponReader;
         this.memberAppender = memberAppender;
         this.memberModifier = memberModifier;
+        this.cartAppender = cartAppender;
+        this.productRegistrationFacade = productRegistrationFacade;
+        this.variantReader = variantReader;
+        this.checkoutFacade = checkoutFacade;
     }
 
     @Test
@@ -212,6 +241,55 @@ class CouponControllerTest extends WebIntegrationTest {
                 .andExpect(jsonPath("$.code").value("COUPON_DUPLICATE_ISSUANCE"));
     }
 
+    @Test
+    @DisplayName("중지가 204로 성공하고 이후 발급은 409 COUPON_DISABLED로 거부된다")
+    void disableRejectsNewIssuance() throws Exception {
+        UUID memberId = registerMember();
+        UUID couponId = createCoupon();
+
+        mvc.perform(post("/api/v1/coupons/{couponId}/disable", couponId)).andExpect(status().isNoContent());
+
+        mvc.perform(post("/api/v1/coupons/{couponId}/issues", couponId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new CouponIssuanceRequest(memberId))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("COUPON_DISABLED"));
+    }
+
+    @Test
+    @DisplayName("중지 전 발급분은 중지 후에도 체크아웃에서 사용된다")
+    void disableDoesNotAffectAlreadyIssuedCoupon() throws Exception {
+        UUID memberId = registerMember();
+        UUID couponId = createCoupon();
+        UUID issuedId = issuedCouponAppender.issue(couponId, memberId);
+        UUID variantId = seedProduct(50);
+        cartAppender.addItem(memberId, variantId, 1);
+
+        mvc.perform(post("/api/v1/coupons/{couponId}/disable", couponId)).andExpect(status().isNoContent());
+
+        UUID orderId = checkoutFacade.checkout(memberId, address(), Money.ZERO, issuedId, PaymentMethod.CARD);
+        assertThat(issuedCouponReader.getIssuedCoupon(issuedId, memberId).status())
+                .isEqualTo(IssuedCouponStatus.USED);
+        assertThat(issuedCouponReader.getIssuedCoupon(issuedId, memberId).orderId())
+                .isEqualTo(orderId);
+    }
+
+    @Test
+    @DisplayName("중지 후 재개가 204로 성공하고 발급이 재개된다")
+    void enableResumesIssuance() throws Exception {
+        UUID memberId = registerMember();
+        UUID couponId = createCoupon();
+        mvc.perform(post("/api/v1/coupons/{couponId}/disable", couponId)).andExpect(status().isNoContent());
+
+        mvc.perform(post("/api/v1/coupons/{couponId}/enable", couponId)).andExpect(status().isNoContent());
+
+        mvc.perform(post("/api/v1/coupons/{couponId}/issues", couponId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new CouponIssuanceRequest(memberId))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.issuedCouponId").exists());
+    }
+
     private UUID registerMember() {
         return memberAppender.register("user-" + UUID.randomUUID() + "@example.com", "테스터");
     }
@@ -219,5 +297,14 @@ class CouponControllerTest extends WebIntegrationTest {
     private UUID createCoupon() {
         return couponAppender.create(
                 "쿠폰", Discount.fixed(Money.of(1000L)), Money.ZERO, ValidityPeriod.of(VALID_FROM, VALID_UNTIL), 30);
+    }
+
+    private UUID seedProduct(int quantity) {
+        UUID productId = productRegistrationFacade.registerProduct("상품", null, Money.of(10000L), List.of(), quantity);
+        return variantReader.getByProductId(productId).get(0).id();
+    }
+
+    private static Address address() {
+        return Address.of("홍길동", "04524", "서울특별시 중구 세종대로 110", "3층", "010-1234-5678");
     }
 }
