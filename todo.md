@@ -28,7 +28,7 @@
 
 ## 운영 기반
 
-- [ ] **8. 관측성** — Actuator·메트릭·구조화 로깅·management 설정 전무. 유일한 헬스체크가 compose의 pg_isready. health(liveness/readiness) + 구조화(JSON) 로깅 최소 구성.
+- [x] **8. 관측성** — Actuator·메트릭·구조화 로깅·management 설정 전무. 유일한 헬스체크가 compose의 pg_isready. health(liveness/readiness) + 구조화(JSON) 로깅 최소 구성. 2026-07-15 완료: actuator health(+프로브)만 노출, 구조화 로깅은 Boot 내장 ECS 포맷(전 프로필 동일 — local 별도 포맷 분기 없음). 판단 기록 — metrics 엔드포인트는 수집기 부재로 소비자가 없어 비노출, 요청 상관관계(traceId성 MDC)·micrometer-tracing은 애플리케이션 로그 지점이 OrderPaidListener 한 곳뿐이고 로그 소비가 콘솔 단일 스트림이라 보류(요청 경로 로깅·수집기 도입 시 재평가).
 - [ ] **9. 앱 컨테이너화** — compose가 DB만 띄우고 앱 이미지가 없다. app-migration(원샷)·app-api 이미지 + compose 풀스택 기동으로 "클론 → 명령 하나"를 완성.
 - [ ] **10. 멱등 키 저장소 영속화** — InMemoryIdempotencyStore는 재시작 시 소실·다중 인스턴스 무력. DB 기반 구현으로 교체해 중복 결제 방어를 보장으로 승격.
 

@@ -6,6 +6,25 @@ spring:
     hibernate:
       ddl-auto: validate
 
+logging:
+  structured:
+    format:
+      # ECS(Elastic Common Schema) — 필드명이 공개 명세라 특정 수집기 제품에 결합되지 않는다.
+      # 전 프로필 동일 포맷(local 포함) — 프로필 간 로그 형상이 갈리면 로컬에서 검증한 파싱이 배포에서 깨진다.
+      console: ecs
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # 의도적 최소 노출 — health만. metrics는 수집기가 없어 소비자가 없으므로 노출하지 않는다.
+        include: health
+  endpoint:
+    health:
+      probes:
+        # 쿠버네티스 밖에서도 /actuator/health/{liveness,readiness} 프로브 그룹을 연다.
+        enabled: true
+
 auth:
   jwt:
     # HS256 대칭 서명 키(32바이트 이상). 기본값 없이 환경변수로만 주입한다(REQUIREMENTS.md 제약·전제).

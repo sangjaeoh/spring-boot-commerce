@@ -75,6 +75,24 @@ ORDER_ID=$(curl -s -X POST $BASE/orders -H 'Content-Type: application/json' \
 curl -s $BASE/orders/$ORDER_ID | jq '{orderNumber, status, payAmount}'
 ```
 
+## 관측성 확인 — health·로그 포맷
+
+앱을 띄운 채 health를 확인한다. 노출 엔드포인트는 health뿐이다(metrics 등은 수집기가 없어 비노출).
+
+```bash
+curl -s http://localhost:8080/actuator/health            # {"status":"UP"}
+curl -s http://localhost:8080/actuator/health/liveness   # 프로세스 생존
+curl -s http://localhost:8080/actuator/health/readiness  # 트래픽 수용 가능
+```
+
+콘솔 로그는 전 프로필에서 ECS(Elastic Common Schema) JSON 한 줄로 나간다. 사람이 읽을 때는 `jq`를 거친다.
+
+```bash
+./gradlew :module-apps:app-api:bootRun --args='--spring.profiles.active=local' | jq -R 'fromjson? // .'
+```
+
+요청 상관관계 식별자(traceId성 MDC)·micrometer-tracing은 보류다 — 애플리케이션 로그 지점이 한 곳뿐이고 로그 소비가 콘솔 단일 스트림이라 상관시킬 로그가 없다. 요청 경로 로깅이나 로그 수집기가 생기는 시점에 재평가한다.
+
 ## 테스트·빌드
 
 ```bash
