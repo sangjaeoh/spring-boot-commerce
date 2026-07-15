@@ -9,6 +9,10 @@ auth:
   jwt:
     # 로컬 전용 개발 키. 운영 키는 환경변수(AUTH_JWT_SECRET)로만 주입한다.
     secret: ${AUTH_JWT_SECRET:local-dev-only-secret-key-32bytes-min!}
+  admin:
+    # 로컬 전용 관리자 시딩 계정 — README 스모크(상품 등록)가 쓴다. 운영은 환경변수로만 주입한다.
+    email: ${AUTH_ADMIN_EMAIL:admin@local.dev}
+    password: ${AUTH_ADMIN_PASSWORD:local-admin-password}
 
 payment:
   webhook:
