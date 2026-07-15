@@ -42,15 +42,16 @@ public record NormalizedOptions(String signature, @Nullable String label) {
         TreeMap<String, String> canonicalByName = new TreeMap<>();
         StringBuilder label = new StringBuilder();
         for (ProductOption option : options) {
-            String name = option.name().trim();
-            String value = option.value().trim();
+            String rawValue = option.value().trim();
+            String name = caseFold(option.name().trim());
+            String value = caseFold(rawValue);
             if (name.isEmpty() || value.isEmpty() || hasSeparator(name) || hasSeparator(value)) {
                 throw new InvalidVariantException(ProductErrorCode.INVALID_OPTION);
             }
-            if (canonicalByName.putIfAbsent(caseFold(name), caseFold(value)) != null) {
+            if (canonicalByName.putIfAbsent(name, value) != null) {
                 throw new InvalidVariantException(ProductErrorCode.INVALID_OPTION);
             }
-            label.append(label.isEmpty() ? "" : LABEL_SEPARATOR).append(value);
+            label.append(label.isEmpty() ? "" : LABEL_SEPARATOR).append(rawValue);
         }
         String signature = canonicalByName.entrySet().stream()
                 .map(entry -> entry.getKey() + NAME_VALUE_SEPARATOR + entry.getValue())

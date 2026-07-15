@@ -68,4 +68,25 @@ class NormalizedOptionsTest {
         assertThatThrownBy(() -> NormalizedOptions.of(List.of(new ProductOption("Color", "Re;d"))))
                 .isInstanceOf(InvalidVariantException.class);
     }
+
+    @Test
+    @DisplayName("정규화(NFKC) 후 구분자가 되는 전각 문자도 거부한다")
+    void rejectsSeparatorRevealedByNormalization() {
+        // 전각 콜론 U+FF1A(：)·세미콜론 U+FF1B(；)은 NFKC로 ASCII ':'·';'로 접혀 시그니처를 오염시킨다
+        assertThatThrownBy(() -> NormalizedOptions.of(List.of(new ProductOption("Co：lor", "Red"))))
+                .isInstanceOf(InvalidVariantException.class);
+        assertThatThrownBy(() -> NormalizedOptions.of(List.of(new ProductOption("Color", "Re；d"))))
+                .isInstanceOf(InvalidVariantException.class);
+    }
+
+    @Test
+    @DisplayName("전각 구분자 우회로 서로 다른 옵션 조합이 같은 시그니처로 충돌하지 않는다")
+    void distinctOptionsDoNotCollideViaFullwidthSeparators() {
+        NormalizedOptions two =
+                NormalizedOptions.of(List.of(new ProductOption("a", "1"), new ProductOption("b", "2")));
+        assertThat(two.signature()).isEqualTo("a:1;b:2");
+        // 한 옵션에 전각 구분자를 심어 "a:1;b:2"를 위조하려는 입력은 거부돼 충돌 자체가 성립하지 않는다
+        assertThatThrownBy(() -> NormalizedOptions.of(List.of(new ProductOption("a", "1；b：2"))))
+                .isInstanceOf(InvalidVariantException.class);
+    }
 }

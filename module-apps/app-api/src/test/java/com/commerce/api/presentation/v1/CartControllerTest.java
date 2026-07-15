@@ -1,6 +1,7 @@
 package com.commerce.api.presentation.v1;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -8,11 +9,13 @@ import com.commerce.api.facade.ProductRegistrationFacade;
 import com.commerce.cart.service.CartAppender;
 import com.commerce.core.money.Money;
 import com.commerce.member.service.MemberAppender;
+import com.commerce.product.service.ProductVariantModifier;
 import com.commerce.product.service.ProductVariantReader;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.TestConstructor;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -24,18 +27,21 @@ class CartControllerTest extends WebIntegrationTest {
     private final CartAppender cartAppender;
     private final ProductRegistrationFacade productRegistrationFacade;
     private final ProductVariantReader variantReader;
+    private final ProductVariantModifier variantModifier;
 
     CartControllerTest(
             MockMvc mvc,
             MemberAppender memberAppender,
             CartAppender cartAppender,
             ProductRegistrationFacade productRegistrationFacade,
-            ProductVariantReader variantReader) {
+            ProductVariantReader variantReader,
+            ProductVariantModifier variantModifier) {
         this.mvc = mvc;
         this.memberAppender = memberAppender;
         this.cartAppender = cartAppender;
         this.productRegistrationFacade = productRegistrationFacade;
         this.variantReader = variantReader;
+        this.variantModifier = variantModifier;
     }
 
     @Test
@@ -65,6 +71,48 @@ class CartControllerTest extends WebIntegrationTest {
                 .andExpect(jsonPath("$.totalAmount").value(0));
     }
 
+    @Test
+    @DisplayName("담기는 204로 응답하고 라인을 반영한다")
+    void addItemReturnsNoContentAndReflectsLine() throws Exception {
+        UUID memberId = registerMember();
+        UUID variantId = seedVariant(10000L);
+
+        mvc.perform(post("/api/v1/carts/items")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(addItemBody(memberId, variantId, 2)))
+                .andExpect(status().isNoContent());
+
+        mvc.perform(get("/api/v1/carts").param("memberId", memberId.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.lines.length()").value(1))
+                .andExpect(jsonPath("$.lines[0].quantity").value(2));
+    }
+
+    @Test
+    @DisplayName("비활성 변형 담기는 409로 거부한다")
+    void addItemRejectedForDisabledVariant() throws Exception {
+        UUID memberId = registerMember();
+        UUID variantId = seedVariant(10000L);
+        variantModifier.disable(variantId);
+
+        mvc.perform(post("/api/v1/carts/items")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(addItemBody(memberId, variantId, 1)))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    @DisplayName("수량 0 담기는 400으로 검증 거부한다")
+    void addItemRejectedForNonPositiveQuantity() throws Exception {
+        UUID memberId = registerMember();
+        UUID variantId = seedVariant(10000L);
+
+        mvc.perform(post("/api/v1/carts/items")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(addItemBody(memberId, variantId, 0)))
+                .andExpect(status().isBadRequest());
+    }
+
     private UUID registerMember() {
         return memberAppender.register("user-" + UUID.randomUUID() + "@example.com", "테스터");
     }
@@ -72,5 +120,9 @@ class CartControllerTest extends WebIntegrationTest {
     private UUID seedVariant(long price) {
         UUID productId = productRegistrationFacade.registerProduct("상품", null, Money.of(price), List.of(), 50);
         return variantReader.getByProductId(productId).get(0).id();
+    }
+
+    private static String addItemBody(UUID memberId, UUID variantId, int quantity) {
+        return "{\"memberId\":\"%s\",\"variantId\":\"%s\",\"quantity\":%d}".formatted(memberId, variantId, quantity);
     }
 }
