@@ -7,6 +7,7 @@ import com.commerce.api.presentation.v1.request.CheckoutRequest;
 import com.commerce.api.presentation.v1.request.FulfillmentHoldRequest;
 import com.commerce.api.presentation.v1.request.OrderRefundRequest;
 import com.commerce.api.presentation.v1.response.CheckoutResponse;
+import com.commerce.api.presentation.v1.response.OrderPageResponse;
 import com.commerce.api.presentation.v1.response.OrderResponse;
 import com.commerce.api.presentation.v1.response.PaymentResponse;
 import com.commerce.core.money.Money;
@@ -16,14 +17,16 @@ import com.commerce.payment.service.PaymentReader;
 import com.commerce.web.auth.AdminOnly;
 import com.commerce.web.auth.AuthUser;
 import jakarta.validation.Valid;
-import java.util.List;
+import jakarta.validation.constraints.Min;
 import java.util.UUID;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -129,12 +132,13 @@ public class OrderController {
         return OrderResponse.from(orderReader.getOrder(orderId, authUser.memberId()));
     }
 
-    /** 본인 주문 목록을 최신순으로 조회한다. */
+    /** 본인 주문 목록을 최신순 페이지로 조회한다. */
     @GetMapping
-    public List<OrderResponse> getOrders(AuthUser authUser) {
-        return orderReader.getOrdersByMember(authUser.memberId()).stream()
-                .map(OrderResponse::from)
-                .toList();
+    public OrderPageResponse getOrders(
+            AuthUser authUser,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "20") @Min(1) int size) {
+        return OrderPageResponse.from(orderReader.getOrdersByMember(authUser.memberId(), PageRequest.of(page, size)));
     }
 
     /** 본인 주문의 결제 정보(승인·환불 거래)를 조회한다. */

@@ -263,7 +263,7 @@ class OrderControllerTest extends WebIntegrationTest {
 
         mvc.perform(get("/api/v1/orders").header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1));
+                .andExpect(jsonPath("$.orders.length()").value(1));
     }
 
     @Test
@@ -610,7 +610,7 @@ class OrderControllerTest extends WebIntegrationTest {
     }
 
     @Test
-    @DisplayName("주문 목록 조회는 200으로 토큰 주체의 주문만 최신순으로 싣는다")
+    @DisplayName("주문 목록 조회는 200으로 토큰 주체의 주문만 최신순 페이지 정보와 함께 싣는다")
     void getOrdersReturnsMemberOrdersNewestFirst() throws Exception {
         UUID memberId = registerMember();
         UUID first = checkoutForMember(memberId);
@@ -619,9 +619,66 @@ class OrderControllerTest extends WebIntegrationTest {
 
         mvc.perform(get("/api/v1/orders").header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(2))
-                .andExpect(jsonPath("$[0].id").value(second.toString()))
-                .andExpect(jsonPath("$[1].id").value(first.toString()));
+                .andExpect(jsonPath("$.orders.length()").value(2))
+                .andExpect(jsonPath("$.orders[0].id").value(second.toString()))
+                .andExpect(jsonPath("$.orders[1].id").value(first.toString()))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(20))
+                .andExpect(jsonPath("$.totalElements").value(2))
+                .andExpect(jsonPath("$.totalPages").value(1));
+    }
+
+    @Test
+    @DisplayName("주문 목록 페이지 경계 — 마지막 페이지는 나머지만 싣고 범위 밖 페이지는 빈 목록에 총계를 유지한다")
+    void getOrdersKeepsTotalsAcrossPageBoundaries() throws Exception {
+        UUID memberId = registerMember();
+        UUID first = checkoutForMember(memberId);
+        UUID second = checkoutForMember(memberId);
+        UUID third = checkoutForMember(memberId);
+
+        mvc.perform(get("/api/v1/orders")
+                        .param("page", "0")
+                        .param("size", "2")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.orders.length()").value(2))
+                .andExpect(jsonPath("$.orders[0].id").value(third.toString()))
+                .andExpect(jsonPath("$.orders[1].id").value(second.toString()))
+                .andExpect(jsonPath("$.totalElements").value(3))
+                .andExpect(jsonPath("$.totalPages").value(2));
+
+        mvc.perform(get("/api/v1/orders")
+                        .param("page", "1")
+                        .param("size", "2")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.orders.length()").value(1))
+                .andExpect(jsonPath("$.orders[0].id").value(first.toString()))
+                .andExpect(jsonPath("$.page").value(1));
+
+        mvc.perform(get("/api/v1/orders")
+                        .param("page", "2")
+                        .param("size", "2")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.orders.length()").value(0))
+                .andExpect(jsonPath("$.totalElements").value(3))
+                .andExpect(jsonPath("$.totalPages").value(2));
+    }
+
+    @Test
+    @DisplayName("음수 page·1 미만 size의 주문 목록 조회는 400 VALIDATION_FAILED로 거부된다")
+    void getOrdersRejectsInvalidPageParams() throws Exception {
+        String token = bearer(registerMember());
+
+        mvc.perform(get("/api/v1/orders").param("page", "-1").header(HttpHeaders.AUTHORIZATION, token))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.errors[0].field").value("page"));
+
+        mvc.perform(get("/api/v1/orders").param("size", "0").header(HttpHeaders.AUTHORIZATION, token))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
     }
 
     @Test
@@ -639,8 +696,8 @@ class OrderControllerTest extends WebIntegrationTest {
 
         mvc.perform(get("/api/v1/orders").header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1))
-                .andExpect(jsonPath("$[0].lines.length()").value(2));
+                .andExpect(jsonPath("$.orders.length()").value(1))
+                .andExpect(jsonPath("$.orders[0].lines.length()").value(2));
     }
 
     private UUID checkoutForMember(UUID memberId) throws Exception {
