@@ -11,6 +11,7 @@ import com.commerce.api.presentation.v1.request.AddressRequest;
 import com.commerce.api.presentation.v1.request.CheckoutRequest;
 import com.commerce.api.presentation.v1.request.FulfillmentHoldRequest;
 import com.commerce.api.presentation.v1.response.CheckoutResponse;
+import com.commerce.api.presentation.v1.response.PaymentResponse;
 import com.commerce.cart.service.CartAppender;
 import com.commerce.core.money.Money;
 import com.commerce.coupon.entity.Discount;
@@ -354,6 +355,71 @@ class OrderControllerTest extends WebIntegrationTest {
                 .andExpect(jsonPath("$.status").value("CANCELLED"))
                 .andExpect(jsonPath("$.cancelledAt").exists())
                 .andExpect(jsonPath("$.cancellationReason").value("CUSTOMER_REQUEST"));
+    }
+
+    @Test
+    @DisplayName("결제 조회는 200으로 승인 상태·수단·금액·승인 거래 ID·승인 시각을 싣는다")
+    void getPaymentReturnsApprovedTransaction() throws Exception {
+        UUID orderId = checkoutViaHttp();
+
+        mvc.perform(get("/api/v1/orders/{orderId}/payment", orderId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("APPROVED"))
+                .andExpect(jsonPath("$.method").value("CARD"))
+                .andExpect(jsonPath("$.amount").value(10000))
+                .andExpect(jsonPath("$.pgTransactionId").exists())
+                .andExpect(jsonPath("$.approvedAt").exists())
+                .andExpect(jsonPath("$.pgCancelTransactionId").doesNotExist())
+                .andExpect(jsonPath("$.cancelledAt").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("취소된 주문의 결제 조회는 CANCELLED와 승인 ID와 별개인 환불 거래 ID·취소 시각을 싣는다")
+    void getPaymentShowsDistinctRefundTransactionAfterCancel() throws Exception {
+        UUID orderId = checkoutViaHttp();
+        mvc.perform(post("/api/v1/orders/{orderId}/cancel", orderId)).andExpect(status().isNoContent());
+
+        String body = mvc.perform(get("/api/v1/orders/{orderId}/payment", orderId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CANCELLED"))
+                .andExpect(jsonPath("$.approvedAt").exists())
+                .andExpect(jsonPath("$.cancelledAt").exists())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        PaymentResponse payment = objectMapper.readValue(body, PaymentResponse.class);
+        assertThat(payment.pgTransactionId()).isNotNull();
+        assertThat(payment.pgCancelTransactionId()).isNotNull();
+        assertThat(payment.pgCancelTransactionId()).isNotEqualTo(payment.pgTransactionId());
+    }
+
+    @Test
+    @DisplayName("전액 할인 0원 결제 조회는 APPROVED에 수단·승인 거래 ID 없이 승인 시각을 싣는다")
+    void getPaymentOmitsGatewayFieldsForZeroAmountPayment() throws Exception {
+        UUID memberId = registerMember();
+        cartAppender.addItem(memberId, seedProduct(50), 1);
+        UUID couponId = couponAppender.create("100% 할인", Discount.rate(100), Money.of(10000L), validity(), 30);
+        UUID issuedId = issuedCouponAppender.issue(couponId, memberId);
+        UUID orderId = checkout(new CheckoutRequest(memberId, addressRequest(), 0L, issuedId, null));
+
+        mvc.perform(get("/api/v1/orders/{orderId}/payment", orderId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("APPROVED"))
+                .andExpect(jsonPath("$.amount").value(0))
+                .andExpect(jsonPath("$.method").doesNotExist())
+                .andExpect(jsonPath("$.pgTransactionId").doesNotExist())
+                .andExpect(jsonPath("$.approvedAt").exists());
+    }
+
+    @Test
+    @DisplayName("결제가 없는 주문의 결제 조회는 404 PAYMENT_NOT_FOUND로 거부된다")
+    void getPaymentReturns404ForOrderWithoutPayment() throws Exception {
+        UUID orderId = placePendingOrder();
+
+        mvc.perform(get("/api/v1/orders/{orderId}/payment", orderId))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("PAYMENT_NOT_FOUND"));
     }
 
     @Test
