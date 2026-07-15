@@ -4,6 +4,7 @@ import com.commerce.messaging.publish.MessagePublisher;
 import com.commerce.order.entity.CancellationReason;
 import com.commerce.order.entity.HoldReason;
 import com.commerce.order.entity.Order;
+import com.commerce.order.entity.RefundReason;
 import com.commerce.order.event.OrderPaid;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderNotFoundException;
@@ -45,6 +46,16 @@ public class OrderModifier {
     @Transactional
     public void cancel(UUID orderId, CancellationReason reason) {
         find(orderId).cancel(reason);
+    }
+
+    /**
+     * 배송 완료 주문을 전체 반품 환불 처리한다.
+     *
+     * @throws OrderStatusException 결제 완료·배송 완료 주문이 아니거나 이미 환불됐으면
+     */
+    @Transactional
+    public void refund(UUID orderId, RefundReason reason) {
+        find(orderId).refund(reason);
     }
 
     /** 출고한다. */

@@ -4,6 +4,7 @@ import com.commerce.order.entity.CancellationReason;
 import com.commerce.order.entity.FulfillmentStatus;
 import com.commerce.order.entity.HoldReason;
 import com.commerce.order.entity.OrderStatus;
+import com.commerce.order.entity.RefundReason;
 import com.commerce.order.info.OrderInfo;
 import java.time.Instant;
 import java.util.Comparator;
@@ -31,7 +32,9 @@ public record OrderResponse(
         @Nullable Instant deliveredAt,
         @Nullable Instant cancelledAt,
         @Nullable CancellationReason cancellationReason,
-        @Nullable HoldReason holdReason) {
+        @Nullable HoldReason holdReason,
+        @Nullable Instant refundedAt,
+        @Nullable RefundReason refundReason) {
 
     public OrderResponse {
         lines = List.copyOf(lines);
@@ -60,6 +63,8 @@ public record OrderResponse(
                 order.deliveredAt(),
                 order.cancelledAt(),
                 order.cancellationReason(),
-                order.holdReason());
+                order.holdReason(),
+                order.refundedAt(),
+                order.refundReason());
     }
 }

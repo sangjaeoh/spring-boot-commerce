@@ -104,6 +104,15 @@ public class Order extends BaseTimeEntity<UUID> {
     @Nullable
     private HoldReason holdReason;
 
+    @Column(name = "refunded_at")
+    @Nullable
+    private Instant refundedAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "refund_reason")
+    @Nullable
+    private RefundReason refundReason;
+
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<OrderLine> lines = new HashSet<>();
 
@@ -157,10 +166,10 @@ public class Order extends BaseTimeEntity<UUID> {
     /**
      * 주문을 취소한다.
      *
-     * @throws OrderStatusException 이미 취소됐거나 출고 이후면
+     * @throws OrderStatusException 이미 취소·환불됐거나 출고 이후면
      */
     public void cancel(CancellationReason reason) {
-        if (status == OrderStatus.CANCELLED) {
+        if (status == OrderStatus.CANCELLED || status == OrderStatus.REFUNDED) {
             throw new OrderStatusException(OrderErrorCode.INVALID_ORDER_STATE_TRANSITION);
         }
         if (status == OrderStatus.PAID && isShippedOrDelivered()) {
@@ -169,6 +178,23 @@ public class Order extends BaseTimeEntity<UUID> {
         this.status = OrderStatus.CANCELLED;
         this.cancelledAt = Instant.now();
         this.cancellationReason = reason;
+    }
+
+    /**
+     * 배송 완료된 주문을 전체 반품 환불 처리한다. 이행 축은 DELIVERED로 남는다.
+     *
+     * @throws OrderStatusException 결제 완료·배송 완료 주문이 아니거나 이미 환불됐으면
+     */
+    public void refund(RefundReason reason) {
+        if (status == OrderStatus.REFUNDED) {
+            throw new OrderStatusException(OrderErrorCode.INVALID_ORDER_STATE_TRANSITION);
+        }
+        if (status != OrderStatus.PAID || fulfillmentStatus != FulfillmentStatus.DELIVERED) {
+            throw new OrderStatusException(OrderErrorCode.REFUND_NOT_ALLOWED);
+        }
+        this.status = OrderStatus.REFUNDED;
+        this.refundedAt = Instant.now();
+        this.refundReason = reason;
     }
 
     /** 출고한다. */
@@ -315,6 +341,14 @@ public class Order extends BaseTimeEntity<UUID> {
 
     public @Nullable HoldReason getHoldReason() {
         return holdReason;
+    }
+
+    public @Nullable Instant getRefundedAt() {
+        return refundedAt;
+    }
+
+    public @Nullable RefundReason getRefundReason() {
+        return refundReason;
     }
 
     public Set<OrderLine> getLines() {

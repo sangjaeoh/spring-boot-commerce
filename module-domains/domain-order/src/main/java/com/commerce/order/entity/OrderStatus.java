@@ -4,5 +4,6 @@ package com.commerce.order.entity;
 public enum OrderStatus {
     PENDING,
     PAID,
-    CANCELLED
+    CANCELLED,
+    REFUNDED
 }

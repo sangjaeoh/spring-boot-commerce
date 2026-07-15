@@ -6,6 +6,7 @@ public enum OrderErrorCode implements ErrorCode {
     ORDER_NOT_FOUND("ORDER_NOT_FOUND", "주문을 찾을 수 없다.", 404),
     INVALID_ORDER_STATE_TRANSITION("ORDER_INVALID_STATE_TRANSITION", "허용되지 않은 주문 상태 전이다.", 409),
     CANCEL_NOT_ALLOWED("ORDER_CANCEL_NOT_ALLOWED", "출고 이후 주문은 취소할 수 없다.", 409),
+    REFUND_NOT_ALLOWED("ORDER_REFUND_NOT_ALLOWED", "배송 완료된 결제 주문만 환불할 수 있다.", 409),
     INVALID_FULFILLMENT_TRANSITION("ORDER_INVALID_FULFILLMENT_TRANSITION", "허용되지 않은 이행 상태 전이다.", 409),
     NOT_PAID("ORDER_NOT_PAID", "결제 완료 주문만 이행할 수 있다.", 409),
     EMPTY_ORDER("ORDER_EMPTY", "주문 라인은 1개 이상이어야 한다.", 400),

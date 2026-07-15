@@ -122,8 +122,8 @@ public class PaymentConfirmationFacade {
             }
             // 이전 확정이 결제완료 후 결제 기록 전에 중단된 잔여 — 기록만 마저 한다.
             case PAID -> paymentProcessor.confirmApproval(payment.id(), pgTransactionId);
-            // 주문은 동기 보상으로 이미 취소·복원됐고 지연 승인된 청구만 고아로 남았다 — 승인 기록 후 환불한다.
-            case CANCELLED -> {
+            // 주문은 이미 취소·환불로 종결됐고 지연 승인된 청구만 고아로 남았다 — 승인 기록 후 환불한다.
+            case CANCELLED, REFUNDED -> {
                 paymentProcessor.confirmApproval(payment.id(), pgTransactionId);
                 paymentProcessor.cancel(payment.id());
             }

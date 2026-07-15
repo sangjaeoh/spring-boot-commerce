@@ -17,6 +17,7 @@ public enum ApiErrorCode implements ErrorCode {
     PAYMENT_METHOD_REQUIRED("API_PAYMENT_METHOD_REQUIRED", "결제 금액이 있으면 결제 수단이 필요하다.", 400),
     PAYMENT_DECLINED("API_PAYMENT_DECLINED", "결제가 거절됐다.", 402),
     ORDER_NOT_CANCELLABLE("API_ORDER_NOT_CANCELLABLE", "취소할 수 없는 주문 상태다.", 409),
+    ORDER_NOT_REFUNDABLE("API_ORDER_NOT_REFUNDABLE", "환불할 수 없는 주문 상태다.", 409),
     WITHDRAWAL_BLOCKED("API_WITHDRAWAL_BLOCKED", "미배송 결제 주문이 있어 탈퇴할 수 없다.", 409),
     WEBHOOK_SIGNATURE_INVALID("API_WEBHOOK_SIGNATURE_INVALID", "웹훅 서명이 유효하지 않다.", 401),
     WEBHOOK_PAYLOAD_INVALID("API_WEBHOOK_PAYLOAD_INVALID", "웹훅 페이로드를 해석할 수 없다.", 400);
