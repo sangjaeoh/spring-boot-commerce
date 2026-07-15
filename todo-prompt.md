@@ -235,23 +235,24 @@
 ## 10. 멱등 키 저장소 영속화
 
 ```text
-[작업] 멱등 키 저장소를 인메모리에서 DB 기반으로 교체
+[작업] 멱등 키 저장소를 인메모리에서 Redis 기반으로 교체
 
 배경(확인된 사실):
-- IdempotencyFilter(common-web)는 IdempotencyStore 포트를 쓰고 구현은 InMemoryIdempotencyStore뿐이다 — 재시작 시 소실, 다중 인스턴스에서 무력. REQUIREMENTS.md 제약·전제에 이 한계가 선언돼 있다.
-- 필터 보장 수준: Idempotency-Key 헤더를 실은 unsafe 요청(POST·PUT·PATCH·DELETE)을 TTL 창 동안 잠그고 중복이면 409(응답 재생 없음).
-- 스키마는 SchemaFlywayFactory가 7개 도메인 스키마를 열거해 스키마별 Flyway로 관리한다 — 신규 스키마 추가 시 팩토리 갱신이 필요하다.
+- IdempotencyFilter(common-web)는 IdempotencyStore 포트를 쓰고 구현은 InMemoryIdempotencyStore뿐이다 — 재시작 시 소실, 다중 인스턴스에서 무력. REQUIREMENTS.md 제약·전제에 이 한계가 선언돼 있다. 포트 Javadoc이 분산 구현의 예로 Redis를 이미 지목한다.
+- 필터 보장 수준: Idempotency-Key 헤더를 실은 unsafe 요청(POST·PUT·PATCH·DELETE)을 TTL 창 동안 잠그고 중복이면 409(응답 재생 없음). InMemory 시맨틱: tryBegin이 in-flight 락(5분)을 선점하고, complete가 dedup 창(10초)으로 단축한다.
+- Redis 인프라가 전무하다: docker-compose에 redis 서비스 없음, 버전 카탈로그에 Redis 클라이언트 의존성 없음. 인프라 구현 모듈 선례는 module-infra:infra-messaging.
 
-목표: 멱등 키가 DB에 영속돼 재시작·다중 인스턴스에서도 중복 차단이 유지되고, 문서의 한계 선언이 새 보장 수준으로 갱신된다.
+목표: 멱등 키가 Redis에 저장돼 재시작·다중 인스턴스에서도 중복 차단이 유지되고, 문서의 한계 선언이 새 보장 수준으로 갱신된다.
 
 작업 내용:
-1. 설계 결정(트레이드오프 명시): 저장소는 새 인프라 없는 DB(Postgres) 권장 — Redis 대비 근거를 남긴다. 테이블 소유(전용 스키마 신설 vs 기존 스키마 편입)와 마이그레이션 SQL 배치 위치를 docs/architecture.md 모듈 규칙과 정합하게 정한다(common-web은 도메인 모듈이 아니다 — 구현 모듈 배치를 아키텍처 규칙으로 검증).
-2. DB 구현: 유니크 키 INSERT로 원자 획득(동시 중복 요청 중 하나만 성공), TTL 만료 처리 전략 결정(획득 시 만료 행 무시 vs 주기 삭제 — 최소안 선택).
-3. 필터·포트는 그대로 두고 구현만 교체한다. InMemory 구현의 거취(테스트용 유지 여부)를 판단한다.
-4. 테스트: 동시 중복 요청 1승 검증, TTL 경과 후 재사용 가능, 재시작 시나리오(새 컨텍스트에서 같은 키 409 — 통합 테스트로 표현 가능한 수준까지).
-5. REQUIREMENTS.md 제약·전제의 in-memory 한계 서술을 새 보장 수준으로 현행화한다.
+1. 설계 결정 기록(트레이드오프 명시): Redis 채택 — Postgres 대안(신규 인프라 불요·내구성 기본 제공) 대비 근거를 남긴다: 이 보장 형상(TTL dedup 락, 응답 재생 없음)의 교과서 패턴이 SET NX PX이고, 네이티브 TTL로 만료 행 처리 전략 자체가 소거되며, 연습 프로젝트라 compose에 redis 추가 비용을 수용한다. Redis 장애 시 필터 동작(fail-open 통과 vs fail-closed 오류)을 결정하고 근거를 남긴다.
+2. 인프라 배선: compose에 redis 서비스 추가(이미지 버전 고정·healthcheck). 재시작 소실 방지가 이 작업의 목표이므로 AOF(appendonly)를 켠다 — 기본 RDB 스냅숏만으로는 재시작 내구성이 안 된다. 클라이언트 의존성은 버전 카탈로그 경유(spring-boot-starter-data-redis 등 최소안 판단), 접속 설정은 local 프로필·compose full 프로필 환경변수 두 경로 모두 배선한다.
+3. Redis 구현: SET NX PX로 원자 선점(동시 중복 요청 중 하나만 성공), complete는 TTL을 dedup 창으로 단축 — InMemory 시맨틱(in-flight 5분→완료 후 10초)을 보존한다. 구현 모듈 배치는 infra-messaging 선례를 따라 docs/architecture.md 모듈 규칙과 정합하게 정한다(common-web은 도메인·인프라 모듈이 아니다 — 배치를 아키텍처 규칙으로 검증).
+4. 필터·포트는 그대로 두고 구현만 교체한다. InMemory 구현의 거취(테스트용 유지 여부)를 판단한다.
+5. 테스트: Testcontainers Redis 기반 — 동시 중복 요청 1승 검증, TTL 경과 후 재사용 가능, 재시작 시나리오(Redis 컨테이너는 유지한 채 새 컨텍스트에서 같은 키 409 — 통합 테스트로 표현 가능한 수준까지).
+6. REQUIREMENTS.md 제약·전제의 in-memory 한계 서술을 새 보장 수준(Redis 필요·AOF 전제 포함)으로 현행화한다. README 기동 안내에 redis를 반영한다.
 
-하지 말 것: 응답 재생(response replay) 추가 — 현행 보장(중복 차단 409)을 유지한다. Redis 등 신규 인프라 도입.
+하지 말 것: 응답 재생(response replay) 추가 — 현행 보장(중복 차단 409)을 유지한다. Redis 클러스터·센티널·Redlock, 캐시 등 멱등 외 용도 확장.
 
 완료 기준: 위 테스트가 통과하고 ./gradlew build 게이트가 통과하며, 문서 제약 선언이 갱신돼 있다.
 완료 후: 루트 todo.md의 10번 항목(멱등 키 저장소 영속화)을 체크([ ] → [x])로 갱신한다. 커밋 및 메인머지, 잔여브랜치 삭제

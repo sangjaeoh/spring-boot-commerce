@@ -5,7 +5,8 @@ import java.util.function.LongSupplier;
 import org.springframework.stereotype.Component;
 
 /**
- * 단일 인스턴스용 인메모리 {@link IdempotencyStore} 구현이다.
+ * 웹 하네스 테스트용 단일 인스턴스 인메모리 {@link IdempotencyStore} 구현이다. 실행 앱은 Redis 구현
+ * (infra-redis)을 쓴다.
  *
  * <p>키별 만료 시각을 원자적으로 갱신해 동시 선점을 직렬화한다. in-flight 락은 완료 후 dedup 창보다
  * 오래 살아, 처리 중인 원본이 아직 안 끝났을 때 도착한 재요청(타임아웃 재시도 포함)을 계속 막는다.

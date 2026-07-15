@@ -44,6 +44,9 @@ spring-boot-starter-web = { module = "org.springframework.boot:spring-boot-start
 spring-boot-starter-actuator = { module = "org.springframework.boot:spring-boot-starter-actuator" }
 spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-starter-test" }
 
+# infra-redis — Redis 멱등 키 저장소. 버전은 Spring Boot BOM
+spring-boot-starter-data-redis = { module = "org.springframework.boot:spring-boot-starter-data-redis" }
+
 # common-web — 슬림 스프링 웹 프레임워크(임베디드 서버 스타터 회피). 버전은 Spring Boot BOM
 spring-webmvc = { module = "org.springframework:spring-webmvc" }
 spring-orm = { module = "org.springframework:spring-orm" }
@@ -58,6 +61,7 @@ junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher
 spring-boot-starter-data-jpa-test = { module = "org.springframework.boot:spring-boot-starter-data-jpa-test" }
 spring-boot-testcontainers = { module = "org.springframework.boot:spring-boot-testcontainers" }
 testcontainers-postgresql = { module = "org.testcontainers:testcontainers-postgresql" }
+testcontainers-redis = { module = "com.redis:testcontainers-redis" }
 testcontainers-junit-jupiter = { module = "org.testcontainers:testcontainers-junit-jupiter" }
 spring-boot-starter-flyway = { module = "org.springframework.boot:spring-boot-starter-flyway" }
 flyway-core = { module = "org.flywaydb:flyway-core" }
