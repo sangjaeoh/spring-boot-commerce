@@ -1,7 +1,9 @@
 package com.commerce.api.presentation.v1;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -9,12 +11,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.commerce.api.presentation.v1.request.AddressRequest;
 import com.commerce.api.presentation.v1.request.CheckoutRequest;
 import com.commerce.api.presentation.v1.request.OptionRequest;
+import com.commerce.api.presentation.v1.request.ProductEditRequest;
 import com.commerce.api.presentation.v1.request.ProductRegistrationRequest;
 import com.commerce.api.presentation.v1.request.VariantRegistrationRequest;
+import com.commerce.api.presentation.v1.response.CheckoutResponse;
 import com.commerce.api.presentation.v1.response.ProductRegistrationResponse;
 import com.commerce.api.presentation.v1.response.VariantRegistrationResponse;
 import com.commerce.cart.service.CartAppender;
 import com.commerce.member.service.MemberAppender;
+import com.commerce.order.info.OrderInfo;
+import com.commerce.order.service.OrderReader;
 import com.commerce.payment.entity.PaymentMethod;
 import com.commerce.product.entity.ProductStatus;
 import com.commerce.product.service.ProductReader;
@@ -39,6 +45,7 @@ class ProductControllerTest extends WebIntegrationTest {
     private final ProductVariantReader variantReader;
     private final MemberAppender memberAppender;
     private final CartAppender cartAppender;
+    private final OrderReader orderReader;
 
     ProductControllerTest(
             MockMvc mvc,
@@ -46,13 +53,15 @@ class ProductControllerTest extends WebIntegrationTest {
             ProductReader productReader,
             ProductVariantReader variantReader,
             MemberAppender memberAppender,
-            CartAppender cartAppender) {
+            CartAppender cartAppender,
+            OrderReader orderReader) {
         this.mvc = mvc;
         this.objectMapper = objectMapper;
         this.productReader = productReader;
         this.variantReader = variantReader;
         this.memberAppender = memberAppender;
         this.cartAppender = cartAppender;
+        this.orderReader = orderReader;
     }
 
     @Test
@@ -243,6 +252,97 @@ class ProductControllerTest extends WebIntegrationTest {
                         .content("{\"price\":0,\"options\":[],\"initialQuantity\":1}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+    }
+
+    @Test
+    @DisplayName("숨김·재노출 왕복이 각각 204로 상태를 전환한다")
+    void hideAndShowRoundTrip() throws Exception {
+        UUID productId = registerProductViaHttp("전환셔츠", 10000L, 5);
+
+        mvc.perform(post("/api/v1/products/{productId}/hide", productId)).andExpect(status().isNoContent());
+        assertThat(productReader.getProduct(productId).status()).isEqualTo(ProductStatus.HIDDEN);
+
+        mvc.perform(post("/api/v1/products/{productId}/show", productId)).andExpect(status().isNoContent());
+        assertThat(productReader.getProduct(productId).status()).isEqualTo(ProductStatus.ON_SALE);
+    }
+
+    @Test
+    @DisplayName("ON_SALE 상품의 show·HIDDEN 상품의 hide 요청은 409 PRODUCT_INVALID_STATE_TRANSITION으로 거부된다")
+    void showAndHideRejectInvalidTransition() throws Exception {
+        UUID productId = registerProductViaHttp("전이거부셔츠", 10000L, 5);
+
+        mvc.perform(post("/api/v1/products/{productId}/show", productId))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("PRODUCT_INVALID_STATE_TRANSITION"));
+
+        mvc.perform(post("/api/v1/products/{productId}/hide", productId)).andExpect(status().isNoContent());
+        mvc.perform(post("/api/v1/products/{productId}/hide", productId))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("PRODUCT_INVALID_STATE_TRANSITION"));
+    }
+
+    @Test
+    @DisplayName("숨긴 상품은 담긴 라인이 있어도 체크아웃이 409 API_NOT_ORDERABLE로 거부된다")
+    void hiddenProductRejectsCheckout() throws Exception {
+        UUID productId = registerProductViaHttp("숨김셔츠", 10000L, 5);
+        UUID variantId = variantReader.getByProductId(productId).get(0).id();
+        UUID memberId = memberAppender.register("user-" + UUID.randomUUID() + "@example.com", "테스터");
+        cartAppender.addItem(memberId, variantId, 1);
+
+        mvc.perform(post("/api/v1/products/{productId}/hide", productId)).andExpect(status().isNoContent());
+
+        CheckoutRequest request = new CheckoutRequest(memberId, addressRequest(), 0L, null, PaymentMethod.CARD);
+        mvc.perform(post("/api/v1/orders")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("API_NOT_ORDERABLE"));
+    }
+
+    @Test
+    @DisplayName("편집이 204로 이름·설명을 바꾸고 기존 주문 productName 스냅샷은 불변이다")
+    void editDoesNotAffectExistingOrderSnapshot() throws Exception {
+        UUID productId = registerProductViaHttp("원래셔츠", 10000L, 5);
+        UUID variantId = variantReader.getByProductId(productId).get(0).id();
+        UUID memberId = memberAppender.register("user-" + UUID.randomUUID() + "@example.com", "테스터");
+        cartAppender.addItem(memberId, variantId, 1);
+        UUID orderId = checkoutViaHttp(memberId);
+
+        ProductEditRequest edit = new ProductEditRequest("바뀐셔츠", "새 설명");
+        mvc.perform(patch("/api/v1/products/{productId}", productId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(edit)))
+                .andExpect(status().isNoContent());
+
+        assertThat(productReader.getProduct(productId).name()).isEqualTo("바뀐셔츠");
+        assertThat(productReader.getProduct(productId).description()).isEqualTo("새 설명");
+        OrderInfo order = orderReader.getOrder(orderId);
+        assertThat(order.lines().get(0).productName()).isEqualTo("원래셔츠");
+    }
+
+    @Test
+    @DisplayName("논리삭제가 204로 성공하고 이후 상세 조회는 404 PRODUCT_NOT_FOUND로 거부된다")
+    void deleteRemovesProductFromDetail() throws Exception {
+        UUID productId = registerProductViaHttp("삭제셔츠", 10000L, 5);
+
+        mvc.perform(delete("/api/v1/products/{productId}", productId)).andExpect(status().isNoContent());
+
+        mvc.perform(get("/api/v1/products/{productId}", productId))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("PRODUCT_NOT_FOUND"));
+    }
+
+    private UUID checkoutViaHttp(UUID memberId) throws Exception {
+        CheckoutRequest request = new CheckoutRequest(memberId, addressRequest(), 0L, null, PaymentMethod.CARD);
+        String body = mvc.perform(post("/api/v1/orders")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        return UUID.fromString(
+                objectMapper.readValue(body, CheckoutResponse.class).orderId());
     }
 
     private UUID registerProductViaHttp(String name, long price, int initialQuantity) throws Exception {

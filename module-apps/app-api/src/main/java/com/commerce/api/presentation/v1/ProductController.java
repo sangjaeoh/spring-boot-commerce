@@ -3,6 +3,7 @@ package com.commerce.api.presentation.v1;
 import com.commerce.api.facade.ProductCatalogFacade;
 import com.commerce.api.facade.ProductDetailFacade;
 import com.commerce.api.facade.ProductRegistrationFacade;
+import com.commerce.api.presentation.v1.request.ProductEditRequest;
 import com.commerce.api.presentation.v1.request.ProductRegistrationRequest;
 import com.commerce.api.presentation.v1.request.VariantRegistrationRequest;
 import com.commerce.api.presentation.v1.response.ProductDetailResponse;
@@ -10,12 +11,16 @@ import com.commerce.api.presentation.v1.response.ProductPageResponse;
 import com.commerce.api.presentation.v1.response.ProductRegistrationResponse;
 import com.commerce.api.presentation.v1.response.VariantRegistrationResponse;
 import com.commerce.core.money.Money;
+import com.commerce.product.service.ProductModifier;
+import com.commerce.product.service.ProductRemover;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import java.util.UUID;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -25,10 +30,13 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 상품 등록·추가 변형 등록·목록·상세 조회 엔드포인트다.
+ * 상품 등록·추가 변형 등록·목록·상세 조회·관리(노출·숨김·편집·논리삭제) 엔드포인트다.
  *
  * <p>등록·추가 변형 등록은 상품 등록 파사드에 얇게 위임한다(변형·초기 재고를 순차 시딩). 목록·상세 조회는
  * 각 파사드에 위임해 ACTIVE 변형·재고 파생(주문가능·품절·대표가)을 합성하고, 컨트롤러는 요청·결과를 DTO로 변환만 한다.
+ * 관리는 단일 도메인 쓰기라 파사드 없이 상품 도메인 Modifier·Remover에 얇게 위임하고, 미존재·허용되지 않은 전이는
+ * 도메인이 던지는 예외를 전역 핸들러가 problem+json으로 매핑한다. 편집은 기존 주문 스냅샷에 영향을 주지 않고,
+ * 논리삭제는 변형을 연쇄 삭제하지 않는다.
  */
 @RestController
 @RequestMapping("/api/v1/products")
@@ -37,14 +45,20 @@ public class ProductController {
     private final ProductRegistrationFacade productRegistrationFacade;
     private final ProductCatalogFacade productCatalogFacade;
     private final ProductDetailFacade productDetailFacade;
+    private final ProductModifier productModifier;
+    private final ProductRemover productRemover;
 
     public ProductController(
             ProductRegistrationFacade productRegistrationFacade,
             ProductCatalogFacade productCatalogFacade,
-            ProductDetailFacade productDetailFacade) {
+            ProductDetailFacade productDetailFacade,
+            ProductModifier productModifier,
+            ProductRemover productRemover) {
         this.productRegistrationFacade = productRegistrationFacade;
         this.productCatalogFacade = productCatalogFacade;
         this.productDetailFacade = productDetailFacade;
+        this.productModifier = productModifier;
+        this.productRemover = productRemover;
     }
 
     /** 상품·첫 변형·초기 재고를 시딩하고 등록된 상품 ID를 반환한다. */
@@ -81,5 +95,34 @@ public class ProductController {
     @GetMapping("/{productId}")
     public ProductDetailResponse getProduct(@PathVariable UUID productId) {
         return ProductDetailResponse.from(productDetailFacade.getProductDetail(productId));
+    }
+
+    /** 상품을 노출한다. */
+    @PostMapping("/{productId}/show")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void show(@PathVariable UUID productId) {
+        productModifier.show(productId);
+    }
+
+    /** 상품을 숨긴다. */
+    @PostMapping("/{productId}/hide")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void hide(@PathVariable UUID productId) {
+        productModifier.hide(productId);
+    }
+
+    /** 상품명·상세 설명을 바꾼다. */
+    @PatchMapping("/{productId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void edit(@PathVariable UUID productId, @Valid @RequestBody ProductEditRequest request) {
+        productModifier.rename(productId, request.name());
+        productModifier.changeDescription(productId, request.description());
+    }
+
+    /** 상품을 논리삭제한다. */
+    @DeleteMapping("/{productId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void delete(@PathVariable UUID productId) {
+        productRemover.delete(productId);
     }
 }
