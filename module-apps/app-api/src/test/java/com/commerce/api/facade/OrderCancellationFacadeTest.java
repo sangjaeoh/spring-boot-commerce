@@ -115,7 +115,7 @@ class OrderCancellationFacadeTest extends FacadeIntegrationTest {
         UUID issuedId = issuedCouponAppender.issue(couponId, memberId);
         UUID orderId = checkoutFacade.checkout(memberId, address(), Money.ZERO, issuedId, PaymentMethod.CARD);
 
-        orderCancellationFacade.cancel(orderId);
+        orderCancellationFacade.cancel(orderId, memberId);
 
         OrderInfo order = orderReader.getOrder(orderId);
         assertThat(order.status()).isEqualTo(OrderStatus.CANCELLED);
@@ -133,7 +133,7 @@ class OrderCancellationFacadeTest extends FacadeIntegrationTest {
         UUID orderId = checkoutFacade.checkout(memberId, address(), Money.ZERO, null, PaymentMethod.CARD);
         orderModifier.ship(orderId);
 
-        assertThatThrownBy(() -> orderCancellationFacade.cancel(orderId))
+        assertThatThrownBy(() -> orderCancellationFacade.cancel(orderId, memberId))
                 .isInstanceOfSatisfying(
                         ApiException.class,
                         ex -> assertThat(ex.getErrorCode()).isEqualTo(ApiErrorCode.ORDER_NOT_CANCELLABLE));
@@ -153,10 +153,11 @@ class OrderCancellationFacadeTest extends FacadeIntegrationTest {
         doThrow(new OrderStatusException(OrderErrorCode.INVALID_ORDER_STATE_TRANSITION))
                 .when(orderModifier)
                 .cancel(eq(orderId), any());
-        assertThatThrownBy(() -> orderCancellationFacade.cancel(orderId)).isInstanceOf(OrderStatusException.class);
+        assertThatThrownBy(() -> orderCancellationFacade.cancel(orderId, memberId))
+                .isInstanceOf(OrderStatusException.class);
         Mockito.reset(orderModifier);
 
-        orderCancellationFacade.cancel(orderId);
+        orderCancellationFacade.cancel(orderId, memberId);
 
         assertThat(orderReader.getOrder(orderId).status()).isEqualTo(OrderStatus.CANCELLED);
         assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(50);
@@ -178,12 +179,13 @@ class OrderCancellationFacadeTest extends FacadeIntegrationTest {
         doThrow(new StockShortageException(StockErrorCode.STOCK_SHORTAGE))
                 .when(stockModifier)
                 .restore(eq(variantId), anyInt());
-        assertThatThrownBy(() -> orderCancellationFacade.cancel(orderId)).isInstanceOf(StockShortageException.class);
+        assertThatThrownBy(() -> orderCancellationFacade.cancel(orderId, memberId))
+                .isInstanceOf(StockShortageException.class);
         assertThat(orderReader.getOrder(orderId).status()).isEqualTo(OrderStatus.CANCELLED);
         assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(46);
         Mockito.reset(stockModifier);
 
-        orderCancellationFacade.cancel(orderId);
+        orderCancellationFacade.cancel(orderId, memberId);
 
         assertThat(orderReader.getOrder(orderId).status()).isEqualTo(OrderStatus.CANCELLED);
         assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(50);
@@ -205,12 +207,13 @@ class OrderCancellationFacadeTest extends FacadeIntegrationTest {
         doThrow(new CouponStatusException(CouponErrorCode.ISSUED_COUPON_NOT_USABLE))
                 .when(issuedCouponModifier)
                 .restoreUse(eq(issuedId));
-        assertThatThrownBy(() -> orderCancellationFacade.cancel(orderId)).isInstanceOf(CouponStatusException.class);
+        assertThatThrownBy(() -> orderCancellationFacade.cancel(orderId, memberId))
+                .isInstanceOf(CouponStatusException.class);
         assertThat(orderReader.getOrder(orderId).status()).isEqualTo(OrderStatus.CANCELLED);
         assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(46);
         Mockito.reset(issuedCouponModifier);
 
-        orderCancellationFacade.cancel(orderId);
+        orderCancellationFacade.cancel(orderId, memberId);
 
         assertThat(orderReader.getOrder(orderId).status()).isEqualTo(OrderStatus.CANCELLED);
         assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(50);

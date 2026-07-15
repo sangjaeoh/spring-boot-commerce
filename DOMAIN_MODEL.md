@@ -8,7 +8,7 @@
 
 범위는 7개 도메인: 회원(member) · 상품(product) · 재고(stock) · 장바구니(cart) · 쿠폰(coupon) · 주문(order) · 결제(payment).
 
-기준선(이 문서의 전제): 결제 게이트웨이는 동기 stub, 도메인 이벤트 transport는 in-process(무손실 보장 아님), 인증은 이메일+패스워드 로그인·JWT 액세스 토큰 발급까지(토큰 강제·역할은 아직 밖 — 경계는 [`REQUIREMENTS.md`](./REQUIREMENTS.md)).
+기준선(이 문서의 전제): 결제 게이트웨이는 동기 stub, 도메인 이벤트 transport는 in-process(무손실 보장 아님), 인증은 이메일+패스워드 로그인·JWT 액세스 토큰 발급·구매자 셀프서비스의 토큰 주체 강제까지(역할은 아직 밖 — 경계는 [`REQUIREMENTS.md`](./REQUIREMENTS.md)).
 
 ## 공통 규약
 

@@ -7,9 +7,7 @@ import java.util.UUID;
 /**
  * 장바구니 담기 요청이다.
  *
- * <p>같은 변형 재담기는 수량을 합산한다. 인증이 범위 밖이라 회원을 요청이 싣는다.
+ * <p>같은 변형 재담기는 수량을 합산한다. 담는 회원은 토큰 주체에서 도출한다.
  */
 public record AddCartItemRequest(
-        @NotNull UUID memberId,
-        @NotNull UUID variantId,
-        @NotNull @Positive Integer quantity) {}
+        @NotNull UUID variantId, @NotNull @Positive Integer quantity) {}

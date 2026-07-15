@@ -1,6 +1,9 @@
 package com.commerce.api.presentation.v1;
 
 import com.commerce.api.SharedPostgresContainer;
+import com.commerce.auth.token.JwtTokenCodec;
+import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -17,11 +20,19 @@ import org.springframework.test.context.DynamicPropertySource;
 @AutoConfigureMockMvc
 abstract class WebIntegrationTest {
 
+    @Autowired
+    private JwtTokenCodec jwtTokenCodec;
+
     @DynamicPropertySource
     static void datasourceProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url", SharedPostgresContainer.INSTANCE::getJdbcUrl);
         registry.add("spring.datasource.username", SharedPostgresContainer.INSTANCE::getUsername);
         registry.add("spring.datasource.password", SharedPostgresContainer.INSTANCE::getPassword);
         registry.add("auth.jwt.secret", () -> "test-secret-key-of-at-least-32-bytes!!");
+    }
+
+    /** 회원을 주체로 실은 {@code Authorization} 헤더 값(Bearer 토큰)을 만든다. */
+    protected String bearer(UUID memberId) {
+        return "Bearer " + jwtTokenCodec.issue(memberId);
     }
 }

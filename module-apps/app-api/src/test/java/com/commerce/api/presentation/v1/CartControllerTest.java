@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestConstructor;
 import org.springframework.test.web.servlet.MockMvc;
@@ -45,13 +46,13 @@ class CartControllerTest extends WebIntegrationTest {
     }
 
     @Test
-    @DisplayName("장바구니 조회는 200으로 라인별 현재가·소계와 총액을 싣는다")
+    @DisplayName("장바구니 조회는 토큰 주체의 장바구니를 200으로 라인별 현재가·소계와 총액을 실어 반환한다")
     void getCartReturnsLinesWithCurrentPriceAndTotal() throws Exception {
         UUID memberId = registerMember();
         UUID variantId = seedVariant(10000L);
         cartAppender.addItem(memberId, variantId, 2);
 
-        mvc.perform(get("/api/v1/carts").param("memberId", memberId.toString()))
+        mvc.perform(get("/api/v1/carts").header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.memberId").value(memberId.toString()))
                 .andExpect(jsonPath("$.lines.length()").value(1))
@@ -65,27 +66,48 @@ class CartControllerTest extends WebIntegrationTest {
     void getEmptyCartForMemberWithoutCart() throws Exception {
         UUID memberId = UUID.randomUUID();
 
-        mvc.perform(get("/api/v1/carts").param("memberId", memberId.toString()))
+        mvc.perform(get("/api/v1/carts").header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.lines.length()").value(0))
                 .andExpect(jsonPath("$.totalAmount").value(0));
     }
 
     @Test
-    @DisplayName("담기는 204로 응답하고 라인을 반영한다")
+    @DisplayName("미인증 장바구니 조회는 401 UNAUTHENTICATED로 거부한다")
+    void getCartRejectsUnauthenticated() throws Exception {
+        mvc.perform(get("/api/v1/carts"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+    }
+
+    @Test
+    @DisplayName("담기는 204로 응답하고 토큰 주체의 장바구니에 라인을 반영한다")
     void addItemReturnsNoContentAndReflectsLine() throws Exception {
         UUID memberId = registerMember();
         UUID variantId = seedVariant(10000L);
 
         mvc.perform(post("/api/v1/carts/items")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(addItemBody(memberId, variantId, 2)))
+                        .content(addItemBody(variantId, 2)))
                 .andExpect(status().isNoContent());
 
-        mvc.perform(get("/api/v1/carts").param("memberId", memberId.toString()))
+        mvc.perform(get("/api/v1/carts").header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.lines.length()").value(1))
                 .andExpect(jsonPath("$.lines[0].quantity").value(2));
+    }
+
+    @Test
+    @DisplayName("미인증 담기는 401 UNAUTHENTICATED로 거부한다")
+    void addItemRejectsUnauthenticated() throws Exception {
+        UUID variantId = seedVariant(10000L);
+
+        mvc.perform(post("/api/v1/carts/items")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(addItemBody(variantId, 1)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
     }
 
     @Test
@@ -96,8 +118,9 @@ class CartControllerTest extends WebIntegrationTest {
         variantModifier.disable(variantId);
 
         mvc.perform(post("/api/v1/carts/items")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(addItemBody(memberId, variantId, 1)))
+                        .content(addItemBody(variantId, 1)))
                 .andExpect(status().isConflict());
     }
 
@@ -108,8 +131,9 @@ class CartControllerTest extends WebIntegrationTest {
         UUID variantId = seedVariant(10000L);
 
         mvc.perform(post("/api/v1/carts/items")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(addItemBody(memberId, variantId, 0)))
+                        .content(addItemBody(variantId, 0)))
                 .andExpect(status().isBadRequest());
     }
 
@@ -122,7 +146,7 @@ class CartControllerTest extends WebIntegrationTest {
         return variantReader.getByProductId(productId).get(0).id();
     }
 
-    private static String addItemBody(UUID memberId, UUID variantId, int quantity) {
-        return "{\"memberId\":\"%s\",\"variantId\":\"%s\",\"quantity\":%d}".formatted(memberId, variantId, quantity);
+    private static String addItemBody(UUID variantId, int quantity) {
+        return "{\"variantId\":\"%s\",\"quantity\":%d}".formatted(variantId, quantity);
     }
 }

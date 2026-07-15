@@ -36,6 +36,19 @@ public class OrderReader {
     }
 
     /**
+     * 본인 주문을 조회한다. 미소유는 존재 누출 방지로 미존재로 취급한다.
+     *
+     * @throws OrderNotFoundException 본인 주문이 없으면
+     */
+    @Transactional(readOnly = true)
+    public OrderInfo getOrder(UUID orderId, UUID memberId) {
+        Order order = orderRepository
+                .findByIdAndMemberId(orderId, memberId)
+                .orElseThrow(() -> new OrderNotFoundException(OrderErrorCode.ORDER_NOT_FOUND));
+        return OrderInfo.from(order);
+    }
+
+    /**
      * 회원에게 미배송 결제완료 주문(PAID이면서 아직 DELIVERED가 아닌 주문)이 있는지 본다.
      *
      * <p>회원 탈퇴 가드가 소비한다. PAID는 취소분을 제외하므로 미취소 조건을 함께 만족한다.

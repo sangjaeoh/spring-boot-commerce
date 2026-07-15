@@ -36,6 +36,7 @@ import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestConstructor;
 import org.springframework.test.web.servlet.MockMvc;
@@ -87,16 +88,17 @@ class OrderControllerTest extends WebIntegrationTest {
     }
 
     @Test
-    @DisplayName("쿠폰·배송비 체크아웃이 201로 주문을 결제하고 할인·결제금액·쿠폰을 반영한다")
+    @DisplayName("쿠폰·배송비 체크아웃이 201로 토큰 주체의 주문을 결제하고 할인·결제금액·쿠폰을 반영한다")
     void checkoutAppliesCouponShippingAndReturnsPaidOrder() throws Exception {
         UUID memberId = registerMember();
         UUID variantId = seedProduct(50);
         cartAppender.addItem(memberId, variantId, 2);
         UUID couponId = couponAppender.create("10% 할인", Discount.rate(10), Money.of(10000L), validity(), 30);
         UUID issuedId = issuedCouponAppender.issue(couponId, memberId);
-        CheckoutRequest request = new CheckoutRequest(memberId, addressRequest(), 3000L, issuedId, PaymentMethod.CARD);
+        CheckoutRequest request = new CheckoutRequest(addressRequest(), 3000L, issuedId, PaymentMethod.CARD);
 
         String body = mvc.perform(post("/api/v1/orders")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
@@ -107,7 +109,7 @@ class OrderControllerTest extends WebIntegrationTest {
 
         UUID orderId = UUID.fromString(
                 objectMapper.readValue(body, CheckoutResponse.class).orderId());
-        OrderInfo order = orderReader.getOrder(orderId);
+        OrderInfo order = orderReader.getOrder(orderId, memberId);
         assertThat(order.status()).isEqualTo(OrderStatus.PAID);
         assertThat(order.discountAmount()).isEqualTo(Money.of(2000L));
         assertThat(order.payAmount()).isEqualTo(Money.of(21000L));
@@ -115,15 +117,24 @@ class OrderControllerTest extends WebIntegrationTest {
     }
 
     @Test
-    @DisplayName("회원 ID가 없는 체크아웃 요청은 400 problem+json으로 거부된다")
-    void checkoutRejectsInvalidRequest() throws Exception {
-        String json = """
-                {"shippingAddress":{"recipientName":"홍길동","zipCode":"04524",\
-                "roadAddress":"서울특별시 중구 세종대로 110","phone":"010-1234-5678"},"shippingFee":0}""";
+    @DisplayName("미인증 체크아웃은 401 UNAUTHENTICATED로 거부된다")
+    void checkoutRejectsUnauthenticated() throws Exception {
+        CheckoutRequest request = new CheckoutRequest(addressRequest(), 0L, null, PaymentMethod.CARD);
 
         mvc.perform(post("/api/v1/orders")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(json))
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+    }
+
+    @Test
+    @DisplayName("배송지가 없는 체크아웃 요청은 400 problem+json으로 거부된다")
+    void checkoutRejectsInvalidRequest() throws Exception {
+        mvc.perform(post("/api/v1/orders")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(registerMember()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"shippingFee\":0}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
                 .andExpect(jsonPath("$.errors").isNotEmpty());
@@ -133,9 +144,10 @@ class OrderControllerTest extends WebIntegrationTest {
     @DisplayName("빈 장바구니 체크아웃은 409 API_EMPTY_CART로 거부된다")
     void checkoutRejectsEmptyCart() throws Exception {
         UUID memberId = registerMember();
-        CheckoutRequest request = new CheckoutRequest(memberId, addressRequest(), 0L, null, PaymentMethod.CARD);
+        CheckoutRequest request = new CheckoutRequest(addressRequest(), 0L, null, PaymentMethod.CARD);
 
         mvc.perform(post("/api/v1/orders")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isConflict())
@@ -145,21 +157,41 @@ class OrderControllerTest extends WebIntegrationTest {
     @Test
     @DisplayName("결제 완료 주문 취소는 204로 성공하고 주문을 CANCELLED로 만든다")
     void cancelSucceedsForPaidOrder() throws Exception {
-        UUID orderId = checkoutViaHttp();
+        UUID memberId = registerMember();
+        UUID orderId = checkoutForMember(memberId);
 
-        mvc.perform(post("/api/v1/orders/{orderId}/cancel", orderId)).andExpect(status().isNoContent());
+        mvc.perform(post("/api/v1/orders/{orderId}/cancel", orderId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
+                .andExpect(status().isNoContent());
 
-        assertThat(orderReader.getOrder(orderId).status()).isEqualTo(OrderStatus.CANCELLED);
+        assertThat(orderReader.getOrder(orderId, memberId).status()).isEqualTo(OrderStatus.CANCELLED);
+    }
+
+    @Test
+    @DisplayName("타인 주문 취소는 404 ORDER_NOT_FOUND로 거부되고 주문 상태를 바꾸지 않는다")
+    void cancelRejectsOtherMembersOrderAsNotFound() throws Exception {
+        UUID ownerId = registerMember();
+        UUID orderId = checkoutForMember(ownerId);
+        UUID intruderId = registerMember();
+
+        mvc.perform(post("/api/v1/orders/{orderId}/cancel", orderId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(intruderId)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("ORDER_NOT_FOUND"));
+
+        assertThat(orderReader.getOrder(orderId, ownerId).status()).isEqualTo(OrderStatus.PAID);
     }
 
     @Test
     @DisplayName("배송 완료 주문 취소는 409 API_ORDER_NOT_CANCELLABLE로 거부된다")
     void cancelRejectsDeliveredOrder() throws Exception {
-        UUID orderId = checkoutViaHttp();
+        UUID memberId = registerMember();
+        UUID orderId = checkoutForMember(memberId);
         orderModifier.ship(orderId);
         orderModifier.confirmDelivery(orderId);
 
-        mvc.perform(post("/api/v1/orders/{orderId}/cancel", orderId))
+        mvc.perform(post("/api/v1/orders/{orderId}/cancel", orderId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("API_ORDER_NOT_CANCELLABLE"));
     }
@@ -167,14 +199,16 @@ class OrderControllerTest extends WebIntegrationTest {
     @Test
     @DisplayName("HTTP로 출고한 주문의 취소 요청은 409 API_ORDER_NOT_CANCELLABLE로 거부되고 상태를 바꾸지 않는다")
     void cancelRejectsShippedOrderViaHttp() throws Exception {
-        UUID orderId = checkoutViaHttp();
+        UUID memberId = registerMember();
+        UUID orderId = checkoutForMember(memberId);
         mvc.perform(post("/api/v1/orders/{orderId}/ship", orderId)).andExpect(status().isNoContent());
 
-        mvc.perform(post("/api/v1/orders/{orderId}/cancel", orderId))
+        mvc.perform(post("/api/v1/orders/{orderId}/cancel", orderId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("API_ORDER_NOT_CANCELLABLE"));
 
-        OrderInfo order = orderReader.getOrder(orderId);
+        OrderInfo order = orderReader.getOrder(orderId, memberId);
         assertThat(order.status()).isEqualTo(OrderStatus.PAID);
         assertThat(order.fulfillmentStatus()).isEqualTo(FulfillmentStatus.SHIPPED);
     }
@@ -185,16 +219,20 @@ class OrderControllerTest extends WebIntegrationTest {
         UUID memberId = registerMember();
         UUID variantId = seedProduct(50);
         cartAppender.addItem(memberId, variantId, 3);
-        UUID orderId = checkout(new CheckoutRequest(memberId, addressRequest(), 0L, null, PaymentMethod.CARD));
+        UUID orderId = checkout(memberId, new CheckoutRequest(addressRequest(), 0L, null, PaymentMethod.CARD));
         String key = UUID.randomUUID().toString();
 
-        mvc.perform(post("/api/v1/orders/{orderId}/cancel", orderId).header(KEY_HEADER, key))
+        mvc.perform(post("/api/v1/orders/{orderId}/cancel", orderId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
+                        .header(KEY_HEADER, key))
                 .andExpect(status().isNoContent());
-        mvc.perform(post("/api/v1/orders/{orderId}/cancel", orderId).header(KEY_HEADER, key))
+        mvc.perform(post("/api/v1/orders/{orderId}/cancel", orderId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
+                        .header(KEY_HEADER, key))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("DUPLICATE_REQUEST"));
 
-        assertThat(orderReader.getOrder(orderId).status()).isEqualTo(OrderStatus.CANCELLED);
+        assertThat(orderReader.getOrder(orderId, memberId).status()).isEqualTo(OrderStatus.CANCELLED);
         assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(50);
     }
 
@@ -203,22 +241,24 @@ class OrderControllerTest extends WebIntegrationTest {
     void duplicateKeyedCheckoutIsRejectedAndDoesNotCreateSecondOrder() throws Exception {
         UUID memberId = registerMember();
         cartAppender.addItem(memberId, seedProduct(50), 2);
-        CheckoutRequest request = new CheckoutRequest(memberId, addressRequest(), 0L, null, PaymentMethod.CARD);
+        CheckoutRequest request = new CheckoutRequest(addressRequest(), 0L, null, PaymentMethod.CARD);
         String key = UUID.randomUUID().toString();
 
         mvc.perform(post("/api/v1/orders")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
                         .header(KEY_HEADER, key)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated());
         mvc.perform(post("/api/v1/orders")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
                         .header(KEY_HEADER, key)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("DUPLICATE_REQUEST"));
 
-        mvc.perform(get("/api/v1/orders").param("memberId", memberId.toString()))
+        mvc.perform(get("/api/v1/orders").header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1));
     }
@@ -226,10 +266,11 @@ class OrderControllerTest extends WebIntegrationTest {
     @Test
     @DisplayName("출고·배송완료 전이가 각각 204로 성공하고 이행 축 상태·시각을 전진시킨다")
     void shipThenConfirmDeliveryProgressesFulfillment() throws Exception {
-        UUID orderId = checkoutViaHttp();
+        UUID memberId = registerMember();
+        UUID orderId = checkoutForMember(memberId);
 
         mvc.perform(post("/api/v1/orders/{orderId}/ship", orderId)).andExpect(status().isNoContent());
-        mvc.perform(get("/api/v1/orders/{orderId}", orderId))
+        mvc.perform(get("/api/v1/orders/{orderId}", orderId).header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("PAID"))
                 .andExpect(jsonPath("$.fulfillmentStatus").value("SHIPPED"))
@@ -237,7 +278,7 @@ class OrderControllerTest extends WebIntegrationTest {
 
         mvc.perform(post("/api/v1/orders/{orderId}/delivery-confirmation", orderId))
                 .andExpect(status().isNoContent());
-        mvc.perform(get("/api/v1/orders/{orderId}", orderId))
+        mvc.perform(get("/api/v1/orders/{orderId}", orderId).header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("PAID"))
                 .andExpect(jsonPath("$.fulfillmentStatus").value("DELIVERED"))
@@ -247,20 +288,21 @@ class OrderControllerTest extends WebIntegrationTest {
     @Test
     @DisplayName("보류·해제 왕복이 각각 204로 사유를 세팅·클리어하고 해제 후 출고가 가능하다")
     void holdAndReleaseRoundTripRestoresShippability() throws Exception {
-        UUID orderId = checkoutViaHttp();
+        UUID memberId = registerMember();
+        UUID orderId = checkoutForMember(memberId);
 
         mvc.perform(post("/api/v1/orders/{orderId}/fulfillment-hold", orderId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(new FulfillmentHoldRequest(HoldReason.FRAUD_REVIEW))))
                 .andExpect(status().isNoContent());
-        mvc.perform(get("/api/v1/orders/{orderId}", orderId))
+        mvc.perform(get("/api/v1/orders/{orderId}", orderId).header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.fulfillmentStatus").value("ON_HOLD"))
                 .andExpect(jsonPath("$.holdReason").value("FRAUD_REVIEW"));
 
         mvc.perform(post("/api/v1/orders/{orderId}/fulfillment-release", orderId))
                 .andExpect(status().isNoContent());
-        mvc.perform(get("/api/v1/orders/{orderId}", orderId))
+        mvc.perform(get("/api/v1/orders/{orderId}", orderId).header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.fulfillmentStatus").value("PREPARING"))
                 .andExpect(jsonPath("$.holdReason").doesNotExist());
@@ -271,7 +313,7 @@ class OrderControllerTest extends WebIntegrationTest {
     @Test
     @DisplayName("미결제(PENDING) 주문 출고는 409 ORDER_NOT_PAID로 거부된다")
     void shipRejectsPendingOrder() throws Exception {
-        UUID orderId = placePendingOrder();
+        UUID orderId = placePendingOrder(registerMember());
 
         mvc.perform(post("/api/v1/orders/{orderId}/ship", orderId))
                 .andExpect(status().isConflict())
@@ -281,8 +323,11 @@ class OrderControllerTest extends WebIntegrationTest {
     @Test
     @DisplayName("취소된 주문 출고는 409 ORDER_NOT_PAID로 거부된다")
     void shipRejectsCancelledOrder() throws Exception {
-        UUID orderId = checkoutViaHttp();
-        mvc.perform(post("/api/v1/orders/{orderId}/cancel", orderId)).andExpect(status().isNoContent());
+        UUID memberId = registerMember();
+        UUID orderId = checkoutForMember(memberId);
+        mvc.perform(post("/api/v1/orders/{orderId}/cancel", orderId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
+                .andExpect(status().isNoContent());
 
         mvc.perform(post("/api/v1/orders/{orderId}/ship", orderId))
                 .andExpect(status().isConflict())
@@ -292,7 +337,7 @@ class OrderControllerTest extends WebIntegrationTest {
     @Test
     @DisplayName("출고 전 배송완료는 409 ORDER_INVALID_FULFILLMENT_TRANSITION으로 거부된다")
     void confirmDeliveryRejectsUnshippedOrder() throws Exception {
-        UUID orderId = checkoutViaHttp();
+        UUID orderId = checkoutForMember(registerMember());
 
         mvc.perform(post("/api/v1/orders/{orderId}/delivery-confirmation", orderId))
                 .andExpect(status().isConflict())
@@ -310,7 +355,7 @@ class OrderControllerTest extends WebIntegrationTest {
     @Test
     @DisplayName("사유가 없는 보류 요청은 400 VALIDATION_FAILED로 거부된다")
     void holdRejectsMissingReason() throws Exception {
-        UUID orderId = checkoutViaHttp();
+        UUID orderId = checkoutForMember(registerMember());
 
         mvc.perform(post("/api/v1/orders/{orderId}/fulfillment-hold", orderId)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -322,9 +367,10 @@ class OrderControllerTest extends WebIntegrationTest {
     @Test
     @DisplayName("주문 상세 조회는 200으로 결제 축·이행 축 상태와 결제 시각을 싣는다")
     void getOrderReturnsDetailWithPaidTimeline() throws Exception {
-        UUID orderId = checkoutViaHttp();
+        UUID memberId = registerMember();
+        UUID orderId = checkoutForMember(memberId);
 
-        mvc.perform(get("/api/v1/orders/{orderId}", orderId))
+        mvc.perform(get("/api/v1/orders/{orderId}", orderId).header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(orderId.toString()))
                 .andExpect(jsonPath("$.status").value("PAID"))
@@ -337,9 +383,31 @@ class OrderControllerTest extends WebIntegrationTest {
     }
 
     @Test
+    @DisplayName("미인증 주문 상세 조회는 401 UNAUTHENTICATED로 거부된다")
+    void getOrderRejectsUnauthenticated() throws Exception {
+        UUID orderId = checkoutForMember(registerMember());
+
+        mvc.perform(get("/api/v1/orders/{orderId}", orderId))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+    }
+
+    @Test
+    @DisplayName("타인 주문 상세 조회는 404 ORDER_NOT_FOUND로 미존재 취급된다")
+    void getOrderTreatsOtherMembersOrderAsNotFound() throws Exception {
+        UUID orderId = checkoutForMember(registerMember());
+        UUID intruderId = registerMember();
+
+        mvc.perform(get("/api/v1/orders/{orderId}", orderId).header(HttpHeaders.AUTHORIZATION, bearer(intruderId)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("ORDER_NOT_FOUND"));
+    }
+
+    @Test
     @DisplayName("없는 주문 상세 조회는 404 ORDER_NOT_FOUND로 거부된다")
     void getOrderReturns404ForMissingOrder() throws Exception {
-        mvc.perform(get("/api/v1/orders/{orderId}", UUID.randomUUID()))
+        mvc.perform(get("/api/v1/orders/{orderId}", UUID.randomUUID())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(registerMember())))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("ORDER_NOT_FOUND"));
     }
@@ -347,10 +415,13 @@ class OrderControllerTest extends WebIntegrationTest {
     @Test
     @DisplayName("취소된 주문 상세는 취소 시각·사유를 싣는다")
     void getOrderShowsCancellationAfterCancel() throws Exception {
-        UUID orderId = checkoutViaHttp();
-        mvc.perform(post("/api/v1/orders/{orderId}/cancel", orderId)).andExpect(status().isNoContent());
+        UUID memberId = registerMember();
+        UUID orderId = checkoutForMember(memberId);
+        mvc.perform(post("/api/v1/orders/{orderId}/cancel", orderId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
+                .andExpect(status().isNoContent());
 
-        mvc.perform(get("/api/v1/orders/{orderId}", orderId))
+        mvc.perform(get("/api/v1/orders/{orderId}", orderId).header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("CANCELLED"))
                 .andExpect(jsonPath("$.cancelledAt").exists())
@@ -360,9 +431,11 @@ class OrderControllerTest extends WebIntegrationTest {
     @Test
     @DisplayName("결제 조회는 200으로 승인 상태·수단·금액·승인 거래 ID·승인 시각을 싣는다")
     void getPaymentReturnsApprovedTransaction() throws Exception {
-        UUID orderId = checkoutViaHttp();
+        UUID memberId = registerMember();
+        UUID orderId = checkoutForMember(memberId);
 
-        mvc.perform(get("/api/v1/orders/{orderId}/payment", orderId))
+        mvc.perform(get("/api/v1/orders/{orderId}/payment", orderId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("APPROVED"))
                 .andExpect(jsonPath("$.method").value("CARD"))
@@ -374,12 +447,28 @@ class OrderControllerTest extends WebIntegrationTest {
     }
 
     @Test
+    @DisplayName("타인 주문 결제 조회는 404 ORDER_NOT_FOUND로 미존재 취급된다")
+    void getPaymentTreatsOtherMembersOrderAsNotFound() throws Exception {
+        UUID orderId = checkoutForMember(registerMember());
+        UUID intruderId = registerMember();
+
+        mvc.perform(get("/api/v1/orders/{orderId}/payment", orderId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(intruderId)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("ORDER_NOT_FOUND"));
+    }
+
+    @Test
     @DisplayName("취소된 주문의 결제 조회는 CANCELLED와 승인 ID와 별개인 환불 거래 ID·취소 시각을 싣는다")
     void getPaymentShowsDistinctRefundTransactionAfterCancel() throws Exception {
-        UUID orderId = checkoutViaHttp();
-        mvc.perform(post("/api/v1/orders/{orderId}/cancel", orderId)).andExpect(status().isNoContent());
+        UUID memberId = registerMember();
+        UUID orderId = checkoutForMember(memberId);
+        mvc.perform(post("/api/v1/orders/{orderId}/cancel", orderId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
+                .andExpect(status().isNoContent());
 
-        String body = mvc.perform(get("/api/v1/orders/{orderId}/payment", orderId))
+        String body = mvc.perform(get("/api/v1/orders/{orderId}/payment", orderId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("CANCELLED"))
                 .andExpect(jsonPath("$.approvedAt").exists())
@@ -401,9 +490,10 @@ class OrderControllerTest extends WebIntegrationTest {
         cartAppender.addItem(memberId, seedProduct(50), 1);
         UUID couponId = couponAppender.create("100% 할인", Discount.rate(100), Money.of(10000L), validity(), 30);
         UUID issuedId = issuedCouponAppender.issue(couponId, memberId);
-        UUID orderId = checkout(new CheckoutRequest(memberId, addressRequest(), 0L, issuedId, null));
+        UUID orderId = checkout(memberId, new CheckoutRequest(addressRequest(), 0L, issuedId, null));
 
-        mvc.perform(get("/api/v1/orders/{orderId}/payment", orderId))
+        mvc.perform(get("/api/v1/orders/{orderId}/payment", orderId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("APPROVED"))
                 .andExpect(jsonPath("$.amount").value(0))
@@ -415,21 +505,24 @@ class OrderControllerTest extends WebIntegrationTest {
     @Test
     @DisplayName("결제가 없는 주문의 결제 조회는 404 PAYMENT_NOT_FOUND로 거부된다")
     void getPaymentReturns404ForOrderWithoutPayment() throws Exception {
-        UUID orderId = placePendingOrder();
+        UUID memberId = registerMember();
+        UUID orderId = placePendingOrder(memberId);
 
-        mvc.perform(get("/api/v1/orders/{orderId}/payment", orderId))
+        mvc.perform(get("/api/v1/orders/{orderId}/payment", orderId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("PAYMENT_NOT_FOUND"));
     }
 
     @Test
-    @DisplayName("회원 주문 목록 조회는 200으로 최신순 주문을 싣는다")
+    @DisplayName("주문 목록 조회는 200으로 토큰 주체의 주문만 최신순으로 싣는다")
     void getOrdersReturnsMemberOrdersNewestFirst() throws Exception {
         UUID memberId = registerMember();
         UUID first = checkoutForMember(memberId);
         UUID second = checkoutForMember(memberId);
+        checkoutForMember(registerMember());
 
-        mvc.perform(get("/api/v1/orders").param("memberId", memberId.toString()))
+        mvc.perform(get("/api/v1/orders").header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(2))
                 .andExpect(jsonPath("$[0].id").value(second.toString()))
@@ -442,28 +535,28 @@ class OrderControllerTest extends WebIntegrationTest {
         UUID memberId = registerMember();
         cartAppender.addItem(memberId, seedProduct(50), 1);
         cartAppender.addItem(memberId, seedProduct(50), 2);
-        CheckoutRequest request = new CheckoutRequest(memberId, addressRequest(), 0L, null, PaymentMethod.CARD);
+        CheckoutRequest request = new CheckoutRequest(addressRequest(), 0L, null, PaymentMethod.CARD);
         mvc.perform(post("/api/v1/orders")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated());
 
-        mvc.perform(get("/api/v1/orders").param("memberId", memberId.toString()))
+        mvc.perform(get("/api/v1/orders").header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].lines.length()").value(2));
     }
 
-    private UUID checkoutViaHttp() throws Exception {
-        return checkoutForMember(registerMember());
-    }
-
     private UUID checkoutForMember(UUID memberId) throws Exception {
         UUID variantId = seedProduct(50);
         cartAppender.addItem(memberId, variantId, 1);
-        CheckoutRequest request = new CheckoutRequest(memberId, addressRequest(), 0L, null, PaymentMethod.CARD);
+        return checkout(memberId, new CheckoutRequest(addressRequest(), 0L, null, PaymentMethod.CARD));
+    }
 
+    private UUID checkout(UUID memberId, CheckoutRequest request) throws Exception {
         String body = mvc.perform(post("/api/v1/orders")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
@@ -474,23 +567,11 @@ class OrderControllerTest extends WebIntegrationTest {
                 objectMapper.readValue(body, CheckoutResponse.class).orderId());
     }
 
-    private UUID checkout(CheckoutRequest request) throws Exception {
-        String body = mvc.perform(post("/api/v1/orders")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isCreated())
-                .andReturn()
-                .getResponse()
-                .getContentAsString();
-        return UUID.fromString(
-                objectMapper.readValue(body, CheckoutResponse.class).orderId());
-    }
-
-    private UUID placePendingOrder() {
+    private UUID placePendingOrder(UUID memberId) {
         OrderLineSnapshot line =
                 new OrderLineSnapshot(UUID.randomUUID(), UUID.randomUUID(), "상품", null, Money.of(10000L), 1);
         Address address = Address.of("홍길동", "04524", "서울특별시 중구 세종대로 110", "3층", "010-1234-5678");
-        return orderAppender.place(registerMember(), List.of(line), address, Money.ZERO, Money.ZERO, null);
+        return orderAppender.place(memberId, List.of(line), address, Money.ZERO, Money.ZERO, null);
     }
 
     private UUID registerMember() {

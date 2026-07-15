@@ -54,12 +54,12 @@ public class OrderCancellationFacade {
     }
 
     /**
-     * 주문을 취소하고 환불·재고·쿠폰을 복원한다.
+     * 회원 본인의 주문을 취소하고 환불·재고·쿠폰을 복원한다. 타인 주문은 미존재로 취급한다.
      *
      * @throws ApiException 취소할 수 없는 주문 상태면
      */
-    public void cancel(UUID orderId) {
-        OrderInfo order = orderReader.getOrder(orderId);
+    public void cancel(UUID orderId, UUID memberId) {
+        OrderInfo order = orderReader.getOrder(orderId, memberId);
         requireCancellable(order);
 
         PaymentInfo payment = paymentReader.getByOrderId(orderId);

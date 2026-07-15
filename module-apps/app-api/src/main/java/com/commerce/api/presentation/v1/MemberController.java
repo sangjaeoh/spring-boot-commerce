@@ -10,6 +10,7 @@ import com.commerce.member.entity.WithdrawalReason;
 import com.commerce.member.service.MemberAppender;
 import com.commerce.member.service.MemberModifier;
 import com.commerce.member.service.MemberReader;
+import com.commerce.web.auth.AuthUser;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -27,10 +28,12 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 회원 가입·조회·탈퇴·관리(정지·해제·이름 변경) 엔드포인트다.
  *
- * <p>가입·조회는 회원 도메인 서비스에, 탈퇴는 탈퇴 파사드에 위임한다. 관리는 단일 도메인 쓰기라 파사드 없이
- * 회원 도메인 Modifier에 얇게 위임하고, 이메일 형식 오류·중복·미존재·탈퇴 거부·허용되지 않은 상태 전이는
- * 도메인/파사드가 던지는 예외를 전역 핸들러가 problem+json으로 매핑한다. 정지와 탈퇴는 독립 축이라 정지 회원도
- * 탈퇴할 수 있다. 인증은 토큰 발급까지가 현재 범위라 회원 소유권은 아직 검사하지 않는다.
+ * <p>가입은 공개, 본인 조회({@code /me})·이름 변경·탈퇴는 토큰 주체({@link AuthUser})에서 회원을 도출하는
+ * 본인용 표면이다(미인증은 401). 회원 지정 조회·정지·해제는 관리자 오퍼레이션이라 대상 회원을 경로로
+ * 받는다(역할 가드는 후속). 가입·조회는 회원 도메인 서비스에, 탈퇴는 탈퇴 파사드에 위임한다. 관리는 단일
+ * 도메인 쓰기라 파사드 없이 회원 도메인 Modifier에 얇게 위임하고, 이메일 형식 오류·중복·미존재·탈퇴 거부·
+ * 허용되지 않은 상태 전이는 도메인/파사드가 던지는 예외를 전역 핸들러가 problem+json으로 매핑한다. 정지와
+ * 탈퇴는 독립 축이라 정지 회원도 탈퇴할 수 있다.
  */
 @RestController
 @RequestMapping("/api/v1/members")
@@ -60,6 +63,12 @@ public class MemberController {
         return MemberRegistrationResponse.from(memberId);
     }
 
+    /** 본인 회원 상세를 계정 상태·정지 사유와 함께 조회한다. */
+    @GetMapping("/me")
+    public MemberResponse getMe(AuthUser authUser) {
+        return MemberResponse.from(memberReader.getMember(authUser.memberId()));
+    }
+
     /** 회원 상세를 계정 상태·정지 사유와 함께 조회한다. */
     @GetMapping("/{memberId}")
     public MemberResponse getMember(@PathVariable UUID memberId) {
@@ -80,17 +89,17 @@ public class MemberController {
         memberModifier.reinstate(memberId);
     }
 
-    /** 회원 표시 이름을 바꾼다. 이메일은 불변이다. */
-    @PatchMapping("/{memberId}")
+    /** 본인 표시 이름을 바꾼다. 이메일은 불변이다. */
+    @PatchMapping("/me")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void rename(@PathVariable UUID memberId, @Valid @RequestBody MemberRenameRequest request) {
-        memberModifier.rename(memberId, request.name());
+    public void rename(AuthUser authUser, @Valid @RequestBody MemberRenameRequest request) {
+        memberModifier.rename(authUser.memberId(), request.name());
     }
 
-    /** 회원을 탈퇴(논리삭제) 처리한다. */
-    @DeleteMapping("/{memberId}")
+    /** 본인을 탈퇴(논리삭제) 처리한다. */
+    @DeleteMapping("/me")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void withdraw(@PathVariable UUID memberId, @RequestParam WithdrawalReason reason) {
-        memberWithdrawalFacade.withdraw(memberId, reason);
+    public void withdraw(AuthUser authUser, @RequestParam WithdrawalReason reason) {
+        memberWithdrawalFacade.withdraw(authUser.memberId(), reason);
     }
 }
