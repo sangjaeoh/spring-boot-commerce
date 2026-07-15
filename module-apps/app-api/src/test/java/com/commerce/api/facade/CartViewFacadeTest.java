@@ -70,7 +70,7 @@ class CartViewFacadeTest extends FacadeIntegrationTest {
     }
 
     private UUID registerMember() {
-        return memberAppender.register("user-" + UUID.randomUUID() + "@example.com", "테스터");
+        return memberAppender.register("user-" + UUID.randomUUID() + "@example.com", "테스터", "password-123!");
     }
 
     private UUID seedVariant(long price) {

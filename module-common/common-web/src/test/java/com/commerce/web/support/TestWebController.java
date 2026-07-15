@@ -1,11 +1,14 @@
 package com.commerce.web.support;
 
+import com.commerce.web.auth.AuthUser;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -43,5 +46,12 @@ public class TestWebController {
     @GetMapping("/test/echo")
     public ResponseEntity<String> echoGet() {
         return ResponseEntity.ok("ok");
+    }
+
+    @GetMapping("/test/auth-user")
+    public ResponseEntity<String> authUser(
+            @RequestAttribute(name = AuthUser.ATTRIBUTE, required = false) @Nullable AuthUser authUser) {
+        return ResponseEntity.ok(
+                authUser == null ? "anonymous" : authUser.memberId().toString());
     }
 }

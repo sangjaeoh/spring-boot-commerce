@@ -6,6 +6,8 @@ public enum MemberErrorCode implements ErrorCode {
     MEMBER_NOT_FOUND("MEMBER_NOT_FOUND", "회원을 찾을 수 없다.", 404),
     DUPLICATE_EMAIL("MEMBER_DUPLICATE_EMAIL", "이미 사용 중인 이메일이다.", 409),
     INVALID_EMAIL_FORMAT("MEMBER_INVALID_EMAIL_FORMAT", "이메일 형식이 올바르지 않다.", 400),
+    INVALID_PASSWORD_FORMAT("MEMBER_INVALID_PASSWORD_FORMAT", "패스워드는 8자 이상 72바이트 이하여야 한다.", 400),
+    INVALID_CREDENTIALS("MEMBER_INVALID_CREDENTIALS", "이메일 또는 패스워드가 올바르지 않다.", 401),
     INVALID_STATUS_TRANSITION("MEMBER_INVALID_STATUS_TRANSITION", "허용되지 않은 회원 상태 전이다.", 409);
 
     private final String code;

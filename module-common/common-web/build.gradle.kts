@@ -8,6 +8,9 @@ dependencies {
     )
     implementation(project(":module-common:common-core"))
 
+    // 인증 필터가 토큰 검증 원자재(JwtTokenCodec)를 소비한다(web→auth 단방향, docs/architecture.md).
+    implementation(project(":module-common:common-auth"))
+
     // 슬림 스프링 웹 프레임워크만 의존한다(임베디드 서버 스타터 회피). @RestControllerAdvice·
     // ProblemDetail·OncePerRequestFilter·MethodArgumentNotValidException을 제공한다.
     implementation(libs.spring.webmvc)

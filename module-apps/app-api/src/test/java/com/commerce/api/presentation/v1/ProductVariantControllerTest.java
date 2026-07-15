@@ -134,7 +134,7 @@ class ProductVariantControllerTest extends WebIntegrationTest {
     @Test
     @DisplayName("가격 변경은 기존 주문 스냅샷에 영향을 주지 않는다")
     void changePriceDoesNotAffectExistingOrderSnapshot() throws Exception {
-        UUID memberId = memberAppender.register("user-" + UUID.randomUUID() + "@example.com", "테스터");
+        UUID memberId = memberAppender.register("user-" + UUID.randomUUID() + "@example.com", "테스터", "password-123!");
         UUID variantId = seedVariant(10000L, 10);
         cartAppender.addItem(memberId, variantId, 1);
         CheckoutRequest request = new CheckoutRequest(memberId, addressRequest(), 0L, null, PaymentMethod.CARD);

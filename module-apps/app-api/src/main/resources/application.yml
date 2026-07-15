@@ -5,3 +5,9 @@ spring:
     open-in-view: false
     hibernate:
       ddl-auto: validate
+
+auth:
+  jwt:
+    # HS256 대칭 서명 키(32바이트 이상). 기본값 없이 환경변수로만 주입한다(REQUIREMENTS.md 제약·전제).
+    secret: ${AUTH_JWT_SECRET}
+    access-token-ttl: 1h

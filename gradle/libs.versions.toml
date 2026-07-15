@@ -10,6 +10,7 @@ errorprone-core = "2.50.0"
 errorprone-gradle-plugin = "5.1.0"
 querydsl = "7.4.0"
 archunit = "1.4.1"
+nimbus-jose-jwt = "10.9.1"
 
 [libraries]
 # build-logic tooling — gradle plugin jars, consumed as regular dependencies in build-logic/build.gradle.kts
@@ -31,6 +32,12 @@ querydsl-apt = { module = "io.github.openfeign.querydsl:querydsl-apt", version.r
 
 # external-module — @Component 등 스테레오타입만 필요(JPA 불필요). 버전은 Spring Boot BOM
 spring-context = { module = "org.springframework:spring-context" }
+
+# domain-member — 패스워드 bcrypt 해시(Spring Security 프레임워크 미도입, crypto 단독). 버전은 Spring Boot BOM(spring-security-bom)
+spring-security-crypto = { module = "org.springframework.security:spring-security-crypto" }
+
+# common-auth — JWT(HS256) 발급·검증 원자재. Spring Boot BOM 비관리라 버전을 명시한다
+nimbus-jose-jwt = { module = "com.nimbusds:nimbus-jose-jwt", version.ref = "nimbus-jose-jwt" }
 
 # app-api
 spring-boot-starter-web = { module = "org.springframework.boot:spring-boot-starter-web" }

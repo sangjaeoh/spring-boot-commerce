@@ -4,3 +4,8 @@ spring:
     url: jdbc:postgresql://localhost:55432/commerce
     username: commerce
     password: commerce
+
+auth:
+  jwt:
+    # 로컬 전용 개발 키. 운영 키는 환경변수(AUTH_JWT_SECRET)로만 주입한다.
+    secret: ${AUTH_JWT_SECRET:local-dev-only-secret-key-32bytes-min!}

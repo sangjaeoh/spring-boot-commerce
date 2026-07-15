@@ -75,7 +75,7 @@ class MemberControllerTest extends WebIntegrationTest {
     @DisplayName("가입이 201로 회원 ID를 반환하고 ACTIVE 회원을 만든다")
     void registerReturns201AndCreatesActiveMember() throws Exception {
         String email = "user-" + UUID.randomUUID() + "@example.com";
-        MemberRegistrationRequest request = new MemberRegistrationRequest(email, "테스터");
+        MemberRegistrationRequest request = new MemberRegistrationRequest(email, "테스터", "password-123!");
 
         String body = mvc.perform(post("/api/v1/members")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -98,7 +98,7 @@ class MemberControllerTest extends WebIntegrationTest {
     @DisplayName("같은 이메일 재가입은 409 MEMBER_DUPLICATE_EMAIL로 거부된다")
     void registerRejectsDuplicateEmail() throws Exception {
         String email = "user-" + UUID.randomUUID() + "@example.com";
-        String json = objectMapper.writeValueAsString(new MemberRegistrationRequest(email, "테스터"));
+        String json = objectMapper.writeValueAsString(new MemberRegistrationRequest(email, "테스터", "password-123!"));
 
         mvc.perform(post("/api/v1/members")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -116,7 +116,7 @@ class MemberControllerTest extends WebIntegrationTest {
     @DisplayName("빈 이름 가입은 400 VALIDATION_FAILED로 거부된다")
     void registerRejectsBlankName() throws Exception {
         String email = "user-" + UUID.randomUUID() + "@example.com";
-        MemberRegistrationRequest request = new MemberRegistrationRequest(email, "  ");
+        MemberRegistrationRequest request = new MemberRegistrationRequest(email, "  ", "password-123!");
 
         mvc.perform(post("/api/v1/members")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -129,7 +129,7 @@ class MemberControllerTest extends WebIntegrationTest {
     @Test
     @DisplayName("형식이 잘못된 이메일 가입은 400 MEMBER_INVALID_EMAIL_FORMAT로 거부된다")
     void registerRejectsMalformedEmail() throws Exception {
-        MemberRegistrationRequest request = new MemberRegistrationRequest("not-an-email", "테스터");
+        MemberRegistrationRequest request = new MemberRegistrationRequest("not-an-email", "테스터", "password-123!");
 
         mvc.perform(post("/api/v1/members")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -139,10 +139,23 @@ class MemberControllerTest extends WebIntegrationTest {
     }
 
     @Test
+    @DisplayName("8자 미만 패스워드 가입은 400 MEMBER_INVALID_PASSWORD_FORMAT로 거부된다")
+    void registerRejectsShortPassword() throws Exception {
+        String email = "user-" + UUID.randomUUID() + "@example.com";
+        MemberRegistrationRequest request = new MemberRegistrationRequest(email, "테스터", "a2345!7");
+
+        mvc.perform(post("/api/v1/members")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("MEMBER_INVALID_PASSWORD_FORMAT"));
+    }
+
+    @Test
     @DisplayName("회원 상세 조회는 200으로 ACTIVE 상태·이메일·이름을 싣는다")
     void getMemberReturnsActiveMember() throws Exception {
         String email = "user-" + UUID.randomUUID() + "@example.com";
-        UUID memberId = memberAppender.register(email, "테스터");
+        UUID memberId = memberAppender.register(email, "테스터", "password-123!");
 
         mvc.perform(get("/api/v1/members/{memberId}", memberId))
                 .andExpect(status().isOk())
@@ -232,7 +245,7 @@ class MemberControllerTest extends WebIntegrationTest {
     @DisplayName("이름 변경이 204로 성공하고 이메일은 불변이다")
     void renameChangesNameOnly() throws Exception {
         String email = "user-" + UUID.randomUUID() + "@example.com";
-        UUID memberId = memberAppender.register(email, "테스터");
+        UUID memberId = memberAppender.register(email, "테스터", "password-123!");
 
         MemberRenameRequest request = new MemberRenameRequest("새이름");
         mvc.perform(patch("/api/v1/members/{memberId}", memberId)
@@ -299,7 +312,7 @@ class MemberControllerTest extends WebIntegrationTest {
     }
 
     private UUID registerMember() {
-        return memberAppender.register("user-" + UUID.randomUUID() + "@example.com", "테스터");
+        return memberAppender.register("user-" + UUID.randomUUID() + "@example.com", "테스터", "password-123!");
     }
 
     private UUID seedProduct(int quantity) {
