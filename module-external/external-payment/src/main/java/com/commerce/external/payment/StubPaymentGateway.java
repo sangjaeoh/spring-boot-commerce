@@ -22,7 +22,8 @@ public final class StubPaymentGateway implements PaymentGateway {
     }
 
     @Override
-    public String cancel(String pgTransactionId) {
+    public String cancel(String pgTransactionId, String idempotencyKey) {
+        // 실 어댑터는 idempotencyKey를 벤더 Idempotency-Key로 전달해 재시도 이중 환불을 막는다. stub은 범위 밖.
         return "STUB-CANCEL-" + UUID.randomUUID();
     }
 }

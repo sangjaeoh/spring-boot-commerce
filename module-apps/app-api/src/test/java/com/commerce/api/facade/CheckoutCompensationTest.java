@@ -145,7 +145,7 @@ class CheckoutCompensationTest extends FacadeIntegrationTest {
                 }
 
                 @Override
-                public String cancel(String pgTransactionId) {
+                public String cancel(String pgTransactionId, String idempotencyKey) {
                     return "TEST-CANCEL-" + pgTransactionId;
                 }
             };
