@@ -3,9 +3,11 @@ package com.commerce.api.presentation.v1;
 import com.commerce.api.facade.CheckoutFacade;
 import com.commerce.api.facade.OrderCancellationFacade;
 import com.commerce.api.presentation.v1.request.CheckoutRequest;
+import com.commerce.api.presentation.v1.request.FulfillmentHoldRequest;
 import com.commerce.api.presentation.v1.response.CheckoutResponse;
 import com.commerce.api.presentation.v1.response.OrderResponse;
 import com.commerce.core.money.Money;
+import com.commerce.order.service.OrderModifier;
 import com.commerce.order.service.OrderReader;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -21,11 +23,12 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 주문 체크아웃·취소·조회 엔드포인트다.
+ * 주문 체크아웃·취소·이행 전이·조회 엔드포인트다.
  *
- * <p>쓰기는 체크아웃·취소 파사드에 얇게 위임하고, 조회는 주문 도메인 Reader에 위임해 결과를 응답 DTO로 변환한다.
- * 크로스 도메인 정책 거부·미존재는 도메인/파사드가 던지는 예외를 전역 핸들러가 problem+json으로 매핑한다.
- * 인증이 범위 밖이라 조회의 회원 소유권은 검사하지 않는다.
+ * <p>크로스 도메인 쓰기(체크아웃·취소)는 파사드에, 단일 도메인 쓰기인 이행 전이는 주문 도메인 Modifier에 얇게
+ * 위임하고, 조회는 주문 도메인 Reader에 위임해 결과를 응답 DTO로 변환한다. 정책 거부·전이 위반·미존재는
+ * 도메인/파사드가 던지는 예외를 전역 핸들러가 problem+json으로 매핑한다. 인증이 범위 밖이라 조회의 회원
+ * 소유권은 검사하지 않는다.
  */
 @RestController
 @RequestMapping("/api/v1/orders")
@@ -33,12 +36,17 @@ public class OrderController {
 
     private final CheckoutFacade checkoutFacade;
     private final OrderCancellationFacade orderCancellationFacade;
+    private final OrderModifier orderModifier;
     private final OrderReader orderReader;
 
     public OrderController(
-            CheckoutFacade checkoutFacade, OrderCancellationFacade orderCancellationFacade, OrderReader orderReader) {
+            CheckoutFacade checkoutFacade,
+            OrderCancellationFacade orderCancellationFacade,
+            OrderModifier orderModifier,
+            OrderReader orderReader) {
         this.checkoutFacade = checkoutFacade;
         this.orderCancellationFacade = orderCancellationFacade;
+        this.orderModifier = orderModifier;
         this.orderReader = orderReader;
     }
 
@@ -60,6 +68,34 @@ public class OrderController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void cancel(@PathVariable UUID orderId) {
         orderCancellationFacade.cancel(orderId);
+    }
+
+    /** 결제 완료 주문을 출고 처리한다. */
+    @PostMapping("/{orderId}/ship")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void ship(@PathVariable UUID orderId) {
+        orderModifier.ship(orderId);
+    }
+
+    /** 출고된 주문을 배송 완료 처리한다. */
+    @PostMapping("/{orderId}/delivery-confirmation")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void confirmDelivery(@PathVariable UUID orderId) {
+        orderModifier.confirmDelivery(orderId);
+    }
+
+    /** 준비 중인 주문의 이행을 보류한다. */
+    @PostMapping("/{orderId}/fulfillment-hold")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void holdFulfillment(@PathVariable UUID orderId, @Valid @RequestBody FulfillmentHoldRequest request) {
+        orderModifier.holdFulfillment(orderId, request.reason());
+    }
+
+    /** 보류된 주문의 이행을 준비 중으로 되돌린다. */
+    @PostMapping("/{orderId}/fulfillment-release")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void releaseFulfillment(@PathVariable UUID orderId) {
+        orderModifier.releaseFulfillment(orderId);
     }
 
     /** 주문 상세를 조회한다. */
