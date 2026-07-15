@@ -1,244 +1,380 @@
 # TODO 작업 요청 프롬프트
 
-[`todo.md`](./todo.md)의 각 항목을 새 세션에서 작업 요청할 때 쓰는 프롬프트다. 항목 하나를 골라 코드 블록 안 내용을 그대로 붙여넣는다. 프롬프트는 자기완결이라 이 파일의 다른 부분 없이 단독으로 동작한다(레포 규칙은 CLAUDE.md→AGENTS.md가 자동 적용). 각 프롬프트는 마지막에 todo.md 체크 갱신 단계를 포함한다. 권장 실행 순서는 todo.md가 소유한다.
+[`todo.md`](./todo.md)의 각 항목을 새 세션에서 작업 요청할 때 쓰는 프롬프트다. 항목 하나를 골라 코드 블록 안 내용을 그대로 붙여넣는다. 프롬프트는 자기완결이라 이 파일의 다른 부분 없이 단독으로 동작한다(레포 규칙은 CLAUDE.md→AGENTS.md가 자동 적용). 각 프롬프트는 마지막에 todo.md 체크 갱신 단계를 포함한다. 항목 번호 순서가 곧 권장 실행 순서이며 순서 근거는 todo.md가 소유한다.
 
-각 프롬프트의 엔드포인트 URL·요청 형상은 제안이다 — 기존 컨트롤러 관례(액션형 POST 서브리소스, `@RequestParam UUID memberId`, problem+json 오류 매핑)와 충돌하면 관례를 따른다.
+각 프롬프트의 엔드포인트 URL·요청 형상은 제안이다 — 기존 컨트롤러 관례(액션형 POST 서브리소스, problem+json 오류 매핑)와 충돌하면 관례를 따른다. 이 단계 항목 다수는 REQUIREMENTS.md·DOMAIN_MODEL.md가 "제외"·"향후 확장"으로 선언한 것을 구현한다 — 해당 선언의 갱신(무엇이 들어오고 무엇이 계속 밖인지)이 각 작업의 일부이며, 문서 편집은 AGENTS.md 편집 규약을 따른다.
 
-## 1. 카탈로그 상품 목록 API
+## 1. CI 파이프라인
 
 ```text
-[작업] 카탈로그 상품 목록 API 추가
+[작업] GitHub Actions 빌드 게이트 추가
 
 배경(확인된 사실):
-- ProductController에는 등록(POST /api/v1/products)과 단건 상세(GET /{productId})만 있다. 목록 조회가 없어 productId를 API 밖에서 알아야만 쇼핑이 시작된다.
-- 단건 상세는 ProductDetailFacade가 상품·ACTIVE 변형·재고를 합성해 주문가능·품절·대표가를 파생한다. 목록은 이 파생 규칙을 그대로 재사용해야 한다.
-- ProductReader에는 getProduct/getProducts(ids)만 있고 목록 메서드가 없다 — 이 작업은 유일하게 리포지토리 쿼리부터 새로 필요하다.
-- 노출 규칙(DOMAIN_MODEL.md §2): 카탈로그 노출 = ON_SALE ∧ 미삭제 ∧ ACTIVE 변형 1개 이상. 품절 = ACTIVE 변형이 모두 소진(재고 quantity=0 또는 status≠SELLABLE)이어도 상품은 계속 노출. 대표가 = ACTIVE 변형 현재가에서 파생(저장 금지).
-- product와 product_variant는 같은 product 스키마의 두 테이블이다(스키마 내 조인 가능 여부는 docs/architecture.md의 리포지토리 접근 범위 규칙을 먼저 확인). 재고는 stock 도메인 배치 조회(IN)로 합성한다.
+- .github 디렉터리가 없다. 품질 게이트(Spotless·NullAway·Error Prone·ArchUnit·전체 테스트)는 로컬 ./gradlew build에만 존재한다.
+- Java 25 toolchain(build-logic convention), 통합 테스트는 Testcontainers가 PostgreSQL(postgres:17-alpine)을 직접 띄운다 — CI 러너에 Docker가 필요하다(GitHub Actions ubuntu 러너는 내장).
 
-목표: GET /api/v1/products (페이지네이션 파라미터 포함)가 노출 상품 목록을 대표가·품절 여부와 함께 반환하고, 숨김·삭제·ACTIVE 변형 0개 상품은 목록에서 빠진다.
+목표: main 푸시와 PR에서 ./gradlew build가 원격으로 강제되고, 실패가 눈에 보인다.
 
 작업 내용:
-1. REQUIREMENTS.md·DOMAIN_MODEL.md §2·docs/architecture.md(리포지토리 접근 범위)를 읽고 설계를 잡는다. "ACTIVE 변형 ≥ 1" 필터를 페이지 산정에 어떻게 반영할지(쿼리 내 EXISTS vs 페이지 후 필터) 트레이드오프를 명시하고 하나를 골라 이유를 남긴다.
-2. 도메인 계층: 목록 쿼리(리포지토리)와 Reader 메서드를 추가한다. 페이지네이션 필수.
-3. 앱 계층: 목록 파사드(또는 ProductDetailFacade 확장)가 변형·재고를 배치 조회해 대표가·품절을 파생한다.
-4. 컨트롤러: GET /api/v1/products 추가, 응답 DTO는 기존 response 패턴을 따른다.
-5. 테스트: 기존 ProductDetailFacadeTest·ProductControllerTest 패턴으로 — 노출 규칙(숨김·삭제·ACTIVE 변형 0 제외), 품절 표시, 대표가, 페이지네이션 경계를 검증한다.
+1. .github/workflows/build.yml: push(main)·pull_request 트리거 → JDK 25 셋업(temurin 등 배포판의 25 지원 확인) → Gradle 캐시(공식 setup-gradle 액션) → ./gradlew build.
+2. Testcontainers가 러너 Docker로 도는지 확인한다(추가 서비스 선언 불필요 — 테스트가 직접 컨테이너를 띄운다).
+3. 병합 차단(branch protection)은 리포 설정이라 코드 밖 — README 또는 PR 설명에 권장 설정만 언급한다.
+4. 검증: 워크플로를 실제로 1회 통과시킨다(그린 런 확인 없이 끝내지 않는다).
 
-하지 말 것: 검색·정렬·카테고리·캐시 등 요청 밖 기능, 대표가 저장(파생만).
+하지 말 것: 배포·릴리스 자동화, 매트릭스 빌드, 커버리지 리포트 연동(요청 밖).
 
-완료 기준: 위 테스트가 통과하고 ./gradlew build 게이트(Spotless·NullAway·Error Prone·ArchUnit)가 통과한다.
-완료 후: 루트 todo.md의 1번 항목(카탈로그 상품 목록 API)을 체크([ ] → [x])로 갱신한다. 커밋 및 메인머지, 잔여브랜치 삭제
+완료 기준: 워크플로 그린 런 1회 확인, 로컬 ./gradlew build 통과.
+완료 후: 루트 todo.md의 1번 항목(CI 파이프라인)을 체크([ ] → [x])로 갱신한다. 커밋 및 메인머지, 잔여브랜치 삭제
 ```
 
-## 2. 주문 이행 전이 API
+## 2. 회원 자격증명·로그인 API
 
 ```text
-[작업] 주문 이행(출고·배송완료·보류·해제) 전이 API 추가
+[작업] 회원 자격증명(패스워드) + 로그인·토큰 발급 API 추가
 
 배경(확인된 사실):
-- OrderModifier에 ship/confirmDelivery/holdFulfillment/releaseFulfillment가 이미 구현·테스트돼 있으나 엔드포인트가 없다. 그래서 모든 PAID 주문이 영원히 PREPARING에 머문다.
-- 연쇄 결함: "출고 이후 취소 거부" 규칙(DOMAIN_MODEL.md §6)이 영원히 발동 불가이고, 미배송 PAID 주문 탈퇴 거부 가드 때문에 결제한 회원은 취소 없이는 영구 탈퇴 불가다.
-- 전이 규칙: 모든 이행 전진은 status=PAID에서만. PREPARING→SHIPPED→DELIVERED, PREPARING↔ON_HOLD(holdReason 세팅/클리어: FRAUD_REVIEW·ADDRESS_VERIFICATION·STOCK_DELAY).
-- 단일 도메인(order) 쓰기라 파사드가 필요 없다(기존 관례: 크로스 도메인 조율만 파사드, 단건 조회는 컨트롤러가 Reader 직접 호출).
+- 인증 코드가 전무하다: Spring Security 의존성이 버전 카탈로그·전 모듈 build.gradle.kts에 없고, 컨트롤러 Javadoc들이 "인증이 범위 밖이라 소유권은 검사하지 않는다"고 반복 명시한다.
+- Member는 이메일(Email 값객체·불변)·이름·상태(ACTIVE↔SUSPENDED)·논리삭제만 보유하고 자격증명 저장이 없다.
+- REQUIREMENTS.md "제외"와 DOMAIN_MODEL.md "명시적 범위 밖"이 인증·로그인·회원 자격증명을 선언하고 있다 — 이 작업은 그 선언을 바꾸는 결정이다.
+- 스키마는 도메인별 Flyway(member 스키마, 현재 V1)로 관리된다.
 
-목표: PAID 주문을 API로 SHIPPED→DELIVERED까지 진행시킬 수 있고, 출고 후 취소가 HTTP로 거부되며, DELIVERED 후에는 해당 회원 탈퇴가 성공한다.
+목표: 가입이 패스워드를 받고, POST /api/v1/auth/login이 이메일+패스워드로 액세스 토큰(JWT)을 발급하며, 후속 항목(3·4번)이 이 토큰에서 주체·역할을 도출할 수 있다.
 
 작업 내용:
-1. OrderController에 엔드포인트 추가(제안): POST /api/v1/orders/{orderId}/ship, POST /{orderId}/delivery-confirmation, POST /{orderId}/fulfillment-hold(사유 입력), POST /{orderId}/fulfillment-release. 기존 POST /{orderId}/cancel 관례(액션형 POST, 204)를 따른다.
-2. 컨트롤러는 OrderModifier에 얇게 위임한다. 오류는 기존 problem+json 매핑을 따른다(전이 위반·PAID 아님·미존재).
-3. 테스트: 기존 OrderControllerTest·WebIntegrationTest 패턴으로 — 정상 전이 체인(PAID→ship→delivery-confirmation), PAID 아님(PENDING·CANCELLED) 거부, hold→release 왕복, ship 후 cancel 요청이 거부되는 HTTP 회귀, DELIVERED 후 회원 탈퇴 성공 시나리오.
+1. 범위 선언 갱신 먼저: 두 문서에서 인증을 범위로 옮기되 새 경계를 명시한다(토큰 로그인만 포함, 소셜 로그인·리프레시 토큰·비밀번호 재설정·이메일 인증은 계속 밖).
+2. 설계 결정을 명시하고 하나를 골라 근거를 남긴다: Spring Security 도입 vs 얇은 자체 필터. 패스워드 해시 알고리즘(bcrypt 등). JWT 서명 키 관리(최소: 환경변수 주입).
+3. member 도메인: 패스워드 해시 저장 + member 스키마 V2 마이그레이션. 기존 행 처리(NOT NULL 여부·연습 DB 재생성 허용 여부)를 판단해 명시한다. 가입 오퍼레이션·API에 패스워드 추가.
+4. POST /api/v1/auth/login — 성공 시 토큰 응답, 실패 시 401 problem+json. 탈퇴·정지 회원의 로그인 허용 여부를 결정하고 근거를 남긴다(제안: 탈퇴는 거부, 정지는 로그인 허용 — 차단은 기존 도메인 게이트가 담당).
+5. 토큰 검증 필터는 이 항목에서 준비만 하고 기존 엔드포인트에 강제하지 않는다(강제는 3번 항목) — 한 번에 한 층.
+6. 테스트: 가입→로그인→토큰 클레임 검증, 잘못된 패스워드 401, 탈퇴 회원 로그인 거부, 해시 저장(평문 미저장) 확인.
 
-하지 말 것: 운송장·배송 추적·택배 연동(범위 밖), 새 상태·필드 추가(도메인은 완성돼 있다).
+하지 말 것: 소셜 로그인·리프레시 토큰·비밀번호 재설정, 기존 엔드포인트에 인증 강제(3번 소관), 역할 도입(4번 소관).
+
+완료 기준: 위 테스트가 통과하고 ./gradlew build 게이트(Spotless·NullAway·Error Prone·ArchUnit)가 통과하며, 두 문서의 범위 선언이 갱신돼 있다.
+완료 후: 루트 todo.md의 2번 항목(회원 자격증명·로그인 API)을 체크([ ] → [x])로 갱신한다. 커밋 및 메인머지, 잔여브랜치 삭제
+```
+
+## 3. 인증 주체 강제
+
+```text
+[작업] 구매자 셀프서비스 API의 자기 신고 memberId 제거 + 토큰 주체·소유권 강제
+
+배경(확인된 사실):
+- memberId가 세 방식으로 자기 신고된다: 경로변수(MemberController /{memberId}), 쿼리파라미터(카트 조회·삭제·비우기, GET /api/v1/orders, 발급쿠폰 단건·목록), 요청 본문(카트 담기·수량 변경, CheckoutRequest, CouponIssuanceRequest). 서버는 소유권을 전혀 검증하지 않는다(컨트롤러 Javadoc 명시).
+- 2번 항목(로그인·토큰 발급·검증 필터)이 선행돼 있어야 한다.
+- 발급쿠폰 단건 조회에는 "미소유는 미존재 취급" 관례가 이미 있다.
+
+목표: 구매자 셀프서비스 API가 토큰 주체에서 memberId를 도출하고, 자기 신고 memberId 파라미터가 표면에서 사라지며, 미인증 요청은 401·타인 리소스 접근은 거부된다.
+
+작업 내용:
+1. 표면 분류 먼저: 전체 엔드포인트를 본인용(카트 5개, 체크아웃, 주문 목록·상세·취소, 발급쿠폰 2개, 회원 본인 조회·이름변경·탈퇴)·관리자용(4번에서 가드)·공개(카탈로그 목록·상세 — 비로그인 쇼핑 허용 제안)로 나눠 표로 남긴다. 회원 조회(GET /{memberId})처럼 본인·관리자 겸용 후보는 판단을 명시한다.
+2. 토큰 검증 필터를 배선하고 주체 memberId를 컨트롤러에 주입한다(아규먼트 리졸버 등 — 2번에서 고른 인증 방식의 관례를 따른다). 본인용 엔드포인트의 요청 DTO·쿼리파라미터·경로변수에서 memberId를 제거한다.
+3. 소유권 검사: 주문 상세·취소는 주체와 주문 소유자 일치를 확인한다. 거부 표현(404 미존재 취급 vs 403)은 발급쿠폰의 기존 관례와 일관되게 결정하고 근거를 남긴다.
+4. 기존 컨트롤러·파사드·웹 통합 테스트를 토큰 발급 헬퍼 기반으로 갱신하고, 미인증 401·타인 주문 접근 거부 회귀를 추가한다.
+
+하지 말 것: 관리자 오퍼레이션 가드(4번 소관 — 이 항목에서는 형상만 유지), 인가 프레임워크 과설계, 요청 밖 엔드포인트 신설.
+
+완료 기준: 본인용 표면에서 자기 신고 memberId가 사라지고, 위 테스트가 통과하며 ./gradlew build 게이트가 통과한다.
+완료 후: 루트 todo.md의 3번 항목(인증 주체 강제)을 체크([ ] → [x])로 갱신한다. 커밋 및 메인머지, 잔여브랜치 삭제
+```
+
+## 4. 관리자 역할 분리
+
+```text
+[작업] 역할(BUYER/ADMIN) 도입 + 관리자 오퍼레이션 가드
+
+배경(확인된 사실):
+- 관리자 성격의 오퍼레이션이 구매자와 같은 표면에 무가드 노출돼 있다: 회원 정지·해제, 상품 등록·show/hide·편집·삭제, 변형 추가·가격·enable/disable/retire, 재고 increase·mark-sold-out·mark-sellable·discontinue, 쿠폰 정책 생성·disable/enable·발급, 주문 ship·delivery-confirmation·fulfillment-hold/release.
+- Member에 역할 개념이 없다. 2·3번 항목(토큰 주체)이 선행돼 있어야 한다.
+
+목표: 관리자 토큰만 관리자 오퍼레이션을 호출할 수 있고, 구매자 토큰은 403, 공개 표면은 무인증으로 동작한다.
+
+작업 내용:
+1. 역할 모델 결정: member.role(BUYER/ADMIN) 필드 vs 별도 관리자 계정 체계 — 트레이드오프를 명시하고 최소안을 고른다(제안: role 필드 + member 스키마 마이그레이션 + 관리자 시딩 방법 결정 — 마이그레이션 시딩 vs 로컬 프로필 시딩).
+2. 3번에서 만든 표면 분류표를 완성한다(관리자/본인/공개 3분류). 쿠폰 발급의 주체를 결정한다: 관리자가 특정 회원에게 발급(현재 본문 memberId 형상에 가까움) vs 회원 셀프 클레임 — 하나를 골라 형상을 정리한다.
+3. 관리자 가드를 적용한다(2번에서 고른 인증 방식의 관례 — Security라면 authorization rule, 자체 필터라면 인터셉터/리졸버). 구매자 토큰 403, 미인증 401.
+4. 테스트: 관리자 성공·구매자 403 대표 케이스(도메인별 1개 이상), 공개 표면(카탈로그) 무인증 접근, 역할 시딩 검증.
+
+하지 말 것: 세분화된 퍼미션·권한 매트릭스, 관리자 전용 앱 분리, 관리자 계정 관리 API(시딩으로 충분).
+
+완료 기준: 표면 분류표가 문서 또는 테스트로 남고, 위 테스트가 통과하며 ./gradlew build 게이트가 통과한다. REQUIREMENTS.md의 인증 범위 서술과 모순이 없다.
+완료 후: 루트 todo.md의 4번 항목(관리자 역할 분리)을 체크([ ] → [x])로 갱신한다. 커밋 및 메인머지, 잔여브랜치 삭제
+```
+
+## 5. 결제 현실화
+
+```text
+[작업] 실패 가능한 PG + PENDING 리컨실 + 웹훅 확정 경로
+
+배경(확인된 사실):
+- 프로덕션 PG는 StubPaymentGateway(module-external/external-payment) 하나이며 모든 승인을 무조건 성공 처리한다("STUB-APPROVE-"+UUID). 실패 경로는 app-api 테스트의 더블로만 검증된다(CheckoutFaultCompensationTest).
+- PaymentGateway 포트는 approve(Money, PaymentMethod)/cancel(pgTransactionId, idempotencyKey)뿐이고 상태 조회가 없다.
+- PaymentProcessor는 PG 호출을 트랜잭션 밖에서 하고 영속 실패 시 환불로 역보상한다. Payment는 REQUESTED→APPROVED(→CANCELLED) 상태와 failureReason·pgTransactionId·pgCancelTransactionId를 보유한다.
+- REQUIREMENTS.md "향후 확장" 1항이 "실 PG·비동기 웹훅 및 미결제 리컨실"을 선언한다.
+- CheckoutFacade가 체크아웃에서 결제 요청·승인을 동기 조율하고, 승인 실패 시 재고·쿠폰 복원 보상이 이미 구현·테스트돼 있다.
+
+목표: 결제가 실패·지연·응답 유실을 겪어도 돈과 주문 상태가 어긋나지 않는다 — 실패 가능한 PG 위에서 기존 보상이 동작하고, 응답이 유실된 REQUESTED 결제는 리컨실이 PG 상태 조회로 확정한다.
+
+작업 내용:
+1. 설계 결정을 명시하고 고른다(트레이드오프 서술 필수):
+   - PG 대상: 실 PG 샌드박스 연동 vs 자체 fake PG(실패·지연·비동기 승인 시뮬레이션 가능). 리포의 "클론만으로 기동" 지향을 유지하려면 fake PG(별도 모듈 앱 또는 compose 서비스)를 권장.
+   - 흐름: 동기 승인 유지 + 웹훅·리컨실을 안전망으로 vs 전면 비동기(주문이 웹훅까지 PENDING 대기). 최소 변경은 전자.
+2. PaymentGateway 포트에 거래 상태 조회를 추가하고 fake PG가 실패·지연 모드를 지원하게 한다.
+3. PENDING 리컨실: 오래된 REQUESTED 결제를 주기적으로 PG 조회로 확정하는 스케줄러(제안: app-api 내 @Scheduled 최소 구성). 확정 결과에 따라 markPaid 또는 기존 보상 경로를 태운다. 재실행 멱등을 보장한다.
+4. 웹훅을 도입하기로 결정했다면: 수신 엔드포인트 + 서명(또는 시크릿) 검증 + 중복 전달 멱등 처리. 인증 가드(2~4번)와의 관계(웹훅은 토큰 아님)를 명시한다.
+5. 테스트: PG 실패 시 체크아웃 보상(기존 자산 재사용), 응답 유실→리컨실이 승인 확정→주문 PAID, 리컨실 반복 실행 멱등, (웹훅 시) 서명 불일치 거부·중복 전달 무해.
+6. REQUIREMENTS.md·DOMAIN_MODEL.md의 "동기 stub 기준선"·"향후 확장" 서술을 새 능력·보장 수준으로 현행화한다.
+
+하지 말 것: 다중 PG 라우팅, 결제 수단 확장, 부분 승인·부분 환불, 아웃박스(6번 소관).
+
+완료 기준: 위 테스트가 통과하고 ./gradlew build 게이트가 통과하며, 문서가 새 결제 경계를 정확히 서술한다.
+완료 후: 루트 todo.md의 5번 항목(결제 현실화)을 체크([ ] → [x])로 갱신한다. 커밋 및 메인머지, 잔여브랜치 삭제
+```
+
+## 6. 아웃박스(내구성 이벤트)
+
+```text
+[작업] 트랜잭셔널 아웃박스 도입 — 이벤트 발행 내구성 확보
+
+배경(확인된 사실):
+- 이벤트 전달은 InProcessMessagePublisher(infra-messaging, ApplicationEventPublisher 재발행)뿐이고 Javadoc이 "무손실·내구성 보장 없음(in-process 기준선)"을 명시한다.
+- 발행은 OrderModifier.markPaid()의 OrderPaid 하나, 소비는 OrderPaidListener(AFTER_COMMIT + REQUIRES_NEW, 장바구니 비우기, 실패는 로그만 남기고 삼킴 — 비필수·멱등).
+- REQUIREMENTS.md "향후 확장"에 아웃박스가 선언돼 있다.
+- 착수 전 정직한 재평가가 조건이다: 소비자가 장바구니 비우기 하나뿐이면 유실 영향이 작아 아웃박스는 과설계일 수 있다. 5번(결제 현실화) 결과로 내구성이 필요한 이벤트 소비가 생겼는지 먼저 확인하고, 없다면 이 항목을 보류하고 그 판단을 todo.md에 기록하는 것도 유효한 완료다.
+
+목표: 이벤트가 발행 트랜잭션과 원자적으로 저장되고, 프로세스 크래시 후에도 미발행분이 릴레이로 전달된다.
+
+작업 내용:
+1. 저장 위치 결정: 아웃박스 테이블을 어느 스키마에 둘지(발행 도메인 스키마 vs 전용 스키마) — docs/architecture.md의 리포지토리 접근 범위·모듈 의존 규칙과 정합하게 설계하고 근거를 남긴다. 신규 스키마면 SchemaFlywayFactory 갱신이 필요하다.
+2. 발행 경로: MessagePublisher 포트는 유지하고 구현을 아웃박스 INSERT(발행 트랜잭션 내)로 교체한다.
+3. 릴레이: 폴링 스케줄러가 미발행 행을 읽어 기존 in-process 전달로 재발행하고 완료 마킹한다. 재전달 허용(at-least-once) — 소비자 멱등을 전제로 명시한다. 처리 완료 행 정리 전략을 결정한다.
+4. 테스트: 발행 트랜잭션 롤백 시 아웃박스 미저장, 커밋 후 릴레이 전달, 릴레이 중복 실행 무해, 소비 실패 후 재전달.
+
+하지 말 것: 외부 브로커(Kafka 등)·CDC 도입 — in-process 소비를 유지한 채 내구성만 추가한다. 신규 이벤트 발굴(기존 발행 지점만).
+
+완료 기준: 위 테스트가 통과하고 ./gradlew build 게이트가 통과하며, DOMAIN_MODEL.md의 "in-process 기준선" 서술이 새 보장 수준으로 현행화돼 있다. (보류 결정 시: 근거를 todo.md 항목에 남기는 것으로 갈음)
+완료 후: 루트 todo.md의 6번 항목(아웃박스)을 체크([ ] → [x])로 갱신한다. 커밋 및 메인머지, 잔여브랜치 삭제
+```
+
+## 7. 배송 후 환불(전체 주문 반품)
+
+```text
+[작업] DELIVERED 주문의 전체 반품→전액 환불 경로 추가
+
+배경(확인된 사실):
+- Order.cancel은 PAID에서 이행 PREPARING·ON_HOLD일 때만 허용되고 SHIPPED·DELIVERED는 CANCEL_NOT_ALLOWED로 거부한다 — 의도된 규칙이나, 대체 경로가 없어 DELIVERED 주문은 영구 환불 불가다.
+- PaymentProcessor.cancel(APPROVED→CANCELLED 전액 환불, 멱등 키 "CANCEL:"+pgTransactionId)은 이미 구현돼 있다.
+- 취소 조율은 OrderCancellationFacade가 담당한다(주문 CANCELLED 1회성 전이가 정확히-1회 보상의 가드).
+- REQUIREMENTS.md·DOMAIN_MODEL.md가 부분 취소·부분 환불·반품(RMA)을 범위 밖으로 선언한다 — 이 작업은 그중 "전체 주문 반품"만 범위로 들이는 결정이다.
+
+목표: DELIVERED 주문에 대해 관리자 액션으로 전체 주문 반품→전액 환불이 API로 완결되고, 이중 환불이 구조적으로 거부된다.
+
+작업 내용:
+1. 범위 선언 갱신: 전체 주문 반품 포함, 부분 반품·교환·반품 배송 추적은 계속 밖.
+2. 상태 모델 설계(트레이드오프 명시): OrderStatus에 REFUNDED 신설 vs CANCELLED 재사용+사유 구분. DOMAIN_MODEL.md 상태 전이 요약과 정합하게 결정하고 근거를 남긴다. 절차는 최소안(요청→승인 2단계가 아닌 관리자 단일 액션)을 제안한다.
+3. 부수 효과 결정(각각 근거 명시): 재고 복원 여부(반품 상품 재판매 가정), 사용 쿠폰 복원 여부(restoreUse는 있으나 만료 경과 가능). 기존 취소 보상과 규칙이 달라지는 지점을 명시한다.
+4. 크로스 도메인 조율 파사드(order+payment±stock·coupon — OrderCancellationFacade 패턴) + 관리자 엔드포인트(제안: POST /api/v1/orders/{orderId}/refund, 사유 입력). 2~4번(인증) 완료 상태라면 관리자 가드를 적용한다.
+5. 테스트: DELIVERED에서만 허용(PREPARING·SHIPPED·CANCELLED 거부), 환불 후 결제 CANCELLED·환불 거래 ID 존재, 이중 환불 거부(1회성 전이 가드), 부수 효과(재고·쿠폰) 결정대로 동작.
+
+하지 말 것: 부분 반품·교환, 반품 요청/승인 워크플로, 배송 회수 추적.
+
+완료 기준: 위 테스트가 통과하고 ./gradlew build 게이트가 통과하며, 두 문서의 상태 전이·범위 서술이 갱신돼 있다.
+완료 후: 루트 todo.md의 7번 항목(배송 후 환불)을 체크([ ] → [x])로 갱신한다. 커밋 및 메인머지, 잔여브랜치 삭제
+```
+
+## 8. 관측성
+
+```text
+[작업] Actuator health + 구조화 로깅 최소 구성
+
+배경(확인된 사실):
+- Actuator·Micrometer·tracing 의존성이 버전 카탈로그·전 모듈에 없고 management.* 설정도 없다. 유일한 헬스체크는 docker-compose의 pg_isready(컨테이너 수준)다.
+- 로깅 설정 파일(logback-spring.xml 등)과 yml의 logging 키가 없다. 애플리케이션 로거 사용은 OrderPaidListener 한 곳뿐이다.
+- Spring Boot 4.1 사용 — 구조화 로깅 내장 지원(logging.structured.format.*)을 우선 검토한다(외부 라이브러리 추가 전에 내장으로 충분한지 확인).
+
+목표: app-api가 liveness/readiness health 엔드포인트를 노출하고, 콘솔 로그가 구조화(JSON) 포맷으로 나가며, 노출 범위가 의도적으로 최소다.
+
+작업 내용:
+1. spring-boot-starter-actuator 의존성 추가(버전 카탈로그 경유), management 설정: health(+liveness/readiness probe) 노출, 그 외 엔드포인트는 기본 비노출 유지. metrics 노출 여부는 판단하고 근거를 남긴다.
+2. 구조화 로깅: 내장 structured logging 설정(포맷 선택 — ecs/logstash 중 근거와 함께). local 프로필에서는 사람이 읽는 포맷 유지 여부를 판단한다.
+3. 요청 상관관계: 최소안으로 요청 단위 식별자(traceId성 MDC) 유무를 판단한다 — micrometer-tracing 도입은 과하면 보류하고 근거를 남긴다.
+4. README에 확인 방법(health URL, 로그 포맷) 한 절 추가.
+5. 테스트: health 엔드포인트 200 응답 통합 테스트 1개(기존 WebIntegrationTest 패턴).
+
+하지 말 것: Prometheus 서버·Grafana 등 수집기 구성, 커스텀 메트릭 대량 추가, 분산 트레이싱 백엔드 연동.
+
+완료 기준: 로컬 기동에서 health가 응답하고 로그가 구조화 포맷으로 출력되며, ./gradlew build 게이트가 통과한다.
+완료 후: 루트 todo.md의 8번 항목(관측성)을 체크([ ] → [x])로 갱신한다. 커밋 및 메인머지, 잔여브랜치 삭제
+```
+
+## 9. 앱 컨테이너화
+
+```text
+[작업] app-migration·app-api 컨테이너 이미지 + compose 풀스택 기동
+
+배경(확인된 사실):
+- docker-compose.yml은 postgres 단일 서비스(postgres:17-alpine, 55432:5432, pg_isready 헬스체크)뿐이고 앱 Dockerfile이 없다.
+- 실행 순서는 postgres → app-migration(원샷: SchemaFlywayFactory.migrateAll 후 종료) → app-api이며, 현재 README는 gradlew bootRun 경로만 안내한다.
+- 프로필은 local 하나(55432 datasource)이고, 운용 datasource는 spring.datasource.* 환경변수 주입이 전제다(MigrationApplication Javadoc).
+- Java 25 toolchain이다 — 이미지 빌드 방식의 Java 25 지원을 확인해야 한다.
+
+목표: 클론 직후 docker compose 명령 하나로 postgres→마이그레이션→app-api가 순서대로 떠서 README 스모크(curl)가 성공한다.
+
+작업 내용:
+1. 이미지 빌드 방식 결정(트레이드오프 명시): Spring Boot bootBuildImage(빌드팩의 Java 25 지원 확인) vs 자체 Dockerfile(JRE 25 베이스). 두 앱에 같은 방식을 쓴다.
+2. compose 확장: migration 서비스(원샷, depends_on postgres healthy, 종료 코드로 성공 판정), api 서비스(depends_on migration 완료), datasource는 환경변수 주입(컨테이너 내부에서는 호스트 55432가 아닌 서비스명:5432 — 프로필 추가 여부 판단). 기존 로컬 gradlew 실행 경로를 깨지 않는다.
+3. README 갱신: 컨테이너 기동 경로를 추가하고 기존 gradlew 경로도 유지(두 경로의 용도 구분 한 줄).
+4. 검증: 클린 상태(볼륨 삭제)에서 compose 기동 → README 스모크 절차 실제 실행 성공.
+
+하지 말 것: k8s 매니페스트, 레지스트리 푸시·태깅 전략, 멀티 아키텍처 빌드.
+
+완료 기준: 클린 컴포즈 기동에서 스모크가 성공하고 ./gradlew build 게이트가 통과한다.
+완료 후: 루트 todo.md의 9번 항목(앱 컨테이너화)을 체크([ ] → [x])로 갱신한다. 커밋 및 메인머지, 잔여브랜치 삭제
+```
+
+## 10. 멱등 키 저장소 영속화
+
+```text
+[작업] 멱등 키 저장소를 인메모리에서 DB 기반으로 교체
+
+배경(확인된 사실):
+- IdempotencyFilter(common-web)는 IdempotencyStore 포트를 쓰고 구현은 InMemoryIdempotencyStore뿐이다 — 재시작 시 소실, 다중 인스턴스에서 무력. REQUIREMENTS.md 제약·전제에 이 한계가 선언돼 있다.
+- 필터 보장 수준: Idempotency-Key 헤더를 실은 unsafe 요청(POST·PUT·PATCH·DELETE)을 TTL 창 동안 잠그고 중복이면 409(응답 재생 없음).
+- 스키마는 SchemaFlywayFactory가 7개 도메인 스키마를 열거해 스키마별 Flyway로 관리한다 — 신규 스키마 추가 시 팩토리 갱신이 필요하다.
+
+목표: 멱등 키가 DB에 영속돼 재시작·다중 인스턴스에서도 중복 차단이 유지되고, 문서의 한계 선언이 새 보장 수준으로 갱신된다.
+
+작업 내용:
+1. 설계 결정(트레이드오프 명시): 저장소는 새 인프라 없는 DB(Postgres) 권장 — Redis 대비 근거를 남긴다. 테이블 소유(전용 스키마 신설 vs 기존 스키마 편입)와 마이그레이션 SQL 배치 위치를 docs/architecture.md 모듈 규칙과 정합하게 정한다(common-web은 도메인 모듈이 아니다 — 구현 모듈 배치를 아키텍처 규칙으로 검증).
+2. DB 구현: 유니크 키 INSERT로 원자 획득(동시 중복 요청 중 하나만 성공), TTL 만료 처리 전략 결정(획득 시 만료 행 무시 vs 주기 삭제 — 최소안 선택).
+3. 필터·포트는 그대로 두고 구현만 교체한다. InMemory 구현의 거취(테스트용 유지 여부)를 판단한다.
+4. 테스트: 동시 중복 요청 1승 검증, TTL 경과 후 재사용 가능, 재시작 시나리오(새 컨텍스트에서 같은 키 409 — 통합 테스트로 표현 가능한 수준까지).
+5. REQUIREMENTS.md 제약·전제의 in-memory 한계 서술을 새 보장 수준으로 현행화한다.
+
+하지 말 것: 응답 재생(response replay) 추가 — 현행 보장(중복 차단 409)을 유지한다. Redis 등 신규 인프라 도입.
+
+완료 기준: 위 테스트가 통과하고 ./gradlew build 게이트가 통과하며, 문서 제약 선언이 갱신돼 있다.
+완료 후: 루트 todo.md의 10번 항목(멱등 키 저장소 영속화)을 체크([ ] → [x])로 갱신한다. 커밋 및 메인머지, 잔여브랜치 삭제
+```
+
+## 11. 주문 목록 페이지네이션
+
+```text
+[작업] 회원 주문 목록 조회에 페이지네이션 적용
+
+배경(확인된 사실):
+- GET /api/v1/orders는 List 전체를 반환한다. 경로: OrderReader.getOrdersByMember → OrderRepository.findByMemberIdOrderByCreatedAtDescIdDesc(@EntityGraph("lines"), 최신순+id 타이브레이커).
+- 상품 목록에 기성 Page 패턴이 있다: ProductController.getProducts(page·size 파라미터, @Min 검증) → Page 반환 → ProductPageResponse(page/size/totalElements/totalPages).
+- 발급쿠폰 목록은 회원당 발급이 정책당 1회라 바운드 — 이 작업에서 제외한다.
+- 함정: 컬렉션 @EntityGraph(lines)와 Pageable을 한 쿼리에 섞으면 메모리 페이지네이션이 된다 — 설계 판단 필요.
+
+목표: 주문 목록이 상품 목록과 같은 페이지 규약(page/size/totalElements/totalPages)으로 응답하고, 페치 전략이 메모리 페이지네이션을 피한다.
+
+작업 내용:
+1. 쿼리 설계(트레이드오프 명시): ID 페이지 조회 후 IN + @EntityGraph 재조회(두 쿼리) vs 다른 방식 — 메모리 페이지네이션 회피를 기준으로 결정하고 근거를 남긴다.
+2. OrderReader에 페이지 메서드, 컨트롤러 파라미터·응답을 상품 목록 패턴(파라미터 검증 포함)으로 맞춘다. 기존 List 반환 형상은 제거한다(외부 클라이언트 부재 전제 — README 스모크에 영향 있으면 함께 갱신).
+3. 3번 항목(인증 주체 강제) 완료 여부에 따라 memberId 소스가 다르다: 완료 전이면 기존 쿼리파라미터 유지, 완료 후면 토큰 주체 — 현재 상태를 확인하고 맞춘다.
+4. 테스트: 페이지 경계(빈 페이지·마지막 페이지), 정렬 안정성(같은 시각 주문의 id 타이브레이커), 총계 정확성, size 검증.
+
+하지 말 것: 상태·기간 필터, 발급쿠폰 목록 페이지네이션, 커서 페이지네이션(기성 오프셋 패턴 유지).
 
 완료 기준: 위 테스트가 통과하고 ./gradlew build 게이트가 통과한다.
-완료 후: 루트 todo.md의 2번 항목(주문 이행 전이 API)을 체크([ ] → [x])로 갱신한다. 커밋 및 메인머지, 잔여브랜치 삭제
+완료 후: 루트 todo.md의 11번 항목(주문 목록 페이지네이션)을 체크([ ] → [x])로 갱신한다. 커밋 및 메인머지, 잔여브랜치 삭제
 ```
 
-## 3. 재고 운영 API
+## 12. 출고 운송장 기록
 
 ```text
-[작업] 재고 운영(재입고·수동 품절/재개·단종) API 추가
+[작업] 출고(ship) 시 운송장 번호 기록 + 조회 노출
 
 배경(확인된 사실):
-- StockModifier에 increase(재입고)/markSoldOut/markSellable/discontinue가 이미 구현·테스트돼 있으나 컨트롤러가 없다(StockController 부재). 그래서 재고가 소진되면 API로는 영구 품절이다.
-- 규칙(DOMAIN_MODEL.md §3): increase는 취소 보상 restore와 별개 의도(신규 물량 입고)이며 DISCONTINUED엔 거부. 전이는 SELLABLE↔SOLD_OUT, {SELLABLE,SOLD_OUT}→DISCONTINUED(종료). 재고는 변형당 1행(variantId 유니크).
-- 단일 도메인 쓰기라 파사드가 필요 없다.
+- POST /api/v1/orders/{orderId}/ship은 인자가 없고 Order에 운송장 필드가 없다 — 이행 상태(SHIPPED·DELIVERED)만 있어 "출고했다"만 알 수 있다.
+- REQUIREMENTS.md·DOMAIN_MODEL.md가 "배송 추적·택배 연동·운송장"을 범위 밖으로 선언한다(출고·배송완료 상태 자체는 포함) — 이 작업은 그중 "운송장 번호 기록"만 범위로 들이는 결정이다.
+- ordering 스키마는 현재 V1 — 스키마별 Flyway라 V2 추가가 다른 도메인과 충돌하지 않는다.
 
-목표: 소진된 변형을 API 재입고로 다시 주문 가능하게 만들 수 있고, 수동 품절/재개·단종을 API로 전환할 수 있다.
+목표: 출고 시 택배사·운송장 번호가 기록되고 주문 상세 응답에 노출된다. 택배사 API 연동·배송 추적은 계속 범위 밖.
 
 작업 내용:
-1. StockController 신설(제안): POST /api/v1/stocks/{variantId}/increase(수량 입력, ≥1 검증), POST /{variantId}/mark-sold-out, POST /{variantId}/mark-sellable, POST /{variantId}/discontinue. variantId 키 사용은 재고가 변형당 1행이라 자연 키다.
-2. StockModifier에 얇게 위임, 오류는 problem+json 매핑(미존재·잘못된 전이·단종 재입고 거부).
-3. 테스트: 기존 컨트롤러 테스트 패턴으로 — 재입고 후 수량 반영, DISCONTINUED 재입고 거부, 전이 성공/거부. 통합 시나리오 하나: 체크아웃으로 소진 → increase → 재체크아웃 성공.
+1. 범위 선언 갱신: 운송장 번호 기록 포함, 택배 연동·추적·반품 회수는 계속 밖.
+2. 필드 설계 결정: carrier+trackingNumber vs 번호만 — 최소안을 근거와 함께 고른다. 필수 여부 결정(제안: ship 시 필수 — 없으면 기록 의미가 없다). Order 필드 + ordering 스키마 V2 마이그레이션.
+3. OrderModifier.ship 시그니처 확장, ship 엔드포인트 요청 본문 추가(검증 포함), 주문 상세 응답 노출(미출고 주문은 null).
+4. 테스트: ship 시 기록·상세 노출, 미출고 주문 null, 필수 검증 400, 기존 ship 전이 가드 회귀 유지.
 
-하지 말 것: 재고 단건 조회 API(상품 상세 파사드가 이미 파생 노출), 예약(홀드) 모델 도입.
+하지 말 것: 택배사 enum 카탈로그 정교화, 배송 추적 상태·이벤트, 운송장 수정 API(요청 밖).
 
-완료 기준: 위 테스트가 통과하고 ./gradlew build 게이트가 통과한다.
-완료 후: 루트 todo.md의 3번 항목(재고 운영 API)을 체크([ ] → [x])로 갱신한다. 커밋 및 메인머지, 잔여브랜치 삭제
+완료 기준: 위 테스트가 통과하고 ./gradlew build 게이트가 통과하며, 두 문서의 범위 서술이 갱신돼 있다.
+완료 후: 루트 todo.md의 12번 항목(출고 운송장 기록)을 체크([ ] → [x])로 갱신한다. 커밋 및 메인머지, 잔여브랜치 삭제
 ```
 
-## 4. 추가 변형 등록 + 변형 관리 API
+## 13. 쿠폰 발급 한도·발급분 무효화
 
 ```text
-[작업] 기존 상품에 변형 추가 등록 + 변형 관리(가격 변경·활성/비활성/은퇴) API 추가
+[작업] 쿠폰 정책 발급 한도(선착순) + 발급분 관리자 무효화 추가
 
 배경(확인된 사실):
-- ProductRegistrationFacade.registerProduct는 상품 등록 시 첫 변형 1개만 시딩한다. 추가 변형 등록 경로(파사드·엔드포인트)가 없어 옵션 상품(색상·사이즈 등 변형 2개 이상)을 만들 수 없다.
-- DOMAIN_MODEL.md "상품 등록 → 첫 변형·재고 시딩" 절에 추가 변형 흐름이 이미 확정돼 있다: 변형 create(DISABLED) → 재고 create(초기수량) → enable. 파괴적 보상 없음(실패 시 DISABLED 변형·재고가 남고 재시도는 남은 단계 재개 — 같은 옵션 재-create는 비-RETIRED 유니크에 막히므로 재생성이 아니라 재개).
-- ProductVariantModifier에 changePrice/enable/disable/retire가 이미 구현돼 있으나 미노출이다. 규칙: 가격 ≥ 1, RETIRED는 모든 변경 거부, (product_id, option_signature) 비-RETIRED 유니크(중복 조합 거부), 은퇴 조합은 새 변형으로 재등록 가능.
-- 변형 추가는 크로스 도메인(product+stock)이라 파사드 소관, 변형 관리(가격·상태)는 단일 도메인이라 컨트롤러→Modifier 직행이 관례에 맞다.
+- Coupon 정책에 발급 한도가 없어 발급 가능 기간·회원당 1회((coupon_id, member_id) 유니크) 외에는 무제한 발급된다.
+- IssuedCoupon 상태는 ISSUED/USED뿐(만료는 expiresAt 사용 시점 판정)이라 잘못 발급된 쿠폰을 회수할 수단이 없다 — 정책 DISABLE은 신규 발급만 차단하고 기발급분은 계속 사용 가능.
+- IssuedCoupon에는 @Version 낙관락이 있다. REQUIREMENTS.md "향후 확장"이 "선착순 발급 한도"와 "발급 쿠폰 회수·관리자 무효화"를 선언한다.
 
-목표: 기존 상품에 두 번째 이상 변형을 API로 등록해 주문까지 가능하고, 변형 가격 변경·활성/비활성/은퇴가 API로 동작한다.
+목표: 정책에 총 발급 한도를 걸 수 있고(소진 시 발급 거부, 동시 발급 경합에서도 한도 초과 불가), 관리자가 특정 발급분을 무효화하면 그 쿠폰은 사용이 거부된다.
 
 작업 내용:
-1. ProductRegistrationFacade에 addVariant(productId, price, options, initialQuantity) 추가 — 문서의 시딩 순서(create DISABLED→재고 create→enable)를 따른다. registerProduct의 기존 시딩 로직과 중복되면 공유를 검토하되 과추상화하지 않는다.
-2. 엔드포인트(제안): POST /api/v1/products/{productId}/variants (추가 등록), POST /api/v1/product-variants/{variantId}/price(또는 PATCH — 기존 관례 우선), POST /{variantId}/enable, /{variantId}/disable, /{variantId}/retire.
-3. 테스트: 추가 변형 등록 후 상품 상세에 두 변형 노출·체크아웃 가능, 중복 옵션 조합(비-RETIRED) 409, 은퇴 후 같은 조합 재등록 성공, RETIRED에 가격 변경·enable 거부, 가격 변경이 기존 주문 스냅샷에 무영향.
+1. 범위 선언 갱신: 두 항목을 "향후 확장"에서 범위로 옮긴다. 사용된(USED) 쿠폰의 소급 회수는 계속 밖으로 명시한다.
+2. 발급 한도 — 동시성 설계가 핵심(트레이드오프 명시): 정책 행 발급 카운트+낙관락 vs 원자적 UPDATE(issued_count < limit) vs COUNT 쿼리 검사. 기존 재고 차감의 처리 방식(낙관락+409 클라이언트 재시도)과의 일관성을 검토해 결정하고 근거를 남긴다. 한도는 선택 필드(무제한 정책 유지 가능). coupon 스키마 마이그레이션 포함.
+3. 무효화 — IssuedCoupon에 REVOKED 상태 신설: ISSUED→REVOKED만 허용(USED는 거부), REVOKED는 use에서 거부. 관리자 엔드포인트(제안: POST /api/v1/issued-coupons/{issuedCouponId}/revoke). 4번 항목(역할) 완료 상태면 관리자 가드 적용.
+4. 테스트: 한도 소진 후 발급 거부, 동시 발급 경합에서 한도 초과 불가(초과 시도는 409 또는 발급 거부 — 설계 결정대로), REVOKED 사용 거부(체크아웃 통합 1케이스), USED 무효화 거부, 목록 조회에 상태 노출.
 
-하지 말 것: 옵션 구조 정규화(옵션 엔티티·옵션 카탈로그 — 범위 밖), 첫 등록 API의 형상 변경.
+하지 말 것: 사용된 쿠폰 소급 회수·주문 금액 재계산, 재발급·양도, 무효화 사유 체계 정교화(사유 한 필드면 충분).
 
-완료 기준: 위 테스트가 통과하고 ./gradlew build 게이트가 통과한다.
-완료 후: 루트 todo.md의 4번 항목(추가 변형 등록 + 변형 관리 API)을 체크([ ] → [x])로 갱신한다. 커밋 및 메인머지, 잔여브랜치 삭제
+완료 기준: 위 테스트가 통과하고 ./gradlew build 게이트가 통과하며, 두 문서의 상태·범위 서술이 갱신돼 있다.
+완료 후: 루트 todo.md의 13번 항목(쿠폰 발급 한도·발급분 무효화)을 체크([ ] → [x])로 갱신한다. 커밋 및 메인머지, 잔여브랜치 삭제
 ```
 
-## 5. 상품 관리 API
+## 14. API 문서화(OpenAPI)
 
 ```text
-[작업] 상품 관리(노출·숨김, 이름·설명 편집, 논리삭제) API 추가
+[작업] springdoc-openapi 자동 문서 + swagger-ui 노출
 
 배경(확인된 사실):
-- ProductModifier(show/hide/rename/changeDescription)와 ProductRemover(논리삭제)가 이미 구현돼 있으나 엔드포인트가 없다. 컨트롤러에는 등록과 단건 상세뿐이다.
-- 규칙(DOMAIN_MODEL.md §2): ON_SALE↔HIDDEN 전이 가드, 이름·설명 편집은 기존 주문 스냅샷에 무영향, 삭제는 deletedAt 논리삭제이며 변형을 연쇄 삭제하지 않는다. 숨김·삭제 상품은 담기·체크아웃 게이트가 거른다(이미 구현).
-- 단일 도메인 쓰기라 파사드가 필요 없다.
+- API 문서화 도구가 전무하다(springdoc·swagger·REST Docs 의존성 없음). 38개 엔드포인트는 코드 Javadoc과 루트 마크다운 문서로만 설명된다.
+- Spring Boot 4.1 사용 — springdoc의 Boot 4 호환 버전을 확인해 버전 카탈로그에 추가해야 한다.
+- 요청 DTO는 Bean Validation이 붙은 record, 오류 응답은 RFC 9457 problem+json(+커스텀 code) 규약이다.
 
-목표: 상품을 API로 숨기고 다시 노출하고, 이름·설명을 고치고, 논리삭제할 수 있다.
+목표: /v3/api-docs와 swagger-ui가 전 엔드포인트를 자동 생성으로 노출하고, 클라이언트가 문서만 보고 스모크 흐름(가입→상품→담기→체크아웃)을 재현할 수 있다.
 
 작업 내용:
-1. ProductController에 추가(제안): POST /api/v1/products/{productId}/show, POST /{productId}/hide, PATCH /{productId}(name·description — 별도 요청 DTO), DELETE /{productId}.
-2. Modifier/Remover에 얇게 위임, 오류는 problem+json 매핑(미존재·잘못된 전이).
-3. 테스트: show/hide 전이 성공·거부, hide된 상품이 담기·체크아웃에서 거부되는 통합 확인(기존 게이트 재검증 1케이스면 충분), rename 후 기존 주문 productName 스냅샷 불변, delete 후 상세 조회 미존재 처리.
+1. springdoc-openapi 의존성(버전 카탈로그 경유, Boot 4.1 호환 버전 확인) + 최소 설정(제목·버전 정도).
+2. 자동 생성 우선 원칙: 컨트롤러에 @Operation 등 어노테이션을 대량 추가하지 않는다. 자동 생성 결과가 명백히 틀리는 지점(예: 204 응답, problem+json 오류 표현)만 최소 보정하고 보정 기준을 남긴다.
+3. 노출 범위 판단: local 외 환경에서 swagger-ui 노출 여부(현재 프로필 체계 기준 최소안). 2~4번(인증) 완료 상태면 보안 스킴(bearer) 표기와 ui 접근 정책을 판단한다.
+4. README에 문서 URL 한 줄 추가.
+5. 검증: 기동 후 swagger-ui에서 대표 흐름 1회 수동 확인(문서 생성 오류·누락 엔드포인트 없는지).
 
-하지 말 것: 카탈로그 목록 관련 작업(별도 항목), 변형 연쇄 처리 추가.
+하지 말 것: 전 엔드포인트 어노테이션 상세 기술, 별도 문서 사이트·버전드 스펙 파일 커밋, REST Docs 병행 도입.
 
-완료 기준: 위 테스트가 통과하고 ./gradlew build 게이트가 통과한다.
-완료 후: 루트 todo.md의 5번 항목(상품 관리 API)을 체크([ ] → [x])로 갱신한다. 커밋 및 메인머지, 잔여브랜치 삭제
+완료 기준: 전 엔드포인트가 문서에 나타나고 ./gradlew build 게이트가 통과한다.
+완료 후: 루트 todo.md의 14번 항목(API 문서화)을 체크([ ] → [x])로 갱신한다. 커밋 및 메인머지, 잔여브랜치 삭제
 ```
 
-## 6. 회원 관리 API
+## 15. Clock 주입
 
 ```text
-[작업] 회원 관리(정지·해제, 이름 변경) API 추가
+[작업] 시간 규칙 지점에 Clock 주입 — 시간 고정 테스트 가능화
 
 배경(확인된 사실):
-- MemberModifier에 suspend(reason)/reinstate/rename이 이미 구현돼 있으나 엔드포인트가 없다. MemberController에는 가입(POST)·단건 조회(GET /{memberId})·탈퇴(DELETE /{memberId}?reason=)만 있다.
-- 규칙(DOMAIN_MODEL.md §1): ACTIVE↔SUSPENDED 전이, suspend는 suspensionReason(FRAUD_SUSPECTED·PAYMENT_ABUSE·POLICY_VIOLATION·CS_MANUAL) 세팅·reinstate는 clear. 정지와 탈퇴는 독립 축. 정지 회원은 담기·체크아웃·쿠폰 발급이 거부된다(게이트 이미 구현). 이메일은 불변, rename은 이름만.
-- 탈퇴 엔드포인트가 @RequestParam으로 사유를 받는 기존 관례가 있다.
+- java.time.Clock 빈·주입이 전무하고, Order·Payment·Member·Product·IssuedCoupon 엔티티와 CheckoutFacade가 Instant.now()를 직접 호출한다. 생성·수정 시각은 BaseTimeEntity(JPA auditing)가 자동 채운다.
+- 시간이 규칙에 개입하는 지점: 쿠폰 발급 가능 기간 판정, 발급 시 expiresAt 스냅샷(발급시각+usageValidDays), 사용 시점 만료 판정. 그 외(paidAt·approvedAt 등)는 기록 시각이다.
+- 현재 만료 경계(직전/직후) 테스트를 시간 고정으로 쓸 수 없는 구조다.
 
-목표: 회원을 API로 정지·해제하고 이름을 변경할 수 있으며, 정지 회원의 담기·체크아웃이 실제로 거부된다.
-
-작업 내용:
-1. MemberController에 추가(제안): POST /api/v1/members/{memberId}/suspend?reason=, POST /{memberId}/reinstate, PATCH /{memberId}(새 이름 — 요청 DTO). 사유 전달은 탈퇴(DELETE ?reason=) 관례를 따른다.
-2. MemberModifier에 얇게 위임, 오류는 problem+json 매핑(미존재·잘못된 전이).
-3. 테스트: 정지→해제 왕복(사유 세팅·클리어 확인), 정지 중 담기 또는 체크아웃 거부 통합 1케이스, 정지된 채 탈퇴 가능(독립 축), rename 후 이메일 불변.
-
-하지 말 것: 관리자 인증·권한 분리(범위 밖 — 기존 단일 표면 유지), 회원 목록 API(요청 밖).
-
-완료 기준: 위 테스트가 통과하고 ./gradlew build 게이트가 통과한다.
-완료 후: 루트 todo.md의 6번 항목(회원 관리 API)을 체크([ ] → [x])로 갱신한다. 커밋 및 메인머지, 잔여브랜치 삭제
-```
-
-## 7. 쿠폰 정책 전환 + 내 발급 쿠폰 목록 API
-
-```text
-[작업] 쿠폰 정책 발급 가능·중지 전환 API + 회원별 발급 쿠폰 목록 API 추가
-
-배경(확인된 사실):
-- CouponModifier.disable/enable이 이미 구현돼 있으나 엔드포인트가 없다(CouponController에는 정책 생성·발급만 있다).
-- 발급 쿠폰 조회는 GET /api/v1/issued-coupons/{issuedCouponId}?memberId= 단건뿐이다. 회원별 목록이 없어 클라이언트가 발급 응답의 ID를 기억하지 않으면 체크아웃에서 쿠폰을 쓸 수 없다. IssuedCouponReader에 목록 메서드부터 없다(getIssuedCoupon·calculateDiscount뿐).
-- 규칙(DOMAIN_MODEL.md §5): 정책 ACTIVE↔DISABLED, DISABLED는 신규 발급만 막고 기발급분은 계속 사용 가능. 발급분 접근은 본인 소유만(미소유는 미존재 취급). 만료는 expiresAt 사용 시점 판정(별도 상태 없음).
-
-목표: 정책을 API로 중지·재개할 수 있고(중지 후 신규 발급 거부·기발급분 사용 가능), 회원이 자기 발급 쿠폰 목록을 조회할 수 있다.
+목표: 시간 규칙 지점이 주입된 시각으로 동작해 만료·기간 경계를 고정 시각 테스트로 검증할 수 있다.
 
 작업 내용:
-1. CouponController에 추가(제안): POST /api/v1/coupons/{couponId}/disable, POST /{couponId}/enable.
-2. IssuedCouponRepository에 회원별 조회, IssuedCouponReader에 목록 메서드 추가(최신순 — OrderReader.getOrdersByMember 관례). 상태·만료 필터는 넣지 않고 전량 반환한다(표시 판단은 클라이언트 몫, 요청 밖 기능 금지).
-3. IssuedCouponController에 GET /api/v1/issued-coupons?memberId= 추가, 기존 IssuedCouponResponse 재사용.
-4. 테스트: disable 후 발급 409·기발급분 사용(체크아웃) 성공, enable 후 발급 재개, 목록이 본인 것만·최신순 반환.
+1. 접근 결정(트레이드오프 명시): 서비스 계층에 Clock 빈 주입 + 엔티티 전이·판정 메서드가 Instant 파라미터를 받는 방식(엔티티에 Clock 주입 금지)을 제안 — 다른 방식을 고르면 근거를 남긴다.
+2. 적용 범위는 외과적으로: 시간 규칙 지점(쿠폰 발급 기간·만료)만 우선한다. 순수 기록 시각(paidAt 등)까지 확장할지는 판단하되, diff가 커지면 규칙 지점으로 한정하고 그 결정을 남긴다. JPA auditing은 그대로 둔다(연결은 선택).
+3. Clock 빈(프로덕션 systemUTC) 구성 위치를 아키텍처 규칙(모듈 의존)과 정합하게 정한다.
+4. 테스트: 만료 경계 직전 사용 성공·직후 거부, 발급 기간 경계, 기존 테스트 회귀 통과.
 
-하지 말 것: 발급분 회수·무효화(범위 밖), 페이지네이션(회원당 발급은 정책당 1회라 소량).
+하지 말 것: Instant.now() 전면 일괄 치환으로 diff 폭발, 시간 관련 신규 기능(만료 상태 전이 배치 등 — 요청 밖).
 
-완료 기준: 위 테스트가 통과하고 ./gradlew build 게이트가 통과한다.
-완료 후: 루트 todo.md의 7번 항목(쿠폰 정책 전환 + 내 발급 쿠폰 목록 API)을 체크([ ] → [x])로 갱신한다. 커밋 및 메인머지, 잔여브랜치 삭제
-```
-
-## 8. 결제 거래 추적 노출
-
-```text
-[작업] 주문 결제 정보(승인·환불 거래) 조회 API 추가
-
-배경(확인된 사실):
-- REQUIREMENTS.md 결제 절은 "승인 거래와 취소(환불) 거래를 각각 식별·추적할 수 있다"를 요구하지만, Payment는 어떤 응답에도 노출되지 않는다(OrderResponse에 결제 정보 없음, PaymentController 없음).
-- Payment 엔티티는 pgTransactionId(승인)·pgCancelTransactionId(환불)·method·failureReason·approvedAt·cancelledAt을 이미 보유하고, PaymentReader.getByOrderId(orderId)도 이미 있다 — 얇은 노출만 필요하다.
-- 0원 결제(전액 할인)는 PG 생략 자동 승인이라 pgTransactionId·method가 null일 수 있다(불변식 amount>0 ⇔ method≠null).
-
-목표: 주문 ID로 결제의 상태·수단·금액·승인/환불 거래 ID·실패 사유·시각을 조회할 수 있다.
-
-작업 내용:
-1. 엔드포인트(제안): GET /api/v1/orders/{orderId}/payment — OrderController에 두고 PaymentReader.getByOrderId에 위임(앱 계층은 모든 도메인을 조립 가능). OrderResponse 확장 대신 별도 엔드포인트를 제안하는 이유: 주문 조회마다 결제 fan-out을 강제하지 않고, 도메인별 응답 관례를 유지한다. 기존 관례와 판단이 다르면 근거를 남기고 조정한다.
-2. PaymentResponse DTO 신설: status, method(널 가능), amount, failureReason(널 가능), pgTransactionId(널 가능), pgCancelTransactionId(널 가능), approvedAt, cancelledAt.
-3. 테스트: 체크아웃 성공 주문의 결제 조회(APPROVED·거래 ID 존재), 취소 후 조회(CANCELLED·환불 거래 ID 존재·승인 ID와 별개), 0원 결제(거래 ID·method null), 결제 없는 주문 ID 미존재 처리.
-
-하지 말 것: 결제 수정·재시도 API(범위 밖), Payment 필드 추가.
-
-완료 기준: 위 테스트가 통과하고 ./gradlew build 게이트가 통과한다.
-완료 후: 루트 todo.md의 8번 항목(결제 거래 추적 노출)을 체크([ ] → [x])로 갱신한다. 커밋 및 메인머지, 잔여브랜치 삭제
-```
-
-## 9. 로컬 실행 구성 + README
-
-```text
-[작업] 로컬 실행 구성(docker-compose + 프로필)과 README 추가
-
-배경(확인된 사실):
-- app-api의 application.yml에는 datasource가 없고(spring.application.name·jpa.ddl-auto=validate·open-in-view=false뿐), docker-compose·README도 없어 리포만으로 앱을 띄울 수 없다. 테스트는 Testcontainers(SharedPostgresContainer)로만 돈다.
-- 스키마 생성은 별도 앱 app-migration이 담당한다 — SchemaFlywayFactory(common-jpa)가 7개 도메인 스키마별 Flyway를 프로그램적으로 실행하고, Boot의 Flyway 오토컨피그는 의도적으로 꺼져 있다(app-migration application.yml 주석 참조: 켜지면 7개 V1__이 버전 충돌). 이 구조를 바꾸지 않는다.
-- Flyway SQL은 각 도메인 모듈의 db/migration/{schema}/에 있다.
-
-목표: 클론 직후 README의 명령 몇 개로 Postgres 기동 → 마이그레이션 → app-api 기동 → 회원가입·상품등록·담기·체크아웃 curl 스모크가 성공한다.
-
-작업 내용:
-1. docker-compose.yml(루트): postgres 단일 서비스, DB·계정은 로컬 프로필과 일치시킨다.
-2. app-api·app-migration에 local 프로필 datasource 설정을 추가한다(기존 application.yml 형상 유지, 프로필 분리). Testcontainers 기반 테스트 설정에 영향이 없어야 한다.
-3. README.md(루트): 프로젝트 한 줄 소개, 모듈 구조 개요(module-apps/common/domains/external/infra), 문서 지도(REQUIREMENTS.md·DOMAIN_MODEL.md·docs/), 실행 순서(compose up → app-migration 실행 → app-api 실행), 체크아웃까지의 curl 스모크 예시(멱등 키 헤더 포함), 테스트 실행법(./gradlew build).
-4. 검증: 문서의 명령을 실제로 그대로 실행해 스모크가 성공하는지 확인한다(문서만 쓰고 끝내지 않는다).
-
-하지 말 것: CI·배포 구성(요청 밖), 마이그레이션 실행 방식 변경, docs/ 규칙 문서 수정.
-
-완료 기준: README 절차 그대로의 신선한 실행(클린 DB)이 스모크까지 성공하고 ./gradlew build가 통과한다.
-완료 후: 루트 todo.md의 9번 항목(로컬 실행 구성 + README)을 체크([ ] → [x])로 갱신한다. 커밋 및 메인머지, 잔여브랜치 삭제
-```
-
-## 10. 문서 현행화(멱등 필터)
-
-```text
-[작업] 멱등 필터 구현 완료를 REQUIREMENTS·DOMAIN_MODEL에 현행화
-
-배경(확인된 사실):
-- IdempotencyFilter는 이미 구현·배선·검증돼 있다: common-web의 OncePerRequestFilter(Idempotency-Key 헤더를 실은 unsafe 요청을 InMemoryIdempotencyStore로 잠그고 중복이면 409 problem+json), app-api에 runtimeOnly 배선, 체크아웃·취소 HTTP 멱등 회귀 테스트 존재(같은 키 재요청 409).
-- 그런데 문서는 이를 아직 미래 항목으로 둔다: REQUIREMENTS.md "향후 확장"의 "체크아웃 동시 더블서밋 방어(멱등 필터)" 항목, DOMAIN_MODEL.md "명시적 범위 밖" 마지막의 "체크아웃 동시 더블서밋 방어(멱등 필터는 추후 common-web 도입 시)" 항목.
-- DOMAIN_MODEL.md 취소·환불 절의 잔여 서술("성공 완결 후 요청 재전송으로 인한 중복 취소 호출은 재고를 이중 복원한다. …재호출의 멱등은 HTTP 경계 책임으로 범위 밖")도 점검 대상이다 — HTTP 경계 방어가 이제 존재하므로, 필터의 보장 수준(같은 Idempotency-Key·TTL 창 내 재요청만 차단하는 best-effort이며 in-memory 단일 인스턴스 한정, 응답 재생 없음)을 정확히 반영해 서술을 조정한다. 과장 금지: 필터가 라인별 exactly-once를 만들지는 않는다.
-
-목표: 두 문서가 멱등 필터를 미래가 아닌 현재 능력으로 정확한 보장 수준과 함께 서술하고, 문서끼리 모순이 없다.
-
-작업 내용:
-1. REQUIREMENTS.md: "향후 확장"에서 해당 항목을 제거하고, 현재 능력으로서 적절한 절(비기능 요구사항의 정합성 부근 또는 제약·전제)에 현재형 한 줄로 옮긴다. in-memory 단일 인스턴스 한계는 제약·전제에 남긴다.
-2. DOMAIN_MODEL.md: "명시적 범위 밖"에서 해당 항목을 제거하고, 취소·환불 절의 잔여 서술을 필터 존재·보장 수준에 맞게 조정한다.
-3. 편집 규약(AGENTS.md) 준수: 현재 상태로 서술, 편집 이력 서술 금지, 한 규칙은 한 문서 소유(필터 메커니즘 상세는 코드/규칙 문서 몫 — 여기선 능력·보장 수준만).
-4. 그 외 문서-구현 불일치를 발견하면 고치지 말고 보고만 한다(외과적 수정).
-
-하지 말 것: 코드 변경, 멱등 저장소 개선(DB 저장소 등 — 별도 결정).
-
-완료 기준: 두 문서 diff가 위 범위에 한정되고, 서술이 실제 필터 동작(헤더 opt-in·unsafe 메서드·409·TTL 창·in-memory)과 일치한다.
-완료 후: 루트 todo.md의 10번 항목(문서 현행화(멱등 필터))을 체크([ ] → [x])로 갱신한다. 커밋 및 메인머지, 잔여브랜치 삭제
+완료 기준: 고정 시각 경계 테스트가 통과하고 ./gradlew build 게이트가 통과한다.
+완료 후: 루트 todo.md의 15번 항목(Clock 주입)을 체크([ ] → [x])로 갱신한다. 커밋 및 메인머지, 잔여브랜치 삭제
 ```
