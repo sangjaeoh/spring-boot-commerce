@@ -6,6 +6,7 @@ import com.commerce.order.entity.FulfillmentStatus;
 import com.commerce.order.entity.HoldReason;
 import com.commerce.order.entity.Order;
 import com.commerce.order.entity.OrderStatus;
+import com.commerce.order.entity.RefundReason;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -31,6 +32,8 @@ public record OrderInfo(
         @Nullable Instant cancelledAt,
         @Nullable CancellationReason cancellationReason,
         @Nullable HoldReason holdReason,
+        @Nullable Instant refundedAt,
+        @Nullable RefundReason refundReason,
         Instant createdAt,
         Instant updatedAt) {
 
@@ -58,6 +61,8 @@ public record OrderInfo(
                 order.getCancelledAt(),
                 order.getCancellationReason(),
                 order.getHoldReason(),
+                order.getRefundedAt(),
+                order.getRefundReason(),
                 order.getCreatedAt(),
                 order.getUpdatedAt());
     }

@@ -10,6 +10,7 @@ import com.commerce.api.facade.ProductRegistrationFacade;
 import com.commerce.api.presentation.v1.request.AddressRequest;
 import com.commerce.api.presentation.v1.request.CheckoutRequest;
 import com.commerce.api.presentation.v1.request.FulfillmentHoldRequest;
+import com.commerce.api.presentation.v1.request.OrderRefundRequest;
 import com.commerce.api.presentation.v1.response.CheckoutResponse;
 import com.commerce.api.presentation.v1.response.PaymentResponse;
 import com.commerce.cart.service.CartAppender;
@@ -24,6 +25,7 @@ import com.commerce.order.entity.FulfillmentStatus;
 import com.commerce.order.entity.HoldReason;
 import com.commerce.order.entity.OrderLineSnapshot;
 import com.commerce.order.entity.OrderStatus;
+import com.commerce.order.entity.RefundReason;
 import com.commerce.order.info.OrderInfo;
 import com.commerce.order.service.OrderAppender;
 import com.commerce.order.service.OrderModifier;
@@ -379,6 +381,77 @@ class OrderControllerTest extends WebIntegrationTest {
         UUID orderId = checkoutForMember(registerMember());
 
         mvc.perform(post("/api/v1/orders/{orderId}/fulfillment-hold", orderId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+    }
+
+    @Test
+    @DisplayName("배송 완료 주문의 관리자 환불은 204로 주문을 REFUNDED로 전이하고 환불 거래를 남긴다")
+    void adminRefundSucceedsForDeliveredOrder() throws Exception {
+        UUID memberId = registerMember();
+        UUID orderId = checkoutForMember(memberId);
+        orderModifier.ship(orderId);
+        orderModifier.confirmDelivery(orderId);
+
+        mvc.perform(post("/api/v1/orders/{orderId}/refund", orderId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new OrderRefundRequest(RefundReason.PRODUCT_DEFECT))))
+                .andExpect(status().isNoContent());
+
+        mvc.perform(get("/api/v1/orders/{orderId}", orderId).header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("REFUNDED"))
+                .andExpect(jsonPath("$.fulfillmentStatus").value("DELIVERED"))
+                .andExpect(jsonPath("$.refundedAt").exists())
+                .andExpect(jsonPath("$.refundReason").value("PRODUCT_DEFECT"));
+        mvc.perform(get("/api/v1/orders/{orderId}/payment", orderId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CANCELLED"))
+                .andExpect(jsonPath("$.pgCancelTransactionId").exists());
+    }
+
+    @Test
+    @DisplayName("구매자 토큰의 본인 주문 환불은 403 FORBIDDEN으로 거부되고 상태를 바꾸지 않는다")
+    void refundRejectsBuyerToken() throws Exception {
+        UUID memberId = registerMember();
+        UUID orderId = checkoutForMember(memberId);
+        orderModifier.ship(orderId);
+        orderModifier.confirmDelivery(orderId);
+
+        mvc.perform(post("/api/v1/orders/{orderId}/refund", orderId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new OrderRefundRequest(RefundReason.PRODUCT_DEFECT))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        assertThat(orderReader.getOrder(orderId, memberId).status()).isEqualTo(OrderStatus.PAID);
+    }
+
+    @Test
+    @DisplayName("배송 완료 전 주문의 관리자 환불은 409 API_ORDER_NOT_REFUNDABLE로 거부된다")
+    void refundRejectsUndeliveredOrderViaHttp() throws Exception {
+        UUID orderId = checkoutForMember(registerMember());
+
+        mvc.perform(post("/api/v1/orders/{orderId}/refund", orderId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new OrderRefundRequest(RefundReason.PRODUCT_DEFECT))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("API_ORDER_NOT_REFUNDABLE"));
+    }
+
+    @Test
+    @DisplayName("사유가 없는 환불 요청은 400 VALIDATION_FAILED로 거부된다")
+    void refundRejectsMissingReason() throws Exception {
+        UUID orderId = checkoutForMember(registerMember());
+
+        mvc.perform(post("/api/v1/orders/{orderId}/refund", orderId)
                         .header(HttpHeaders.AUTHORIZATION, adminBearer())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))

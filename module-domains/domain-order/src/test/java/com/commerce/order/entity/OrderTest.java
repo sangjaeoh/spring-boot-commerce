@@ -126,6 +126,53 @@ class OrderTest {
         assertThat(onHold.getStatus()).isEqualTo(OrderStatus.CANCELLED);
     }
 
+    private Order deliveredOrder() {
+        Order order = paidOrder();
+        order.ship();
+        order.confirmDelivery();
+        return order;
+    }
+
+    @Test
+    @DisplayName("배송 완료 주문을 환불하면 REFUNDED가 되고 이행 축은 DELIVERED로 남는다")
+    void refundDeliveredOrder() {
+        Order order = deliveredOrder();
+        order.refund(RefundReason.PRODUCT_DEFECT);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.REFUNDED);
+        assertThat(order.getFulfillmentStatus()).isEqualTo(FulfillmentStatus.DELIVERED);
+        assertThat(order.getRefundedAt()).isNotNull();
+        assertThat(order.getRefundReason()).isEqualTo(RefundReason.PRODUCT_DEFECT);
+    }
+
+    @Test
+    @DisplayName("배송 완료 전(준비·출고) 주문은 환불할 수 없다")
+    void refundRejectedBeforeDelivery() {
+        assertThatThrownBy(() -> paidOrder().refund(RefundReason.CHANGE_OF_MIND))
+                .isInstanceOf(OrderStatusException.class);
+
+        Order shipped = paidOrder();
+        shipped.ship();
+        assertThatThrownBy(() -> shipped.refund(RefundReason.CHANGE_OF_MIND)).isInstanceOf(OrderStatusException.class);
+    }
+
+    @Test
+    @DisplayName("취소된 주문은 환불할 수 없다")
+    void refundRejectedForCancelledOrder() {
+        Order order = paidOrder();
+        order.cancel(CancellationReason.CUSTOMER_REQUEST);
+        assertThatThrownBy(() -> order.refund(RefundReason.CHANGE_OF_MIND)).isInstanceOf(OrderStatusException.class);
+    }
+
+    @Test
+    @DisplayName("환불은 1회만 유효하고 환불된 주문은 취소도 할 수 없다")
+    void refundIsOneShotAndBlocksCancel() {
+        Order order = deliveredOrder();
+        order.refund(RefundReason.PRODUCT_DEFECT);
+        assertThatThrownBy(() -> order.refund(RefundReason.PRODUCT_DEFECT)).isInstanceOf(OrderStatusException.class);
+        assertThatThrownBy(() -> order.cancel(CancellationReason.ADMIN_ACTION))
+                .isInstanceOf(OrderStatusException.class);
+    }
+
     @Test
     @DisplayName("이행 전진은 결제 완료에서만 유효하다")
     void fulfillmentRequiresPaid() {
