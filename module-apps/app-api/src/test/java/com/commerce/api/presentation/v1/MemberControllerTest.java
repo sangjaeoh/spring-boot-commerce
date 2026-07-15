@@ -32,6 +32,7 @@ import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestConstructor;
 import org.springframework.test.web.servlet.MockMvc;
@@ -166,6 +167,26 @@ class MemberControllerTest extends WebIntegrationTest {
     }
 
     @Test
+    @DisplayName("본인 조회(/me)는 200으로 토큰 주체의 상세를 싣는다")
+    void getMeReturnsTokenSubjectDetail() throws Exception {
+        String email = "user-" + UUID.randomUUID() + "@example.com";
+        UUID memberId = memberAppender.register(email, "테스터", "password-123!");
+
+        mvc.perform(get("/api/v1/members/me").header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(memberId.toString()))
+                .andExpect(jsonPath("$.email").value(email));
+    }
+
+    @Test
+    @DisplayName("미인증 본인 조회(/me)는 401 UNAUTHENTICATED로 거부된다")
+    void getMeRejectsUnauthenticated() throws Exception {
+        mvc.perform(get("/api/v1/members/me"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+    }
+
+    @Test
     @DisplayName("정지 회원 상세는 SUSPENDED 상태·정지 사유를 싣는다")
     void getMemberIncludesSuspension() throws Exception {
         UUID memberId = registerMember();
@@ -210,8 +231,9 @@ class MemberControllerTest extends WebIntegrationTest {
         mvc.perform(post("/api/v1/members/{memberId}/suspend", memberId).param("reason", "PAYMENT_ABUSE"))
                 .andExpect(status().isNoContent());
 
-        AddCartItemRequest request = new AddCartItemRequest(memberId, variantId, 1);
+        AddCartItemRequest request = new AddCartItemRequest(variantId, 1);
         mvc.perform(post("/api/v1/carts/items")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isConflict())
@@ -225,7 +247,9 @@ class MemberControllerTest extends WebIntegrationTest {
         mvc.perform(post("/api/v1/members/{memberId}/suspend", memberId).param("reason", "CS_MANUAL"))
                 .andExpect(status().isNoContent());
 
-        mvc.perform(delete("/api/v1/members/{memberId}", memberId).param("reason", "NO_LONGER_USED"))
+        mvc.perform(delete("/api/v1/members/me")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
+                        .param("reason", "NO_LONGER_USED"))
                 .andExpect(status().isNoContent());
 
         assertThatThrownBy(() -> memberReader.getMember(memberId)).isInstanceOf(MemberNotFoundException.class);
@@ -242,13 +266,14 @@ class MemberControllerTest extends WebIntegrationTest {
     }
 
     @Test
-    @DisplayName("이름 변경이 204로 성공하고 이메일은 불변이다")
+    @DisplayName("본인 이름 변경이 204로 성공하고 이메일은 불변이다")
     void renameChangesNameOnly() throws Exception {
         String email = "user-" + UUID.randomUUID() + "@example.com";
         UUID memberId = memberAppender.register(email, "테스터", "password-123!");
 
         MemberRenameRequest request = new MemberRenameRequest("새이름");
-        mvc.perform(patch("/api/v1/members/{memberId}", memberId)
+        mvc.perform(patch("/api/v1/members/me")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isNoContent());
@@ -259,11 +284,13 @@ class MemberControllerTest extends WebIntegrationTest {
     }
 
     @Test
-    @DisplayName("탈퇴가 204로 성공하고 회원을 논리삭제한다")
+    @DisplayName("본인 탈퇴가 204로 성공하고 회원을 논리삭제한다")
     void withdrawSoftDeletesMember() throws Exception {
         UUID memberId = registerMember();
 
-        mvc.perform(delete("/api/v1/members/{memberId}", memberId).param("reason", "NO_LONGER_USED"))
+        mvc.perform(delete("/api/v1/members/me")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
+                        .param("reason", "NO_LONGER_USED"))
                 .andExpect(status().isNoContent());
 
         assertThatThrownBy(() -> memberReader.getMember(memberId)).isInstanceOf(MemberNotFoundException.class);
@@ -277,7 +304,9 @@ class MemberControllerTest extends WebIntegrationTest {
         cartAppender.addItem(memberId, variantId, 1);
         checkoutFacade.checkout(memberId, address(), Money.ZERO, null, PaymentMethod.CARD);
 
-        mvc.perform(delete("/api/v1/members/{memberId}", memberId).param("reason", "NO_LONGER_USED"))
+        mvc.perform(delete("/api/v1/members/me")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
+                        .param("reason", "NO_LONGER_USED"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("API_WITHDRAWAL_BLOCKED"));
 
@@ -295,7 +324,9 @@ class MemberControllerTest extends WebIntegrationTest {
         mvc.perform(post("/api/v1/orders/{orderId}/delivery-confirmation", orderId))
                 .andExpect(status().isNoContent());
 
-        mvc.perform(delete("/api/v1/members/{memberId}", memberId).param("reason", "NO_LONGER_USED"))
+        mvc.perform(delete("/api/v1/members/me")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
+                        .param("reason", "NO_LONGER_USED"))
                 .andExpect(status().isNoContent());
 
         assertThatThrownBy(() -> memberReader.getMember(memberId)).isInstanceOf(MemberNotFoundException.class);
@@ -306,7 +337,7 @@ class MemberControllerTest extends WebIntegrationTest {
     void withdrawRejectsMissingReason() throws Exception {
         UUID memberId = registerMember();
 
-        mvc.perform(delete("/api/v1/members/{memberId}", memberId))
+        mvc.perform(delete("/api/v1/members/me").header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
     }

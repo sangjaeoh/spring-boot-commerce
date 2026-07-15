@@ -54,4 +54,9 @@ public class TestWebController {
         return ResponseEntity.ok(
                 authUser == null ? "anonymous" : authUser.memberId().toString());
     }
+
+    @GetMapping("/test/principal")
+    public ResponseEntity<String> principal(AuthUser authUser) {
+        return ResponseEntity.ok(authUser.memberId().toString());
+    }
 }

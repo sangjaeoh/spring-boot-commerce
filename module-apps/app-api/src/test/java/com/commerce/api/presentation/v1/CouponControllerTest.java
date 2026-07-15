@@ -8,7 +8,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.commerce.api.facade.CheckoutFacade;
 import com.commerce.api.facade.ProductRegistrationFacade;
 import com.commerce.api.presentation.v1.request.CouponCreationRequest;
-import com.commerce.api.presentation.v1.request.CouponIssuanceRequest;
 import com.commerce.api.presentation.v1.request.DiscountRequest;
 import com.commerce.api.presentation.v1.response.CouponCreationResponse;
 import com.commerce.cart.service.CartAppender;
@@ -31,6 +30,7 @@ import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestConstructor;
 import org.springframework.test.web.servlet.MockMvc;
@@ -98,8 +98,7 @@ class CouponControllerTest extends WebIntegrationTest {
                 objectMapper.readValue(body, CouponCreationResponse.class).couponId());
         UUID memberId = registerMember();
         mvc.perform(post("/api/v1/coupons/{couponId}/issues", couponId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(new CouponIssuanceRequest(memberId))))
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.issuedCouponId").exists());
     }
@@ -193,17 +192,25 @@ class CouponControllerTest extends WebIntegrationTest {
     }
 
     @Test
-    @DisplayName("발급이 201로 발급분 ID를 반환한다")
+    @DisplayName("발급이 201로 토큰 주체에게 발급하고 발급분 ID를 반환한다")
     void issueReturnsIssuedCouponId() throws Exception {
         UUID memberId = registerMember();
         UUID couponId = createCoupon();
-        CouponIssuanceRequest request = new CouponIssuanceRequest(memberId);
 
         mvc.perform(post("/api/v1/coupons/{couponId}/issues", couponId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.issuedCouponId").exists());
+    }
+
+    @Test
+    @DisplayName("미인증 발급은 401 UNAUTHENTICATED로 거부된다")
+    void issueRejectsUnauthenticated() throws Exception {
+        UUID couponId = createCoupon();
+
+        mvc.perform(post("/api/v1/coupons/{couponId}/issues", couponId))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
     }
 
     @Test
@@ -212,11 +219,9 @@ class CouponControllerTest extends WebIntegrationTest {
         UUID memberId = registerMember();
         UUID couponId = createCoupon();
         memberModifier.suspend(memberId, SuspensionReason.POLICY_VIOLATION);
-        CouponIssuanceRequest request = new CouponIssuanceRequest(memberId);
 
         mvc.perform(post("/api/v1/coupons/{couponId}/issues", couponId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("API_MEMBER_NOT_ELIGIBLE"));
     }
@@ -226,17 +231,13 @@ class CouponControllerTest extends WebIntegrationTest {
     void issueRejectsDuplicate() throws Exception {
         UUID memberId = registerMember();
         UUID couponId = createCoupon();
-        CouponIssuanceRequest request = new CouponIssuanceRequest(memberId);
-        String json = objectMapper.writeValueAsString(request);
 
         mvc.perform(post("/api/v1/coupons/{couponId}/issues", couponId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(json))
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
                 .andExpect(status().isCreated());
 
         mvc.perform(post("/api/v1/coupons/{couponId}/issues", couponId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(json))
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("COUPON_DUPLICATE_ISSUANCE"));
     }
@@ -250,8 +251,7 @@ class CouponControllerTest extends WebIntegrationTest {
         mvc.perform(post("/api/v1/coupons/{couponId}/disable", couponId)).andExpect(status().isNoContent());
 
         mvc.perform(post("/api/v1/coupons/{couponId}/issues", couponId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(new CouponIssuanceRequest(memberId))))
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("COUPON_DISABLED"));
     }
@@ -284,8 +284,7 @@ class CouponControllerTest extends WebIntegrationTest {
         mvc.perform(post("/api/v1/coupons/{couponId}/enable", couponId)).andExpect(status().isNoContent());
 
         mvc.perform(post("/api/v1/coupons/{couponId}/issues", couponId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(new CouponIssuanceRequest(memberId))))
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.issuedCouponId").exists());
     }

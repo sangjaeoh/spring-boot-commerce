@@ -14,6 +14,7 @@ import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpHeaders;
 import org.springframework.test.context.TestConstructor;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -43,7 +44,8 @@ class IssuedCouponControllerTest extends WebIntegrationTest {
         UUID couponId = createCoupon();
         UUID issuedId = issuedCouponAppender.issue(couponId, ownerId);
 
-        mvc.perform(get("/api/v1/issued-coupons/{issuedCouponId}", issuedId).param("memberId", ownerId.toString()))
+        mvc.perform(get("/api/v1/issued-coupons/{issuedCouponId}", issuedId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(ownerId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(issuedId.toString()))
                 .andExpect(jsonPath("$.status").value("ISSUED"));
@@ -57,13 +59,22 @@ class IssuedCouponControllerTest extends WebIntegrationTest {
         UUID couponId = createCoupon();
         UUID issuedId = issuedCouponAppender.issue(couponId, ownerId);
 
-        mvc.perform(get("/api/v1/issued-coupons/{issuedCouponId}", issuedId).param("memberId", otherId.toString()))
+        mvc.perform(get("/api/v1/issued-coupons/{issuedCouponId}", issuedId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(otherId)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("ISSUED_COUPON_NOT_FOUND"));
     }
 
     @Test
-    @DisplayName("발급 쿠폰 목록 조회는 본인 발급분만 최신순으로 싣는다")
+    @DisplayName("미인증 발급 쿠폰 목록 조회는 401 UNAUTHENTICATED로 거부된다")
+    void getIssuedCouponsRejectsUnauthenticated() throws Exception {
+        mvc.perform(get("/api/v1/issued-coupons"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+    }
+
+    @Test
+    @DisplayName("발급 쿠폰 목록 조회는 토큰 주체의 발급분만 최신순으로 싣는다")
     void getIssuedCouponsReturnsOnlyOwnCouponsNewestFirst() throws Exception {
         UUID ownerId = registerMember();
         UUID otherId = registerMember();
@@ -71,7 +82,7 @@ class IssuedCouponControllerTest extends WebIntegrationTest {
         UUID secondIssuedId = issuedCouponAppender.issue(createCoupon(), ownerId);
         issuedCouponAppender.issue(createCoupon(), otherId);
 
-        mvc.perform(get("/api/v1/issued-coupons").param("memberId", ownerId.toString()))
+        mvc.perform(get("/api/v1/issued-coupons").header(HttpHeaders.AUTHORIZATION, bearer(ownerId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(2))
                 .andExpect(jsonPath("$[0].id").value(secondIssuedId.toString()))

@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <p>자격증명 검증은 회원 도메인에 위임하고 검증된 주체(회원 ID)로 JWT 액세스 토큰을 발급한다. 검증 실패
  * (미존재·탈퇴·패스워드 불일치)는 도메인이 던지는 예외를 전역 핸들러가 401 problem+json으로 매핑한다.
- * 발급된 토큰의 엔드포인트 강제는 이 API의 범위 밖이다(REQUIREMENTS.md 인증).
+ * 발급된 토큰의 엔드포인트 강제는 토큰 검증 필터와 인증 주체 리졸버가 담당한다(REQUIREMENTS.md 인증).
  */
 @RestController
 @RequestMapping("/api/v1/auth")
