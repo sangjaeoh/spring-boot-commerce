@@ -82,8 +82,7 @@ class NormalizedOptionsTest {
     @Test
     @DisplayName("전각 구분자 우회로 서로 다른 옵션 조합이 같은 시그니처로 충돌하지 않는다")
     void distinctOptionsDoNotCollideViaFullwidthSeparators() {
-        NormalizedOptions two =
-                NormalizedOptions.of(List.of(new ProductOption("a", "1"), new ProductOption("b", "2")));
+        NormalizedOptions two = NormalizedOptions.of(List.of(new ProductOption("a", "1"), new ProductOption("b", "2")));
         assertThat(two.signature()).isEqualTo("a:1;b:2");
         // 한 옵션에 전각 구분자를 심어 "a:1;b:2"를 위조하려는 입력은 거부돼 충돌 자체가 성립하지 않는다
         assertThatThrownBy(() -> NormalizedOptions.of(List.of(new ProductOption("a", "1；b：2"))))
