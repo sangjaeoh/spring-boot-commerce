@@ -29,6 +29,9 @@ abstract class WebIntegrationTest {
 
     protected static final String ADMIN_PASSWORD = "admin-password-123!";
 
+    /** PG 웹훅 서명에 쓰는 공유 시크릿. */
+    protected static final String WEBHOOK_SECRET = "test-webhook-secret";
+
     private static @Nullable UUID seededAdminId;
 
     @Autowired
@@ -45,6 +48,7 @@ abstract class WebIntegrationTest {
         registry.add("auth.jwt.secret", () -> "test-secret-key-of-at-least-32-bytes!!");
         registry.add("auth.admin.email", () -> ADMIN_EMAIL);
         registry.add("auth.admin.password", () -> ADMIN_PASSWORD);
+        registry.add("payment.webhook.secret", () -> WEBHOOK_SECRET);
     }
 
     /** 회원을 주체로 실은 구매자 {@code Authorization} 헤더 값(Bearer 토큰)을 만든다. */

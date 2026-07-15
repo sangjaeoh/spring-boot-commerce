@@ -1,11 +1,13 @@
 package com.commerce.payment.service;
 
+import com.commerce.payment.entity.FailureReason;
 import com.commerce.payment.entity.Payment;
 import com.commerce.payment.entity.PaymentStatus;
 import com.commerce.payment.exception.PaymentErrorCode;
 import com.commerce.payment.exception.PaymentNotFoundException;
 import com.commerce.payment.exception.PaymentStatusException;
 import com.commerce.payment.info.PaymentInfo;
+import com.commerce.payment.port.GatewayTransactionStatus;
 import com.commerce.payment.port.PaymentApproval;
 import com.commerce.payment.port.PaymentGateway;
 import com.commerce.payment.repository.PaymentRepository;
@@ -18,11 +20,12 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * 결제 승인·취소를 조율한다. PG 호출은 포트에 위임한다.
+ * 결제 승인·취소·확정 기록을 조율한다. PG 호출은 포트에 위임한다.
  *
  * <p>승인·취소 모두 PG 호출을 트랜잭션 밖에서 내고 결과 영속만 좁힌다. 승인은 영속 실패 시 고아 청구를 환불로
  * 역보상한다(청구가 환불 없이 고아로 남지 않게). 취소는 환불이 비가역이라 역보상 대신 멱등 키로 재시도 이중
- * 환불을 막는다.
+ * 환불을 막는다. 응답 유실로 요청 상태에 머문 결제는 확정 기록({@code confirm*})이 PG 재청구 없이 상태 조회
+ * 결과만 반영한다.
  */
 @Service
 public class PaymentProcessor {
@@ -54,7 +57,8 @@ public class PaymentProcessor {
         if (!payment.requiresGatewayApproval()) {
             return inTransaction(() -> recordAutoApproval(paymentId));
         }
-        PaymentApproval approval = paymentGateway.approve(payment.getAmount(), payment.requireMethod());
+        PaymentApproval approval =
+                paymentGateway.approve(payment.getId(), payment.getAmount(), payment.requireMethod());
         try {
             return inTransaction(() -> recordApproval(paymentId, approval));
         } catch (RuntimeException persistFailure) {
@@ -91,6 +95,35 @@ public class PaymentProcessor {
         }
         String pgCancelTransactionId = paymentGateway.cancel(pgTransactionId, refundIdempotencyKey(pgTransactionId));
         inTransaction(() -> recordCancellation(paymentId, pgCancelTransactionId));
+    }
+
+    /**
+     * 결제의 PG 거래 상태를 조회한다. 응답 유실로 요청 상태에 머문 결제를 리컨실·웹훅 확정 경로가 확정할 때
+     * 근거로 쓴다. PG 호출이므로 호출자는 트랜잭션 밖에서 부른다.
+     *
+     * @throws PaymentNotFoundException 결제가 없으면
+     */
+    public GatewayTransactionStatus inquireGateway(UUID paymentId) {
+        find(paymentId);
+        return paymentGateway.inquire(paymentId);
+    }
+
+    /**
+     * PG 상태 조회로 확정된 승인을 기록한다. PG를 재청구하지 않고 결과만 반영한다.
+     *
+     * @throws PaymentStatusException 요청 상태가 아니면
+     */
+    public PaymentInfo confirmApproval(UUID paymentId, String pgTransactionId) {
+        return inTransaction(() -> recordApproval(paymentId, PaymentApproval.approved(pgTransactionId)));
+    }
+
+    /**
+     * PG 상태 조회로 확정된 실패(거절·청구 미도달)를 기록한다.
+     *
+     * @throws PaymentStatusException 요청 상태가 아니면
+     */
+    public PaymentInfo confirmFailure(UUID paymentId, FailureReason failureReason) {
+        return inTransaction(() -> recordApproval(paymentId, PaymentApproval.declined(failureReason)));
     }
 
     private PaymentInfo recordAutoApproval(UUID paymentId) {

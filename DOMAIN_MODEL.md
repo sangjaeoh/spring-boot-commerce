@@ -8,7 +8,7 @@
 
 범위는 7개 도메인: 회원(member) · 상품(product) · 재고(stock) · 장바구니(cart) · 쿠폰(coupon) · 주문(order) · 결제(payment).
 
-기준선(이 문서의 전제): 결제 게이트웨이는 동기 stub, 도메인 이벤트 transport는 in-process(무손실 보장 아님), 인증은 이메일+패스워드 로그인·JWT 액세스 토큰 발급·구매자 셀프서비스의 토큰 주체 강제·역할(BUYER/ADMIN) 기반 관리자 오퍼레이션 가드까지(경계는 [`REQUIREMENTS.md`](./REQUIREMENTS.md)).
+기준선(이 문서의 전제): 결제 게이트웨이는 실패·응답 유실을 시뮬레이션하는 동기 승인 fake이고 응답 유실 결제는 리컨실·웹훅 확정 경로가 PG 거래 상태 조회로 확정한다, 도메인 이벤트 transport는 in-process(무손실 보장 아님), 인증은 이메일+패스워드 로그인·JWT 액세스 토큰 발급·구매자 셀프서비스의 토큰 주체 강제·역할(BUYER/ADMIN) 기반 관리자 오퍼레이션 가드까지(경계는 [`REQUIREMENTS.md`](./REQUIREMENTS.md)).
 
 ## 공통 규약
 
@@ -521,7 +521,7 @@
 
 - 애그리거트 루트: `Payment`
 - 스키마/테이블: `payment` / `payment`
-- 포트: `PaymentGateway`(approve·cancel). 구현은 외부 어댑터(연습용 stub).
+- 포트: `PaymentGateway`(approve·cancel·inquire[거래 상태 조회]). 구현은 외부 어댑터(실패·응답 유실을 트리거 금액으로 시뮬레이션하는 연습용 fake). approve가 가맹점 참조(결제 ID)를 실어 inquire의 조회 키가 된다 — 응답 유실 시 호출자는 PG 거래 ID를 모른다.
 
 ### 필드
 
@@ -559,8 +559,9 @@
 - 승인: `PaymentGateway.approve` 성공 시 APPROVED + pgTransactionId, 실패 시 FAILED + `failureReason`(`INSUFFICIENT_BALANCE`·`LIMIT_EXCEEDED`·`INVALID_METHOD`·`RISK_DECLINED`·`GATEWAY_ERROR`). `payAmount == 0`(전액 할인)이면 PG를 호출하지 않고 APPROVED로 자동 처리한다(pgTransactionId 없음). 체크아웃 파사드가 동기 반환된 사유로 보상·안내를 분기한다.
 - 취소·환불(cancel): APPROVED에서만 CANCELLED로. `PaymentGateway.cancel` 호출 시 취소 거래 ID를 `pgCancelTransactionId`에 저장한다(승인 ID `pgTransactionId`와 분리 — 정산·CS 대사). 단 `pgTransactionId == null`(PG 미호출 승인)이면 환불 호출을 생략하고 상태만 CANCELLED로 둔다.
 - 멱등: 이미 결제된 주문(APPROVED)에 재요청은 상태 가드로 거부. 결제 실패로 주문이 취소되면 재체크아웃은 새 주문(새 orderId)을 만든다 — 실패 결제 행은 새 주문을 막지 않는다.
+- 리컨실 확정(confirmApproval·confirmFailure): 응답 유실로 REQUESTED에 남은 결제를 PG 재청구 없이 상태 조회(inquire) 결과로만 기록한다. 승인 확정은 APPROVED + pgTransactionId, 거절 확정은 FAILED + 사유, 청구 미도달(NOT_FOUND)은 돈이 움직이지 않았으므로 FAILED(`GATEWAY_ERROR`)로 확정한다. 확정 대상 선별·주문측 조율(결제완료·보상·고아 청구 환불)은 크로스 도메인 정책이 소유한다.
 - 결제 수단: 승인/실패가 동기 확정되는 수단만(`CARD`·`EASY_PAY`·`BANK_TRANSFER`). 불변식 `amount > 0 ⇔ method != null` — `amount == 0`(전액 할인) 결제는 실 지불 수단이 없으므로 `method` 없이 PG 생략 자동 승인하고 가짜 `CARD`를 채우지 않는다. 가상계좌 등 입금 대기·비동기 통지 수단은 범위 밖(실 PG·웹훅 기준선 밖). 수단별 부가 데이터(할부·provider)는 단일 상세 컬럼으로 겸용하지 않는다.
-- 도메인 이벤트 없음. 결제 결과는 동기 stub이 호출자(체크아웃 파사드)에게 즉시 반환하므로, 승인/실패 반영은 파사드가 동기로 처리한다(크로스 도메인 정책 참조).
+- 도메인 이벤트 없음. 결제 결과는 동기 승인 PG가 호출자(체크아웃 파사드)에게 즉시 반환하므로, 승인/실패 반영은 파사드가 동기로 처리한다. 응답이 유실된 잔여만 리컨실 확정 경로가 닫는다(크로스 도메인 정책 참조).
 
 ### 오퍼레이션
 
@@ -569,12 +570,15 @@
 | request | orderId, amount, method? | orderId 유니크, amount = 주문 payAmount, `amount>0 ⇔ method≠null`, 최초 REQUESTED | 주문당 결제 중복 |
 | approve | paymentId | REQUESTED→APPROVED(+pgTransactionId·`approvedAt`) 또는 FAILED(+failureReason); `payAmount == 0`이면 PG 생략 자동 승인 | 미존재; 잘못된 전이 |
 | cancel | paymentId | APPROVED→CANCELLED(+`cancelledAt`); PG 환불 시 `pgCancelTransactionId` 세팅; `pgTransactionId == null`이면 PG 생략 | 미존재; 잘못된 전이 |
+| inquireGateway | paymentId | PG 거래 상태 조회(포트 위임). 결제 상태 무변경 | 미존재 |
+| confirmApproval | paymentId, pgTransactionId | REQUESTED→APPROVED(+`approvedAt`). PG 재청구 없음 | 미존재; 잘못된 전이 |
+| confirmFailure | paymentId, failureReason | REQUESTED→FAILED(+failureReason). PG 재청구 없음 | 미존재; 잘못된 전이 |
 
 포트 `PaymentGateway`(approve·cancel)는 도메인이 소유하고 구현은 외부 어댑터다. 반환 형상·거부의 예외 매핑·서비스 역할 배치·네이밍은 `docs/coding-conventions.md`가 소유.
 
 ## 크로스 도메인 정책 (체크아웃·취소)
 
-여러 도메인을 잇는 흐름의 정책이다. 조율은 앱 계층(파사드)이 하고, 각 도메인 서비스는 자기 트랜잭션만 소유한다(파사드는 트랜잭션을 열지 않는다). 결제가 동기 stub이라 결과를 파사드가 즉시 알므로, 핵심 정합은 파사드의 동기 조율 + 실패 시 동기 보상으로 처리하고, 유실돼도 무해한 후처리(장바구니 비우기) 하나만 도메인 이벤트로 뺀다.
+여러 도메인을 잇는 흐름의 정책이다. 조율은 앱 계층(파사드)이 하고, 각 도메인 서비스는 자기 트랜잭션만 소유한다(파사드는 트랜잭션을 열지 않는다). 결제 승인이 동기 확정이라 결과를 파사드가 즉시 알므로, 핵심 정합은 파사드의 동기 조율 + 실패 시 동기 보상으로 처리하고, 유실돼도 무해한 후처리(장바구니 비우기) 하나만 도메인 이벤트로 뺀다. 동기 경로가 결과를 기록하지 못한 잔여(응답 유실·프로세스 중단)는 미확정 결제 리컨실이 닫는다.
 
 ### 체크아웃 (주문 생성 → 결제)
 
@@ -603,6 +607,22 @@
 - 복원 순서는 멱등 단계(쿠폰 복원, USED 아니면 no-op)를 비멱등 가산 단계(재고 복원) 앞에 둔다. 단일 라인 주문의 예외-재시도는 재고를 정확히 한 번 복원한다(재고가 종단 단계라 완료된 복원이 후속 실패로 재복원되지 않는다).
 - 환원 불가능한 잔여: 다중 라인 주문의 재고 복원 루프 중간 실패는 재시도가 이미 복원된 라인을 가산 재복원한다. 성공 완결 후 요청 재전송으로 인한 중복 취소 호출은 재고를 이중 복원한다 — 재호출의 멱등은 HTTP 경계 책임이며, 멱등 필터가 같은 `Idempotency-Key`의 TTL 창 내 재요청을 409로 거부해 이 창을 좁히지만 헤더 opt-in·in-memory 단일 인스턴스의 best-effort 방어라 창 밖·다른 키·헤더 없는 재호출은 막지 못한다. durable한 라인별 복원 진행 비트가 없어(주문 PAID/CANCELLED가 유일 신호) 라인별 exactly-once는 불변식 안에서 도달 불가다.
 
+### 미확정 결제 리컨실·웹훅 확정
+
+응답 유실·프로세스 중단으로 REQUESTED에 남은 결제를 확정하는 흐름(파사드, 주기 스윕·웹훅 공용):
+
+- 대상 선별: 생성 후 유예(`payment.reconciliation.stale-after`)가 지나도록 REQUESTED인 결제. 유예가 동기 체크아웃과의 경합을 차단한다 — 유예 내 결제는 체크아웃 스레드가 단독 소유하고, 확정 경로(스윕·웹훅 모두)는 손대지 않는다.
+- 확정 근거는 항상 PG 거래 상태 조회(inquire)다. 웹훅 페이로드는 결제를 지목하는 트리거일 뿐 결과를 신뢰하지 않는다 — 서명(공유 시크릿 HMAC-SHA256)을 통과한 위조 페이로드도 상태를 왜곡하지 못한다.
+- 분기는 PG 거래 × 주문 상태의 함수다.
+  - 승인 거래 × 주문 PENDING → 주문 결제완료(`markPaid`) 후 결제 승인 확정 기록. 응답 유실 전 크래시로 멈춘 체크아웃의 완결이다.
+  - 승인 거래 × 주문 PAID → 결제 기록만 마저 한다(이전 확정이 결제완료 후 중단된 잔여의 자기 복구).
+  - 승인 거래 × 주문 CANCELLED → 주문은 동기 보상으로 이미 취소·복원됐고 지연 승인 청구만 고아로 남았다. 승인 기록 후 즉시 환불(`cancel`)한다.
+  - 거절 거래 → 보상(주문 취소 → 쿠폰 복원 → 재고 복원) 후 결제 실패 확정(거절 사유).
+  - 거래 미도달(NOT_FOUND) → 청구가 PG에 닿지 않아 돈이 움직이지 않았다. 거절과 같은 보상 후 실패 확정(`GATEWAY_ERROR`).
+- 멱등: 이미 종결(비REQUESTED)된 결제는 조용히 통과한다 — 반복 스윕·중복 웹훅 전달이 무해하다. 보상의 복원은 주문 취소의 1회성 전이 뒤에만 태워 반복 실행이 이중 복원하지 않고, 주문측 효과는 상태 가드로 재실행을 건너뛴다.
+- 결제 상태 기록을 주문측 효과 뒤 마지막에 둔다. 중간에 중단돼도 결제가 REQUESTED로 남아 다음 스윕이 같은 분기를 재실행한다(자기 복구). 취소 전이 커밋과 복원 사이 중단의 복원 유실은 취소·환불 흐름과 같은 잔여 한계다(무손실 복구 범위 밖).
+- 스윕은 결제 단위로 실패를 격리한다 — 한 결제의 확정 실패는 로그만 남기고 남은 대상을 계속 처리하며 다음 스윕이 재시도한다.
+
 ### 상품 등록 → 첫 변형·재고 시딩
 
 상품 등록과 첫 변형·초기 재고 생성을 잇는 흐름(파사드, 동기):
@@ -623,7 +643,7 @@
 
 ### 정합·보장 수준
 
-- 결제 이후 핵심 상태(PAID/CANCELLED)는 파사드가 동기로 확정하므로 "결제됐는데 PENDING" 같은 창이 없다.
+- 결제 이후 핵심 상태(PAID/CANCELLED)는 파사드가 동기로 확정하므로 동기 경로엔 "결제됐는데 PENDING" 같은 창이 없다. 동기 경로가 기록하지 못한 잔여(응답 유실·중단)는 리컨실이 유예 + 스윕 주기 안에 PG 상태 조회로 수렴시킨다.
 - in-process 이벤트(`OrderPaid`)는 커밋 후 발행하되 무손실 보장이 아니다. 리스너는 멱등하고, 유실 시 장바구니가 남는 것 외 영향이 없다.
 - 복원 정확성: 모든 재고·쿠폰 복원은 주문의 1회성 `PENDING·PAID → CANCELLED` 전이가 게이트한다. `restore`는 가산·교환법칙이라 낙관락 충돌 시 재시도해도 안전하지만 멱등은 아니므로(커밋된 복원을 재전달하면 이중 가산), 이 전이 가드가 정확히-1회 복원을 보장한다.
 - 크로스 트랜잭션 부분 실패(예: 보상 도중 프로세스 크래시)의 무손실 복구는 범위 밖이다. 낙관락 충돌 재시도 수렴(가산·재시도 안전)과 크래시 리플레이 멱등(제공 안 함)은 구분된다.
@@ -688,7 +708,7 @@
 - 장바구니: 회원당 1개(lazy get-or-create), 동일 변형 재담기 수량 합산(cart_id·variant_id 유니크), 담기·증량 게이트(회원 자격 활성 ∧ 변형 ACTIVE ∧ 상품 ON_SALE·미삭제)·감량/제거 무게이트, 선택 제거 `removeItems`·전체 `clear`, 총액 비저장(체크아웃 시 변형 현재가), 결제 완료 시 주문된 변형 라인만 제거(`OrderPaid` 소비).
 - 쿠폰: 할인은 `Discount` 값 객체(판별형 Fixed/Rate 단일 VO, 알고리즘·불변식 내재), `ValidityPeriod`는 발급 가능 기간, 발급분 사용 기한은 `IssuedCoupon.expiresAt`(발급시각 + `usageValidDays`)로 발급창과 분리, 정책 상태 ACTIVE↔DISABLED(`disable`/`enable`)로 발급 가능·중지, 발급은 ACTIVE·발급기간·회원당 1회, 사용은 주문 생성 이후 확정(정책 status 재검사 없음 — 발급분 자격만), 산출 할인 0이면 적용 거부, 만료는 `expiresAt` 판정(EXPIRED 상태 없음), 취소 시 복원.
 - 주문: 라인(variantId·productId·productName·optionLabel·unitPrice)·배송지 스냅샷, `orderNumber`, 결제 축 status와 별도 이행 축 `fulfillmentStatus{NOT_STARTED→PREPARING→SHIPPED→DELIVERED, PREPARING↔ON_HOLD}`(`ship`/`confirmDelivery`/`holdFulfillment`/`releaseFulfillment`, markPaid가 PREPARING 전이, 이행 전진은 status=PAID에서만 — 취소 주문 출고 불가), 보류 사유 `holdReason`, 출고 후 취소 금지, `paidAt`·`cancelledAt`·`cancellationReason` 시각·사유, 배송비 `shippingFee`(payAmount = total−discount+shippingFee), 불변식 `issuedCouponId ⟺ discountAmount>0`, totalAmount 자기 계산·discountAmount ≤ totalAmount 자기 강제, 할인·payAmount 서버 계산, 취소는 PENDING·PAID 모두(보상은 소스 상태 함수).
-- 결제: `@Version` 없음, 주문당 1행, `PaymentMethod{CARD, EASY_PAY, BANK_TRANSFER}`(동기 수단, `amount>0 ⇔ method≠null`), FAILED 사유 `failureReason`, 승인·취소 거래 ID 분리(`pgTransactionId`/`pgCancelTransactionId`), 업무 시각 `approvedAt`/`cancelledAt`, 0원은 PG 생략 자동 승인, 도메인 이벤트 없음.
+- 결제: `@Version` 없음, 주문당 1행, `PaymentMethod{CARD, EASY_PAY, BANK_TRANSFER}`(동기 수단, `amount>0 ⇔ method≠null`), FAILED 사유 `failureReason`, 승인·취소 거래 ID 분리(`pgTransactionId`/`pgCancelTransactionId`), 업무 시각 `approvedAt`/`cancelledAt`, 0원은 PG 생략 자동 승인, 도메인 이벤트 없음. 응답 유실로 REQUESTED에 남은 결제는 유예 후 리컨실·웹훅 확정 경로가 PG 상태 조회(가맹점 참조 키)로 확정한다.
 - 정합: 핵심은 파사드 동기 조율 + 동기 보상, 주문 PENDING을 사가 앵커로 먼저 생성(order-first), 유일 이벤트는 `OrderPaid → 장바구니 비우기`.
 - 표기: 각 도메인에 오퍼레이션 카탈로그(연산·입력·강제 불변식·거부[도메인 표현])를 두고, 반환 형상·ErrorCode·HTTP status·동시성 메커니즘은 `docs/`가 소유(참조).
 - Money: `common-core` 순수 값 타입, 컨버터는 `common-jpa` 단일. 배송지 `Address`는 `@Embeddable`.
@@ -702,11 +722,11 @@
 - 회원 주소록(배송지는 체크아웃 요청이 매번 제공).
 - 소셜 로그인·리프레시 토큰·비밀번호 재설정·이메일 인증(인증은 이메일+패스워드 로그인·JWT 액세스 토큰 발급까지 범위 내).
 - 세분화된 퍼미션·권한 매트릭스 — 역할은 BUYER/ADMIN 이분법이고 토큰은 주체(회원 ID)·역할 클레임을 싣는다. 역할 변경 오퍼레이션도 범위 밖(관리자는 시딩으로만 생성).
-- 실 PG·비동기 웹훅과 그에 따른 PENDING 리컨실·아웃박스(내구성 메시징).
+- 실 PG 연동(fake PG 어댑터 교체)·아웃박스(내구성 메시징). 웹훅 확정·PENDING 리컨실은 fake PG 기준으로 범위에 들어왔다.
 - 쿠폰 선착순 발급 한도.
 - 발급된 쿠폰의 회수·관리자 무효화(정책 DISABLED는 신규 발급만 막고 기발급분은 계속 사용 가능).
 - 상품변형 옵션의 구조 정규화: 옵션을 별도 엔티티·상품 단위 옵션 타입 스키마·글로벌 옵션 카탈로그·파셋 검색으로 두는 것(현재는 optionSignature·optionLabel 평탄 저장). 변형 간 옵션 타입 정합도 강제하지 않는다.
 - 상품 대표가·가격대 집계 읽기모델과 그 최적화(대표가는 ACTIVE 변형에서 파생하는 조회다).
 - 상품당 총재고 집계(변형 재고 합산 — admin/read-model).
 - 상인용 SKU 코드(`orderNumber` 같은 업무 식별자) — 변형 식별은 variantId로 충분하다.
-- 동시 "PENDING 주문 취소" 경로(최소 흐름의 주문 상태 전이는 체크아웃 스레드가 단독 소유). 동시 취소 경로 도입 시 필요한 동시성 제어는 `docs/entity-persistence.md`가 소유한다.
+- 사용자 개시 "PENDING 주문 취소" 경로. 주문 상태 전이는 유예(stale-after) 내엔 체크아웃 스레드가, 유예 후엔 리컨실 확정 경로가 시간 분할로 소유한다. 동시 취소 경로 도입 시 필요한 동시성 제어는 `docs/entity-persistence.md`가 소유한다.

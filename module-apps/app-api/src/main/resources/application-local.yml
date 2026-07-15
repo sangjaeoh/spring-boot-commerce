@@ -9,3 +9,8 @@ auth:
   jwt:
     # 로컬 전용 개발 키. 운영 키는 환경변수(AUTH_JWT_SECRET)로만 주입한다.
     secret: ${AUTH_JWT_SECRET:local-dev-only-secret-key-32bytes-min!}
+
+payment:
+  webhook:
+    # 로컬 전용 개발 시크릿. 운영 시크릿은 환경변수(PAYMENT_WEBHOOK_SECRET)로만 주입한다.
+    secret: ${PAYMENT_WEBHOOK_SECRET:local-dev-only-webhook-secret}
