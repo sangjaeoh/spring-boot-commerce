@@ -70,10 +70,17 @@ public class PaymentProcessor {
      * 실패하면 재시도가 같은 멱등 키로 환불을 재호출하고 PG가 이를 멱등 처리해 이중 환불을 막는다 — 환불은
      * 비가역이라 승인의 고아 청구와 달리 역보상할 수 없다. 호출자는 이 메서드를 트랜잭션 밖에서 부른다.
      *
-     * @throws PaymentStatusException 승인 상태가 아니면
+     * <p>이미 취소된 결제는 관용하고 조용히 반환한다. 취소 후 다운스트림(주문 취소·복원)이 실패해 재시도되는
+     * 경로에서 이미-환불·CANCELLED 결제를 '환불 완료'로 통과시켜 복원을 완결한다. 이 반환이 아래 PG 환불 호출
+     * 앞이라 재시도가 PG를 재호출하지 않아 환불이 최대 한 번만 일어난다.
+     *
+     * @throws PaymentStatusException 승인·취소 상태가 아니면
      */
     public void cancel(UUID paymentId) {
         Payment payment = find(paymentId);
+        if (payment.getStatus() == PaymentStatus.CANCELLED) {
+            return;
+        }
         if (payment.getStatus() != PaymentStatus.APPROVED) {
             throw new PaymentStatusException(PaymentErrorCode.INVALID_PAYMENT_STATE_TRANSITION);
         }
