@@ -11,3 +11,12 @@ auth:
     # HS256 대칭 서명 키(32바이트 이상). 기본값 없이 환경변수로만 주입한다(REQUIREMENTS.md 제약·전제).
     secret: ${AUTH_JWT_SECRET}
     access-token-ttl: 1h
+
+payment:
+  reconciliation:
+    # 생성 후 이 유예가 지나도록 REQUESTED인 결제만 리컨실·웹훅 확정 대상이다(동기 체크아웃과의 경합 차단).
+    stale-after: 10m
+    fixed-delay: 1m
+  webhook:
+    # PG와 공유하는 HMAC-SHA256 서명 시크릿. 기본값 없이 환경변수로만 주입한다(JWT 키와 동일 규약).
+    secret: ${PAYMENT_WEBHOOK_SECRET}
