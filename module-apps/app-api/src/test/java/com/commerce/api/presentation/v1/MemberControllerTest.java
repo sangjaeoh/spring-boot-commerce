@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -11,7 +12,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.commerce.api.facade.CheckoutFacade;
 import com.commerce.api.facade.ProductRegistrationFacade;
+import com.commerce.api.presentation.v1.request.AddCartItemRequest;
 import com.commerce.api.presentation.v1.request.MemberRegistrationRequest;
+import com.commerce.api.presentation.v1.request.MemberRenameRequest;
 import com.commerce.api.presentation.v1.response.MemberRegistrationResponse;
 import com.commerce.cart.service.CartAppender;
 import com.commerce.core.money.Money;
@@ -167,6 +170,79 @@ class MemberControllerTest extends WebIntegrationTest {
         mvc.perform(get("/api/v1/members/{memberId}", UUID.randomUUID()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("MEMBER_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("정지 후 해제 왕복이 사유를 기록했다가 지운다")
+    void suspendAndReinstateRoundTrip() throws Exception {
+        UUID memberId = registerMember();
+
+        mvc.perform(post("/api/v1/members/{memberId}/suspend", memberId).param("reason", "FRAUD_SUSPECTED"))
+                .andExpect(status().isNoContent());
+        MemberInfo suspended = memberReader.getMember(memberId);
+        assertThat(suspended.status()).isEqualTo(MemberStatus.SUSPENDED);
+        assertThat(suspended.suspensionReason()).isEqualTo(SuspensionReason.FRAUD_SUSPECTED);
+
+        mvc.perform(post("/api/v1/members/{memberId}/reinstate", memberId)).andExpect(status().isNoContent());
+        MemberInfo reinstated = memberReader.getMember(memberId);
+        assertThat(reinstated.status()).isEqualTo(MemberStatus.ACTIVE);
+        assertThat(reinstated.suspensionReason()).isNull();
+    }
+
+    @Test
+    @DisplayName("정지 회원 담기는 409 API_MEMBER_NOT_ELIGIBLE로 거부된다")
+    void suspendedMemberCannotAddCartItem() throws Exception {
+        UUID memberId = registerMember();
+        UUID variantId = seedProduct(50);
+        mvc.perform(post("/api/v1/members/{memberId}/suspend", memberId).param("reason", "PAYMENT_ABUSE"))
+                .andExpect(status().isNoContent());
+
+        AddCartItemRequest request = new AddCartItemRequest(memberId, variantId, 1);
+        mvc.perform(post("/api/v1/carts/items")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("API_MEMBER_NOT_ELIGIBLE"));
+    }
+
+    @Test
+    @DisplayName("정지 회원도 탈퇴가 204로 성공한다")
+    void suspendedMemberCanWithdraw() throws Exception {
+        UUID memberId = registerMember();
+        mvc.perform(post("/api/v1/members/{memberId}/suspend", memberId).param("reason", "CS_MANUAL"))
+                .andExpect(status().isNoContent());
+
+        mvc.perform(delete("/api/v1/members/{memberId}", memberId).param("reason", "NO_LONGER_USED"))
+                .andExpect(status().isNoContent());
+
+        assertThatThrownBy(() -> memberReader.getMember(memberId)).isInstanceOf(MemberNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("활성 회원 해제는 409 MEMBER_INVALID_STATUS_TRANSITION으로 거부된다")
+    void reinstateRejectsActiveMember() throws Exception {
+        UUID memberId = registerMember();
+
+        mvc.perform(post("/api/v1/members/{memberId}/reinstate", memberId))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("MEMBER_INVALID_STATUS_TRANSITION"));
+    }
+
+    @Test
+    @DisplayName("이름 변경이 204로 성공하고 이메일은 불변이다")
+    void renameChangesNameOnly() throws Exception {
+        String email = "user-" + UUID.randomUUID() + "@example.com";
+        UUID memberId = memberAppender.register(email, "테스터");
+
+        MemberRenameRequest request = new MemberRenameRequest("새이름");
+        mvc.perform(patch("/api/v1/members/{memberId}", memberId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isNoContent());
+
+        MemberInfo member = memberReader.getMember(memberId);
+        assertThat(member.name()).isEqualTo("새이름");
+        assertThat(member.email()).isEqualTo(email);
     }
 
     @Test
