@@ -23,6 +23,7 @@ import com.commerce.order.service.OrderModifier;
 import com.commerce.order.service.OrderReader;
 import com.commerce.payment.entity.PaymentMethod;
 import com.commerce.product.service.ProductVariantReader;
+import com.commerce.stock.service.StockReader;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -36,6 +37,8 @@ import tools.jackson.databind.ObjectMapper;
 @TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 class OrderControllerTest extends WebIntegrationTest {
 
+    private static final String KEY_HEADER = "Idempotency-Key";
+
     private final MockMvc mvc;
     private final ObjectMapper objectMapper;
     private final MemberAppender memberAppender;
@@ -46,6 +49,7 @@ class OrderControllerTest extends WebIntegrationTest {
     private final IssuedCouponAppender issuedCouponAppender;
     private final OrderReader orderReader;
     private final OrderModifier orderModifier;
+    private final StockReader stockReader;
 
     OrderControllerTest(
             MockMvc mvc,
@@ -57,7 +61,8 @@ class OrderControllerTest extends WebIntegrationTest {
             CouponAppender couponAppender,
             IssuedCouponAppender issuedCouponAppender,
             OrderReader orderReader,
-            OrderModifier orderModifier) {
+            OrderModifier orderModifier,
+            StockReader stockReader) {
         this.mvc = mvc;
         this.objectMapper = objectMapper;
         this.memberAppender = memberAppender;
@@ -68,6 +73,7 @@ class OrderControllerTest extends WebIntegrationTest {
         this.issuedCouponAppender = issuedCouponAppender;
         this.orderReader = orderReader;
         this.orderModifier = orderModifier;
+        this.stockReader = stockReader;
     }
 
     @Test
@@ -149,6 +155,50 @@ class OrderControllerTest extends WebIntegrationTest {
     }
 
     @Test
+    @DisplayName("같은 Idempotency-Key로 취소를 재요청하면 409로 거부되고 재고를 이중 복원하지 않는다")
+    void duplicateKeyedCancelIsRejectedAndDoesNotDoubleRestore() throws Exception {
+        UUID memberId = registerMember();
+        UUID variantId = seedProduct(50);
+        cartAppender.addItem(memberId, variantId, 3);
+        UUID orderId = checkout(new CheckoutRequest(memberId, addressRequest(), 0L, null, PaymentMethod.CARD));
+        String key = UUID.randomUUID().toString();
+
+        mvc.perform(post("/api/v1/orders/{orderId}/cancel", orderId).header(KEY_HEADER, key))
+                .andExpect(status().isNoContent());
+        mvc.perform(post("/api/v1/orders/{orderId}/cancel", orderId).header(KEY_HEADER, key))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("DUPLICATE_REQUEST"));
+
+        assertThat(orderReader.getOrder(orderId).status()).isEqualTo(OrderStatus.CANCELLED);
+        assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(50);
+    }
+
+    @Test
+    @DisplayName("같은 Idempotency-Key로 체크아웃을 재요청하면 409로 거부되고 주문을 이중 생성하지 않는다")
+    void duplicateKeyedCheckoutIsRejectedAndDoesNotCreateSecondOrder() throws Exception {
+        UUID memberId = registerMember();
+        cartAppender.addItem(memberId, seedProduct(50), 2);
+        CheckoutRequest request = new CheckoutRequest(memberId, addressRequest(), 0L, null, PaymentMethod.CARD);
+        String key = UUID.randomUUID().toString();
+
+        mvc.perform(post("/api/v1/orders")
+                        .header(KEY_HEADER, key)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated());
+        mvc.perform(post("/api/v1/orders")
+                        .header(KEY_HEADER, key)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("DUPLICATE_REQUEST"));
+
+        mvc.perform(get("/api/v1/orders").param("memberId", memberId.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1));
+    }
+
+    @Test
     @DisplayName("주문 상세 조회는 200으로 결제 축·이행 축 상태와 결제 시각을 싣는다")
     void getOrderReturnsDetailWithPaidTimeline() throws Exception {
         UUID orderId = checkoutViaHttp();
@@ -227,6 +277,18 @@ class OrderControllerTest extends WebIntegrationTest {
         cartAppender.addItem(memberId, variantId, 1);
         CheckoutRequest request = new CheckoutRequest(memberId, addressRequest(), 0L, null, PaymentMethod.CARD);
 
+        String body = mvc.perform(post("/api/v1/orders")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        return UUID.fromString(
+                objectMapper.readValue(body, CheckoutResponse.class).orderId());
+    }
+
+    private UUID checkout(CheckoutRequest request) throws Exception {
         String body = mvc.perform(post("/api/v1/orders")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
