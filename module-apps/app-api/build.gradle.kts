@@ -22,15 +22,17 @@ dependencies {
     implementation(libs.spring.boot.starter.data.jpa)
     implementation(libs.spring.boot.starter.actuator)
 
-    // 스테레오타입 빈만 조립한다(코드 참조 없음): 결제 어댑터·in-process 발행 transport·JDBC 드라이버.
+    // 스테레오타입 빈만 조립한다(코드 참조 없음): 결제 어댑터·in-process 발행 transport·멱등 키 저장소·JDBC 드라이버.
     runtimeOnly(project(":module-external:external-payment"))
     runtimeOnly(project(":module-infra:infra-messaging"))
+    runtimeOnly(project(":module-infra:infra-redis"))
     runtimeOnly(libs.postgresql)
 
     testImplementation(libs.spring.boot.starter.test)
     testImplementation(libs.spring.boot.starter.webmvc.test)
     testImplementation(libs.archunit.junit5)
     testImplementation(libs.testcontainers.postgresql)
+    testImplementation(libs.testcontainers.redis)
     testImplementation(libs.testcontainers.junit.jupiter)
     testImplementation(libs.flyway.core)
     testImplementation(libs.flyway.database.postgresql)

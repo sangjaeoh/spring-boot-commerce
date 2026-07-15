@@ -1,6 +1,7 @@
 package com.commerce.api.presentation.v1;
 
 import com.commerce.api.SharedPostgresContainer;
+import com.commerce.api.SharedRedisContainer;
 import com.commerce.auth.token.AuthRole;
 import com.commerce.auth.token.JwtTokenCodec;
 import com.commerce.member.service.MemberCredentialValidator;
@@ -45,6 +46,8 @@ abstract class WebIntegrationTest {
         registry.add("spring.datasource.url", SharedPostgresContainer.INSTANCE::getJdbcUrl);
         registry.add("spring.datasource.username", SharedPostgresContainer.INSTANCE::getUsername);
         registry.add("spring.datasource.password", SharedPostgresContainer.INSTANCE::getPassword);
+        registry.add("spring.data.redis.host", SharedRedisContainer.INSTANCE::getRedisHost);
+        registry.add("spring.data.redis.port", SharedRedisContainer.INSTANCE::getRedisPort);
         registry.add("auth.jwt.secret", () -> "test-secret-key-of-at-least-32-bytes!!");
         registry.add("auth.admin.email", () -> ADMIN_EMAIL);
         registry.add("auth.admin.password", () -> ADMIN_PASSWORD);

@@ -1,6 +1,6 @@
-# 기본(프로필 없음)은 로컬 실행용 PostgreSQL만 띄운다. DB·계정·포트는 app-api/app-migration의
-# local 프로필과 일치한다. 호스트 포트는 개발자 로컬의 기존 PostgreSQL(5432)과 충돌하지 않도록
-# 55432를 쓴다.
+# 기본(프로필 없음)은 로컬 실행용 PostgreSQL·Redis를 띄운다. DB·계정·포트는 app-api/app-migration의
+# local 프로필과 일치한다. 호스트 포트는 개발자 로컬의 기존 PostgreSQL(5432)·Redis(6379)와 충돌하지
+# 않도록 55432·56379를 쓴다.
 # --profile full은 앱 이미지를 빌드해 postgres → migration(원샷) → api 순서로 풀스택을 띄운다.
 # 컨테이너 안에서는 호스트 포트가 아닌 서비스명(postgres:5432)으로 접속하므로 local 프로필 대신
 # datasource를 환경변수로 주입한다.
@@ -16,6 +16,19 @@ services:
       - "55432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U commerce -d commerce"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+
+  redis:
+    image: redis:8.2-alpine
+    container_name: commerce-redis
+    # 멱등 키의 재시작 내구성을 위해 AOF를 켠다 — 기본 RDB 스냅숏만으로는 재시작 시 키가 소실된다.
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "56379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
       interval: 2s
       timeout: 2s
       retries: 15
@@ -43,12 +56,15 @@ services:
     depends_on:
       migration:
         condition: service_completed_successfully
+      redis:
+        condition: service_healthy
     ports:
       - "8080:8080"
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/commerce
       SPRING_DATASOURCE_USERNAME: commerce
       SPRING_DATASOURCE_PASSWORD: commerce
+      SPRING_DATA_REDIS_HOST: redis
       # 로컬 전용 개발 시크릿·관리자 시딩 계정 — application-local.yml의 기본값과 같은 값이다. 운영은 별도 주입.
       AUTH_JWT_SECRET: local-dev-only-secret-key-32bytes-min!
       PAYMENT_WEBHOOK_SECRET: local-dev-only-webhook-secret
