@@ -37,6 +37,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.TestConstructor;
 
 /**
@@ -181,7 +182,10 @@ class PaymentReconciliationTest extends FacadeIntegrationTest {
         cartAppender.addItem(memberId, variantId, 2);
         assertThatThrownBy(() -> checkoutFacade.checkout(memberId, address(), Money.ZERO, null, PaymentMethod.CARD))
                 .isInstanceOf(RuntimeException.class);
-        OrderInfo order = orderReader.getOrdersByMember(memberId).get(0);
+        OrderInfo order = orderReader
+                .getOrdersByMember(memberId, PageRequest.of(0, 1))
+                .getContent()
+                .get(0);
         assertThat(order.status()).isEqualTo(OrderStatus.CANCELLED);
         assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(50);
 

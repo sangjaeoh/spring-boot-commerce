@@ -12,6 +12,8 @@ import com.commerce.order.info.OrderInfo;
 import com.commerce.order.service.OrderAppender;
 import com.commerce.order.service.OrderModifier;
 import com.commerce.order.service.OrderReader;
+import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -25,6 +27,8 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.TestConstructor;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -69,10 +73,14 @@ class OrderPersistenceTest {
     }
 
     private UUID place() {
+        return place(UUID.randomUUID());
+    }
+
+    private UUID place(UUID memberId) {
         List<OrderLineSnapshot> lines = List.of(
                 new OrderLineSnapshot(UUID.randomUUID(), UUID.randomUUID(), "티셔츠", "Red / L", Money.of(10000L), 2));
         Address address = Address.of("홍길동", "04524", "서울특별시 중구 세종대로 110", "3층", "010-1234-5678");
-        return orderAppender.place(UUID.randomUUID(), lines, address, Money.ZERO, Money.of(3000L), null);
+        return orderAppender.place(memberId, lines, address, Money.ZERO, Money.of(3000L), null);
     }
 
     @Test
@@ -110,6 +118,27 @@ class OrderPersistenceTest {
         OrderInfo order = orderReader.getOrder(orderId);
         assertThat(order.status()).isEqualTo(OrderStatus.PAID);
         assertThat(order.fulfillmentStatus()).isEqualTo(FulfillmentStatus.DELIVERED);
+    }
+
+    @Test
+    @DisplayName("같은 생성 시각의 주문 목록 페이지는 id 내림차순 타이브레이커로 결정적 순서를 갖는다")
+    void getOrdersByMemberBreaksCreatedAtTieWithIdDesc() {
+        UUID memberId = UUID.randomUUID();
+        List<UUID> orderIds = List.of(place(memberId), place(memberId), place(memberId));
+        em.flush();
+        em.getEntityManager()
+                .createNativeQuery("update ordering.orders set created_at = :t where member_id = :memberId")
+                .setParameter("t", Instant.parse("2026-01-01T00:00:00Z"))
+                .setParameter("memberId", memberId)
+                .executeUpdate();
+        em.clear();
+
+        Page<OrderInfo> page = orderReader.getOrdersByMember(memberId, PageRequest.of(0, 10));
+
+        List<UUID> expected =
+                orderIds.stream().sorted(Comparator.<UUID>reverseOrder()).toList();
+        assertThat(page.getContent()).extracting(OrderInfo::id).containsExactlyElementsOf(expected);
+        assertThat(page.getTotalElements()).isEqualTo(3);
     }
 
     @TestConfiguration

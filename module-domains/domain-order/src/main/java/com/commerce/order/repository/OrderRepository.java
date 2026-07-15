@@ -3,11 +3,16 @@ package com.commerce.order.repository;
 import com.commerce.order.entity.FulfillmentStatus;
 import com.commerce.order.entity.Order;
 import com.commerce.order.entity.OrderStatus;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface OrderRepository extends JpaRepository<Order, UUID> {
 
@@ -16,6 +21,14 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
     boolean existsByMemberIdAndStatusAndFulfillmentStatusNot(
             UUID memberId, OrderStatus status, FulfillmentStatus fulfillmentStatus);
 
+    @Query("""
+            select o.id
+            from Order o
+            where o.memberId = :memberId
+            order by o.createdAt desc, o.id desc
+            """)
+    Page<UUID> findIdPageByMemberId(@Param("memberId") UUID memberId, Pageable pageable);
+
     @EntityGraph(attributePaths = "lines")
-    List<Order> findByMemberIdOrderByCreatedAtDescIdDesc(UUID memberId);
+    List<Order> findByIdInOrderByCreatedAtDescIdDesc(Collection<UUID> ids);
 }
