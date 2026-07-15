@@ -3,7 +3,8 @@ package com.commerce.web.exception;
 import com.commerce.core.exception.ErrorCode;
 
 public enum WebErrorCode implements ErrorCode {
-    UNAUTHENTICATED("UNAUTHENTICATED", "인증이 필요하다.", 401);
+    UNAUTHENTICATED("UNAUTHENTICATED", "인증이 필요하다.", 401),
+    FORBIDDEN("FORBIDDEN", "권한이 없다.", 403);
 
     private final String code;
     private final String message;

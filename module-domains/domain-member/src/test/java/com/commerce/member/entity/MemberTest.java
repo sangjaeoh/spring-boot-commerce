@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 class MemberTest {
 
     private Member activeMember() {
-        return Member.create(Email.of("user@example.com"), "홍길동", "{hashed}password");
+        return Member.create(Email.of("user@example.com"), "홍길동", "{hashed}password", MemberRole.BUYER);
     }
 
     @Test
@@ -21,6 +21,14 @@ class MemberTest {
         assertThat(member.getSuspensionReason()).isNull();
         assertThat(member.getDeletedAt()).isNull();
         assertThat(member.getId()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("생성 시 받은 역할을 보존한다")
+    void createKeepsGivenRole() {
+        Member admin = Member.create(Email.of("admin@example.com"), "관리자", "{hashed}password", MemberRole.ADMIN);
+        assertThat(activeMember().getRole()).isEqualTo(MemberRole.BUYER);
+        assertThat(admin.getRole()).isEqualTo(MemberRole.ADMIN);
     }
 
     @Test

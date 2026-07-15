@@ -23,14 +23,14 @@ class JwtTokenCodecTest {
     private final JwtTokenCodec codec = new JwtTokenCodec(SECRET, Duration.ofHours(1));
 
     @Test
-    @DisplayName("발급한 토큰을 검증하면 주체가 왕복한다")
-    void issueThenVerifyRoundTripsSubject() {
+    @DisplayName("발급한 토큰을 검증하면 주체·역할이 왕복한다")
+    void issueThenVerifyRoundTripsSubjectAndRole() {
         UUID subject = UUID.randomUUID();
 
-        String token = codec.issue(subject);
+        String token = codec.issue(subject, AuthRole.ADMIN);
 
         assertThat(token.split("\\.")).hasSize(3);
-        assertThat(codec.verify(token)).contains(subject);
+        assertThat(codec.verify(token)).contains(new TokenClaims(subject, AuthRole.ADMIN));
     }
 
     @Test
@@ -38,7 +38,7 @@ class JwtTokenCodecTest {
     void verifyRejectsTokenSignedWithDifferentKey() {
         JwtTokenCodec other = new JwtTokenCodec("another-secret-key-of-32-bytes-min!!!!", Duration.ofHours(1));
 
-        String token = other.issue(UUID.randomUUID());
+        String token = other.issue(UUID.randomUUID(), AuthRole.BUYER);
 
         assertThat(codec.verify(token)).isEmpty();
     }
@@ -49,6 +49,7 @@ class JwtTokenCodecTest {
         Instant past = Instant.now().minus(Duration.ofMinutes(5));
         JWTClaimsSet claims = new JWTClaimsSet.Builder()
                 .subject(UUID.randomUUID().toString())
+                .claim("role", AuthRole.BUYER.name())
                 .issueTime(Date.from(past.minus(Duration.ofMinutes(1))))
                 .expirationTime(Date.from(past))
                 .build();
@@ -59,9 +60,40 @@ class JwtTokenCodecTest {
     }
 
     @Test
+    @DisplayName("역할 클레임이 없는 토큰은 검증에 실패한다")
+    void verifyRejectsTokenWithoutRoleClaim() throws Exception {
+        Instant now = Instant.now();
+        JWTClaimsSet claims = new JWTClaimsSet.Builder()
+                .subject(UUID.randomUUID().toString())
+                .issueTime(Date.from(now))
+                .expirationTime(Date.from(now.plus(Duration.ofHours(1))))
+                .build();
+        SignedJWT roleless = new SignedJWT(new JWSHeader(JWSAlgorithm.HS256), claims);
+        roleless.sign(new MACSigner(SECRET.getBytes(StandardCharsets.UTF_8)));
+
+        assertThat(codec.verify(roleless.serialize())).isEmpty();
+    }
+
+    @Test
+    @DisplayName("정의되지 않은 역할 값을 실은 토큰은 검증에 실패한다")
+    void verifyRejectsUnknownRoleValue() throws Exception {
+        Instant now = Instant.now();
+        JWTClaimsSet claims = new JWTClaimsSet.Builder()
+                .subject(UUID.randomUUID().toString())
+                .claim("role", "SUPERUSER")
+                .issueTime(Date.from(now))
+                .expirationTime(Date.from(now.plus(Duration.ofHours(1))))
+                .build();
+        SignedJWT unknownRole = new SignedJWT(new JWSHeader(JWSAlgorithm.HS256), claims);
+        unknownRole.sign(new MACSigner(SECRET.getBytes(StandardCharsets.UTF_8)));
+
+        assertThat(codec.verify(unknownRole.serialize())).isEmpty();
+    }
+
+    @Test
     @DisplayName("변조된 토큰은 검증에 실패한다")
     void verifyRejectsTamperedToken() {
-        String token = codec.issue(UUID.randomUUID());
+        String token = codec.issue(UUID.randomUUID(), AuthRole.BUYER);
         String tampered = token.substring(0, token.length() - 2) + "xx";
 
         assertThat(codec.verify(tampered)).isEmpty();

@@ -8,7 +8,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.commerce.api.presentation.v1.request.LoginRequest;
 import com.commerce.api.presentation.v1.response.LoginResponse;
+import com.commerce.auth.token.AuthRole;
 import com.commerce.auth.token.JwtTokenCodec;
+import com.commerce.auth.token.TokenClaims;
 import com.commerce.member.entity.SuspensionReason;
 import com.commerce.member.entity.WithdrawalReason;
 import com.commerce.member.service.MemberAppender;
@@ -50,7 +52,7 @@ class AuthControllerTest extends WebIntegrationTest {
     }
 
     @Test
-    @DisplayName("가입한 자격증명으로 로그인하면 회원 ID를 주체로 실은 Bearer 액세스 토큰이 발급된다")
+    @DisplayName("가입한 자격증명으로 로그인하면 회원 ID를 주체로, BUYER를 역할로 실은 Bearer 액세스 토큰이 발급된다")
     void loginIssuesTokenWithMemberIdSubject() throws Exception {
         String email = "user-" + UUID.randomUUID() + "@example.com";
         UUID memberId = memberAppender.register(email, "테스터", PASSWORD);
@@ -67,7 +69,7 @@ class AuthControllerTest extends WebIntegrationTest {
 
         String accessToken = objectMapper.readValue(body, LoginResponse.class).accessToken();
         assertThat(accessToken.split("\\.")).hasSize(3);
-        assertThat(jwtTokenCodec.verify(accessToken)).contains(memberId);
+        assertThat(jwtTokenCodec.verify(accessToken)).contains(new TokenClaims(memberId, AuthRole.BUYER));
     }
 
     @Test

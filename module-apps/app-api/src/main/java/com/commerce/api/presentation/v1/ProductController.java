@@ -13,6 +13,7 @@ import com.commerce.api.presentation.v1.response.VariantRegistrationResponse;
 import com.commerce.core.money.Money;
 import com.commerce.product.service.ProductModifier;
 import com.commerce.product.service.ProductRemover;
+import com.commerce.web.auth.AdminOnly;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import java.util.UUID;
@@ -32,7 +33,8 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 상품 등록·추가 변형 등록·목록·상세 조회·관리(노출·숨김·편집·논리삭제) 엔드포인트다.
  *
- * <p>등록·추가 변형 등록은 상품 등록 파사드에 얇게 위임한다(변형·초기 재고를 순차 시딩). 목록·상세 조회는
+ * <p>등록·추가 변형 등록은 상품 등록 파사드에 얇게 위임한다(변형·초기 재고를 순차 시딩). 등록·관리는
+ * 관리자 표면이라 관리자 토큰만 허용하고({@link AdminOnly}), 목록·상세 조회는 공개다(비로그인 쇼핑). 조회는
  * 각 파사드에 위임해 ACTIVE 변형·재고 파생(주문가능·품절·대표가)을 합성하고, 컨트롤러는 요청·결과를 DTO로 변환만 한다.
  * 관리는 단일 도메인 쓰기라 파사드 없이 상품 도메인 Modifier·Remover에 얇게 위임하고, 미존재·허용되지 않은 전이는
  * 도메인이 던지는 예외를 전역 핸들러가 problem+json으로 매핑한다. 편집은 기존 주문 스냅샷에 영향을 주지 않고,
@@ -62,6 +64,7 @@ public class ProductController {
     }
 
     /** 상품·첫 변형·초기 재고를 시딩하고 등록된 상품 ID를 반환한다. */
+    @AdminOnly
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ProductRegistrationResponse register(@Valid @RequestBody ProductRegistrationRequest request) {
@@ -75,6 +78,7 @@ public class ProductController {
     }
 
     /** 기존 상품에 변형·재고를 시딩하고 등록된 변형 ID를 반환한다. */
+    @AdminOnly
     @PostMapping("/{productId}/variants")
     @ResponseStatus(HttpStatus.CREATED)
     public VariantRegistrationResponse addVariant(
@@ -98,6 +102,7 @@ public class ProductController {
     }
 
     /** 상품을 노출한다. */
+    @AdminOnly
     @PostMapping("/{productId}/show")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void show(@PathVariable UUID productId) {
@@ -105,6 +110,7 @@ public class ProductController {
     }
 
     /** 상품을 숨긴다. */
+    @AdminOnly
     @PostMapping("/{productId}/hide")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void hide(@PathVariable UUID productId) {
@@ -112,6 +118,7 @@ public class ProductController {
     }
 
     /** 상품명·상세 설명을 바꾼다. */
+    @AdminOnly
     @PatchMapping("/{productId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void edit(@PathVariable UUID productId, @Valid @RequestBody ProductEditRequest request) {
@@ -120,6 +127,7 @@ public class ProductController {
     }
 
     /** 상품을 논리삭제한다. */
+    @AdminOnly
     @DeleteMapping("/{productId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable UUID productId) {

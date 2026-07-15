@@ -1,6 +1,7 @@
 package com.commerce.member.info;
 
 import com.commerce.member.entity.Member;
+import com.commerce.member.entity.MemberRole;
 import com.commerce.member.entity.MemberStatus;
 import com.commerce.member.entity.SuspensionReason;
 import java.time.Instant;
@@ -16,6 +17,7 @@ public record MemberInfo(
         UUID id,
         String email,
         String name,
+        MemberRole role,
         MemberStatus status,
         @Nullable SuspensionReason suspensionReason,
         Instant createdAt,
@@ -26,6 +28,7 @@ public record MemberInfo(
                 member.getId(),
                 member.getEmail().value(),
                 member.getName(),
+                member.getRole(),
                 member.getStatus(),
                 member.getSuspensionReason(),
                 member.getCreatedAt(),

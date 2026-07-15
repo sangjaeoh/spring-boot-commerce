@@ -72,6 +72,7 @@ class ProductControllerTest extends WebIntegrationTest {
                 new ProductRegistrationRequest("티셔츠", "면 100%", 10000L, List.of(new OptionRequest("색상", "빨강")), 50);
 
         String body = mvc.perform(post("/api/v1/products")
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
@@ -92,6 +93,7 @@ class ProductControllerTest extends WebIntegrationTest {
         ProductRegistrationRequest request = new ProductRegistrationRequest("  ", null, 10000L, List.of(), 50);
 
         mvc.perform(post("/api/v1/products")
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
@@ -105,6 +107,7 @@ class ProductControllerTest extends WebIntegrationTest {
                 {"name":"모자","price":5000,"options":[null],"initialQuantity":10}""";
 
         mvc.perform(post("/api/v1/products")
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json))
                 .andExpect(status().isBadRequest())
@@ -213,6 +216,7 @@ class ProductControllerTest extends WebIntegrationTest {
         VariantRegistrationRequest duplicate =
                 new VariantRegistrationRequest(13000L, List.of(new OptionRequest("색상", "파랑")), 1);
         mvc.perform(post("/api/v1/products/{productId}/variants", productId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(duplicate)))
                 .andExpect(status().isConflict())
@@ -224,7 +228,8 @@ class ProductControllerTest extends WebIntegrationTest {
     void addVariantAllowsRetiredCombinationAgain() throws Exception {
         UUID productId = registerProductViaHttp("재등록셔츠", 10000L, 5);
         UUID variantId = addVariantViaHttp(productId, 12000L, List.of(new OptionRequest("색상", "파랑")), 3);
-        mvc.perform(post("/api/v1/product-variants/{variantId}/retire", variantId))
+        mvc.perform(post("/api/v1/product-variants/{variantId}/retire", variantId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
                 .andExpect(status().isNoContent());
 
         UUID reRegistered = addVariantViaHttp(productId, 15000L, List.of(new OptionRequest("색상", "파랑")), 2);
@@ -238,6 +243,7 @@ class ProductControllerTest extends WebIntegrationTest {
         VariantRegistrationRequest request = new VariantRegistrationRequest(10000L, List.of(), 1);
 
         mvc.perform(post("/api/v1/products/{productId}/variants", UUID.randomUUID())
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isNotFound())
@@ -250,6 +256,7 @@ class ProductControllerTest extends WebIntegrationTest {
         UUID productId = registerProductViaHttp("검증셔츠", 10000L, 5);
 
         mvc.perform(post("/api/v1/products/{productId}/variants", productId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"price\":0,\"options\":[],\"initialQuantity\":1}"))
                 .andExpect(status().isBadRequest())
@@ -261,10 +268,14 @@ class ProductControllerTest extends WebIntegrationTest {
     void hideAndShowRoundTrip() throws Exception {
         UUID productId = registerProductViaHttp("전환셔츠", 10000L, 5);
 
-        mvc.perform(post("/api/v1/products/{productId}/hide", productId)).andExpect(status().isNoContent());
+        mvc.perform(post("/api/v1/products/{productId}/hide", productId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
+                .andExpect(status().isNoContent());
         assertThat(productReader.getProduct(productId).status()).isEqualTo(ProductStatus.HIDDEN);
 
-        mvc.perform(post("/api/v1/products/{productId}/show", productId)).andExpect(status().isNoContent());
+        mvc.perform(post("/api/v1/products/{productId}/show", productId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
+                .andExpect(status().isNoContent());
         assertThat(productReader.getProduct(productId).status()).isEqualTo(ProductStatus.ON_SALE);
     }
 
@@ -273,12 +284,16 @@ class ProductControllerTest extends WebIntegrationTest {
     void showAndHideRejectInvalidTransition() throws Exception {
         UUID productId = registerProductViaHttp("전이거부셔츠", 10000L, 5);
 
-        mvc.perform(post("/api/v1/products/{productId}/show", productId))
+        mvc.perform(post("/api/v1/products/{productId}/show", productId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("PRODUCT_INVALID_STATE_TRANSITION"));
 
-        mvc.perform(post("/api/v1/products/{productId}/hide", productId)).andExpect(status().isNoContent());
-        mvc.perform(post("/api/v1/products/{productId}/hide", productId))
+        mvc.perform(post("/api/v1/products/{productId}/hide", productId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
+                .andExpect(status().isNoContent());
+        mvc.perform(post("/api/v1/products/{productId}/hide", productId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("PRODUCT_INVALID_STATE_TRANSITION"));
     }
@@ -291,7 +306,9 @@ class ProductControllerTest extends WebIntegrationTest {
         UUID memberId = memberAppender.register("user-" + UUID.randomUUID() + "@example.com", "테스터", "password-123!");
         cartAppender.addItem(memberId, variantId, 1);
 
-        mvc.perform(post("/api/v1/products/{productId}/hide", productId)).andExpect(status().isNoContent());
+        mvc.perform(post("/api/v1/products/{productId}/hide", productId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
+                .andExpect(status().isNoContent());
 
         CheckoutRequest request = new CheckoutRequest(addressRequest(), 0L, null, PaymentMethod.CARD);
         mvc.perform(post("/api/v1/orders")
@@ -313,6 +330,7 @@ class ProductControllerTest extends WebIntegrationTest {
 
         ProductEditRequest edit = new ProductEditRequest("바뀐셔츠", "새 설명");
         mvc.perform(patch("/api/v1/products/{productId}", productId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(edit)))
                 .andExpect(status().isNoContent());
@@ -328,11 +346,35 @@ class ProductControllerTest extends WebIntegrationTest {
     void deleteRemovesProductFromDetail() throws Exception {
         UUID productId = registerProductViaHttp("삭제셔츠", 10000L, 5);
 
-        mvc.perform(delete("/api/v1/products/{productId}", productId)).andExpect(status().isNoContent());
+        mvc.perform(delete("/api/v1/products/{productId}", productId).header(HttpHeaders.AUTHORIZATION, adminBearer()))
+                .andExpect(status().isNoContent());
 
         mvc.perform(get("/api/v1/products/{productId}", productId))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("PRODUCT_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("구매자 토큰의 상품 등록은 403 FORBIDDEN으로 거부된다")
+    void registerRejectsBuyerToken() throws Exception {
+        UUID buyerId = memberAppender.register("user-" + UUID.randomUUID() + "@example.com", "테스터", "password-123!");
+        ProductRegistrationRequest request = new ProductRegistrationRequest("셔츠", null, 10000L, List.of(), 5);
+
+        mvc.perform(post("/api/v1/products")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(buyerId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    @DisplayName("카탈로그 목록·상세 조회는 무인증으로 접근된다(공개 표면)")
+    void catalogIsPublicWithoutAuthentication() throws Exception {
+        UUID productId = registerProductViaHttp("공개셔츠", 10000L, 5);
+
+        mvc.perform(get("/api/v1/products")).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/products/{productId}", productId)).andExpect(status().isOk());
     }
 
     private UUID checkoutViaHttp(UUID memberId) throws Exception {
@@ -353,6 +395,7 @@ class ProductControllerTest extends WebIntegrationTest {
         ProductRegistrationRequest request =
                 new ProductRegistrationRequest(name, null, price, List.of(), initialQuantity);
         String body = mvc.perform(post("/api/v1/products")
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
@@ -367,6 +410,7 @@ class ProductControllerTest extends WebIntegrationTest {
             throws Exception {
         VariantRegistrationRequest request = new VariantRegistrationRequest(price, options, initialQuantity);
         String body = mvc.perform(post("/api/v1/products/{productId}/variants", productId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
@@ -390,12 +434,14 @@ class ProductControllerTest extends WebIntegrationTest {
         String key = "product-" + UUID.randomUUID();
 
         mvc.perform(post("/api/v1/products")
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
                         .header(KEY_HEADER, key)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json))
                 .andExpect(status().isCreated());
 
         mvc.perform(post("/api/v1/products")
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
                         .header(KEY_HEADER, key)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json))

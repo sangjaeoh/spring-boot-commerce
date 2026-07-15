@@ -1,5 +1,6 @@
 package com.commerce.web.support;
 
+import com.commerce.web.auth.AdminOnly;
 import com.commerce.web.auth.AuthUser;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
@@ -58,5 +59,11 @@ public class TestWebController {
     @GetMapping("/test/principal")
     public ResponseEntity<String> principal(AuthUser authUser) {
         return ResponseEntity.ok(authUser.memberId().toString());
+    }
+
+    @AdminOnly
+    @GetMapping("/test/admin")
+    public ResponseEntity<String> admin() {
+        return ResponseEntity.ok("admin-ok");
     }
 }

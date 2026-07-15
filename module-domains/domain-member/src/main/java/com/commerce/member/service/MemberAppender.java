@@ -2,6 +2,7 @@ package com.commerce.member.service;
 
 import com.commerce.member.entity.Email;
 import com.commerce.member.entity.Member;
+import com.commerce.member.entity.MemberRole;
 import com.commerce.member.exception.DuplicateEmailException;
 import com.commerce.member.exception.InvalidPasswordException;
 import com.commerce.member.exception.MemberErrorCode;
@@ -31,13 +32,28 @@ public class MemberAppender {
     }
 
     /**
-     * 회원을 가입시키고 새 회원 ID를 반환한다. 패스워드는 bcrypt 해시로만 저장한다(평문 비보관).
+     * 구매자 회원을 가입시키고 새 회원 ID를 반환한다. 패스워드는 bcrypt 해시로만 저장한다(평문 비보관).
      *
      * @throws DuplicateEmailException 활성 회원 사이에서 이메일이 이미 쓰일 때
      * @throws InvalidPasswordException 패스워드가 정책(8자 이상 72바이트 이하)에 어긋날 때
      */
     @Transactional
     public UUID register(String email, String name, String rawPassword) {
+        return append(email, name, rawPassword, MemberRole.BUYER);
+    }
+
+    /**
+     * 관리자 회원을 가입시키고 새 회원 ID를 반환한다. 공개 가입 경로가 아니라 기동 시딩 전용이다.
+     *
+     * @throws DuplicateEmailException 활성 회원 사이에서 이메일이 이미 쓰일 때
+     * @throws InvalidPasswordException 패스워드가 정책(8자 이상 72바이트 이하)에 어긋날 때
+     */
+    @Transactional
+    public UUID registerAdmin(String email, String name, String rawPassword) {
+        return append(email, name, rawPassword, MemberRole.ADMIN);
+    }
+
+    private UUID append(String email, String name, String rawPassword, MemberRole role) {
         Email emailValue = Email.of(email);
         validatePassword(rawPassword);
         if (memberRepository.existsByEmailAndDeletedAtIsNull(emailValue)) {
@@ -45,7 +61,7 @@ public class MemberAppender {
         }
         try {
             return memberRepository
-                    .saveAndFlush(Member.create(emailValue, name, passwordEncoder.encode(rawPassword)))
+                    .saveAndFlush(Member.create(emailValue, name, passwordEncoder.encode(rawPassword), role))
                     .getId();
         } catch (DataIntegrityViolationException e) {
             // 선검사와 저장 사이 동시 가입 경합 방어

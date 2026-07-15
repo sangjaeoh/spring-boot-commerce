@@ -201,7 +201,8 @@ class OrderControllerTest extends WebIntegrationTest {
     void cancelRejectsShippedOrderViaHttp() throws Exception {
         UUID memberId = registerMember();
         UUID orderId = checkoutForMember(memberId);
-        mvc.perform(post("/api/v1/orders/{orderId}/ship", orderId)).andExpect(status().isNoContent());
+        mvc.perform(post("/api/v1/orders/{orderId}/ship", orderId).header(HttpHeaders.AUTHORIZATION, adminBearer()))
+                .andExpect(status().isNoContent());
 
         mvc.perform(post("/api/v1/orders/{orderId}/cancel", orderId)
                         .header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
@@ -269,14 +270,16 @@ class OrderControllerTest extends WebIntegrationTest {
         UUID memberId = registerMember();
         UUID orderId = checkoutForMember(memberId);
 
-        mvc.perform(post("/api/v1/orders/{orderId}/ship", orderId)).andExpect(status().isNoContent());
+        mvc.perform(post("/api/v1/orders/{orderId}/ship", orderId).header(HttpHeaders.AUTHORIZATION, adminBearer()))
+                .andExpect(status().isNoContent());
         mvc.perform(get("/api/v1/orders/{orderId}", orderId).header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("PAID"))
                 .andExpect(jsonPath("$.fulfillmentStatus").value("SHIPPED"))
                 .andExpect(jsonPath("$.shippedAt").exists());
 
-        mvc.perform(post("/api/v1/orders/{orderId}/delivery-confirmation", orderId))
+        mvc.perform(post("/api/v1/orders/{orderId}/delivery-confirmation", orderId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
                 .andExpect(status().isNoContent());
         mvc.perform(get("/api/v1/orders/{orderId}", orderId).header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
                 .andExpect(status().isOk())
@@ -292,6 +295,7 @@ class OrderControllerTest extends WebIntegrationTest {
         UUID orderId = checkoutForMember(memberId);
 
         mvc.perform(post("/api/v1/orders/{orderId}/fulfillment-hold", orderId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(new FulfillmentHoldRequest(HoldReason.FRAUD_REVIEW))))
                 .andExpect(status().isNoContent());
@@ -300,14 +304,16 @@ class OrderControllerTest extends WebIntegrationTest {
                 .andExpect(jsonPath("$.fulfillmentStatus").value("ON_HOLD"))
                 .andExpect(jsonPath("$.holdReason").value("FRAUD_REVIEW"));
 
-        mvc.perform(post("/api/v1/orders/{orderId}/fulfillment-release", orderId))
+        mvc.perform(post("/api/v1/orders/{orderId}/fulfillment-release", orderId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
                 .andExpect(status().isNoContent());
         mvc.perform(get("/api/v1/orders/{orderId}", orderId).header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.fulfillmentStatus").value("PREPARING"))
                 .andExpect(jsonPath("$.holdReason").doesNotExist());
 
-        mvc.perform(post("/api/v1/orders/{orderId}/ship", orderId)).andExpect(status().isNoContent());
+        mvc.perform(post("/api/v1/orders/{orderId}/ship", orderId).header(HttpHeaders.AUTHORIZATION, adminBearer()))
+                .andExpect(status().isNoContent());
     }
 
     @Test
@@ -315,7 +321,7 @@ class OrderControllerTest extends WebIntegrationTest {
     void shipRejectsPendingOrder() throws Exception {
         UUID orderId = placePendingOrder(registerMember());
 
-        mvc.perform(post("/api/v1/orders/{orderId}/ship", orderId))
+        mvc.perform(post("/api/v1/orders/{orderId}/ship", orderId).header(HttpHeaders.AUTHORIZATION, adminBearer()))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("ORDER_NOT_PAID"));
     }
@@ -329,7 +335,7 @@ class OrderControllerTest extends WebIntegrationTest {
                         .header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
                 .andExpect(status().isNoContent());
 
-        mvc.perform(post("/api/v1/orders/{orderId}/ship", orderId))
+        mvc.perform(post("/api/v1/orders/{orderId}/ship", orderId).header(HttpHeaders.AUTHORIZATION, adminBearer()))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("ORDER_NOT_PAID"));
     }
@@ -339,7 +345,8 @@ class OrderControllerTest extends WebIntegrationTest {
     void confirmDeliveryRejectsUnshippedOrder() throws Exception {
         UUID orderId = checkoutForMember(registerMember());
 
-        mvc.perform(post("/api/v1/orders/{orderId}/delivery-confirmation", orderId))
+        mvc.perform(post("/api/v1/orders/{orderId}/delivery-confirmation", orderId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("ORDER_INVALID_FULFILLMENT_TRANSITION"));
     }
@@ -347,9 +354,23 @@ class OrderControllerTest extends WebIntegrationTest {
     @Test
     @DisplayName("없는 주문 출고는 404 ORDER_NOT_FOUND로 거부된다")
     void shipReturns404ForMissingOrder() throws Exception {
-        mvc.perform(post("/api/v1/orders/{orderId}/ship", UUID.randomUUID()))
+        mvc.perform(post("/api/v1/orders/{orderId}/ship", UUID.randomUUID())
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("ORDER_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("구매자 토큰의 본인 주문 출고는 403 FORBIDDEN으로 거부되고 이행 상태를 바꾸지 않는다")
+    void shipRejectsBuyerToken() throws Exception {
+        UUID memberId = registerMember();
+        UUID orderId = checkoutForMember(memberId);
+
+        mvc.perform(post("/api/v1/orders/{orderId}/ship", orderId).header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        assertThat(orderReader.getOrder(orderId, memberId).fulfillmentStatus()).isEqualTo(FulfillmentStatus.PREPARING);
     }
 
     @Test
@@ -358,6 +379,7 @@ class OrderControllerTest extends WebIntegrationTest {
         UUID orderId = checkoutForMember(registerMember());
 
         mvc.perform(post("/api/v1/orders/{orderId}/fulfillment-hold", orderId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isBadRequest())

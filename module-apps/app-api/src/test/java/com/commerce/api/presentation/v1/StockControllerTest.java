@@ -71,6 +71,7 @@ class StockControllerTest extends WebIntegrationTest {
         UUID variantId = seedProduct(10);
 
         mvc.perform(post("/api/v1/stocks/{variantId}/increase", variantId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"quantity\":0}"))
                 .andExpect(status().isBadRequest())
@@ -91,7 +92,9 @@ class StockControllerTest extends WebIntegrationTest {
     @DisplayName("단종 재고 재입고는 409 STOCK_CANNOT_INCREASE_DISCONTINUED로 거부된다")
     void increaseRejectsDiscontinuedStock() throws Exception {
         UUID variantId = seedProduct(10);
-        mvc.perform(post("/api/v1/stocks/{variantId}/discontinue", variantId)).andExpect(status().isNoContent());
+        mvc.perform(post("/api/v1/stocks/{variantId}/discontinue", variantId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
+                .andExpect(status().isNoContent());
         assertThat(stockReader.getByVariantId(variantId).status()).isEqualTo(StockStatus.DISCONTINUED);
 
         increase(variantId, 5)
@@ -106,10 +109,14 @@ class StockControllerTest extends WebIntegrationTest {
     void markSoldOutAndSellableRoundTrip() throws Exception {
         UUID variantId = seedProduct(10);
 
-        mvc.perform(post("/api/v1/stocks/{variantId}/mark-sold-out", variantId)).andExpect(status().isNoContent());
+        mvc.perform(post("/api/v1/stocks/{variantId}/mark-sold-out", variantId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
+                .andExpect(status().isNoContent());
         assertThat(stockReader.getByVariantId(variantId).status()).isEqualTo(StockStatus.SOLD_OUT);
 
-        mvc.perform(post("/api/v1/stocks/{variantId}/mark-sellable", variantId)).andExpect(status().isNoContent());
+        mvc.perform(post("/api/v1/stocks/{variantId}/mark-sellable", variantId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
+                .andExpect(status().isNoContent());
         assertThat(stockReader.getByVariantId(variantId).status()).isEqualTo(StockStatus.SELLABLE);
     }
 
@@ -118,7 +125,8 @@ class StockControllerTest extends WebIntegrationTest {
     void markSellableRejectsSellableStock() throws Exception {
         UUID variantId = seedProduct(10);
 
-        mvc.perform(post("/api/v1/stocks/{variantId}/mark-sellable", variantId))
+        mvc.perform(post("/api/v1/stocks/{variantId}/mark-sellable", variantId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("STOCK_INVALID_STATE_TRANSITION"));
     }
@@ -127,9 +135,12 @@ class StockControllerTest extends WebIntegrationTest {
     @DisplayName("단종 재고의 품절 전환은 409 STOCK_INVALID_STATE_TRANSITION으로 거부된다")
     void markSoldOutRejectsDiscontinuedStock() throws Exception {
         UUID variantId = seedProduct(10);
-        mvc.perform(post("/api/v1/stocks/{variantId}/discontinue", variantId)).andExpect(status().isNoContent());
+        mvc.perform(post("/api/v1/stocks/{variantId}/discontinue", variantId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
+                .andExpect(status().isNoContent());
 
-        mvc.perform(post("/api/v1/stocks/{variantId}/mark-sold-out", variantId))
+        mvc.perform(post("/api/v1/stocks/{variantId}/mark-sold-out", variantId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("STOCK_INVALID_STATE_TRANSITION"));
     }
@@ -154,8 +165,25 @@ class StockControllerTest extends WebIntegrationTest {
         assertThat(stockReader.getByVariantId(variantId).quantity()).isZero();
     }
 
+    @Test
+    @DisplayName("구매자 토큰의 재입고는 403 FORBIDDEN으로 거부되고 수량을 바꾸지 않는다")
+    void increaseRejectsBuyerToken() throws Exception {
+        UUID buyerId = registerMember();
+        UUID variantId = seedProduct(10);
+
+        mvc.perform(post("/api/v1/stocks/{variantId}/increase", variantId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(buyerId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new StockIncreaseRequest(5))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(10);
+    }
+
     private ResultActions increase(UUID variantId, int quantity) throws Exception {
         return mvc.perform(post("/api/v1/stocks/{variantId}/increase", variantId)
+                .header(HttpHeaders.AUTHORIZATION, adminBearer())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(new StockIncreaseRequest(quantity))));
     }

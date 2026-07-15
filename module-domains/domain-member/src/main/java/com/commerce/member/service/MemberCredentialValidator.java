@@ -5,9 +5,9 @@ import com.commerce.member.entity.Member;
 import com.commerce.member.exception.InvalidCredentialsException;
 import com.commerce.member.exception.InvalidEmailException;
 import com.commerce.member.exception.MemberErrorCode;
+import com.commerce.member.info.MemberInfo;
 import com.commerce.member.repository.MemberRepository;
 import java.nio.charset.StandardCharsets;
-import java.util.UUID;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -25,13 +25,13 @@ public class MemberCredentialValidator {
     }
 
     /**
-     * 이메일+패스워드 자격증명을 검증하고 회원 ID를 반환한다. 정지 회원은 통과한다 — 차단은 담기·체크아웃
+     * 이메일+패스워드 자격증명을 검증하고 검증된 회원을 반환한다. 정지 회원은 통과한다 — 차단은 담기·체크아웃
      * 자격 게이트가 담당한다.
      *
      * @throws InvalidCredentialsException 미존재·탈퇴·패스워드 불일치 — 원인을 구분하지 않는다(계정 존재 노출 방지)
      */
     @Transactional(readOnly = true)
-    public UUID authenticate(String email, String rawPassword) {
+    public MemberInfo authenticate(String email, String rawPassword) {
         Member member = memberRepository
                 .findByEmailAndDeletedAtIsNull(parseEmail(email))
                 .orElseThrow(() -> new InvalidCredentialsException(MemberErrorCode.INVALID_CREDENTIALS));
@@ -40,7 +40,7 @@ public class MemberCredentialValidator {
                 || !passwordEncoder.matches(rawPassword, member.getPasswordHash())) {
             throw new InvalidCredentialsException(MemberErrorCode.INVALID_CREDENTIALS);
         }
-        return member.getId();
+        return MemberInfo.from(member);
     }
 
     // 형식이 어긋난 이메일은 어떤 계정에도 속하지 않으므로 형식 오류(400)가 아니라 동일 거부(401)로 응답한다.
