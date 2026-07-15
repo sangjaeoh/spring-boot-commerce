@@ -171,4 +171,12 @@ public class Payment extends BaseTimeEntity<UUID> {
     public @Nullable String getPgCancelTransactionId() {
         return pgCancelTransactionId;
     }
+
+    public @Nullable Instant getApprovedAt() {
+        return approvedAt;
+    }
+
+    public @Nullable Instant getCancelledAt() {
+        return cancelledAt;
+    }
 }

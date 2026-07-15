@@ -19,6 +19,8 @@ public record PaymentInfo(
         @Nullable FailureReason failureReason,
         @Nullable String pgTransactionId,
         @Nullable String pgCancelTransactionId,
+        @Nullable Instant approvedAt,
+        @Nullable Instant cancelledAt,
         Instant createdAt,
         Instant updatedAt) {
 
@@ -32,6 +34,8 @@ public record PaymentInfo(
                 payment.getFailureReason(),
                 payment.getPgTransactionId(),
                 payment.getPgCancelTransactionId(),
+                payment.getApprovedAt(),
+                payment.getCancelledAt(),
                 payment.getCreatedAt(),
                 payment.getUpdatedAt());
     }

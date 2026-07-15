@@ -6,9 +6,11 @@ import com.commerce.api.presentation.v1.request.CheckoutRequest;
 import com.commerce.api.presentation.v1.request.FulfillmentHoldRequest;
 import com.commerce.api.presentation.v1.response.CheckoutResponse;
 import com.commerce.api.presentation.v1.response.OrderResponse;
+import com.commerce.api.presentation.v1.response.PaymentResponse;
 import com.commerce.core.money.Money;
 import com.commerce.order.service.OrderModifier;
 import com.commerce.order.service.OrderReader;
+import com.commerce.payment.service.PaymentReader;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
@@ -26,7 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
  * 주문 체크아웃·취소·이행 전이·조회 엔드포인트다.
  *
  * <p>크로스 도메인 쓰기(체크아웃·취소)는 파사드에, 단일 도메인 쓰기인 이행 전이는 주문 도메인 Modifier에 얇게
- * 위임하고, 조회는 주문 도메인 Reader에 위임해 결과를 응답 DTO로 변환한다. 정책 거부·전이 위반·미존재는
+ * 위임하고, 조회는 주문·결제 각 도메인 Reader에 위임해 결과를 응답 DTO로 변환한다. 정책 거부·전이 위반·미존재는
  * 도메인/파사드가 던지는 예외를 전역 핸들러가 problem+json으로 매핑한다. 인증이 범위 밖이라 조회의 회원
  * 소유권은 검사하지 않는다.
  */
@@ -38,16 +40,19 @@ public class OrderController {
     private final OrderCancellationFacade orderCancellationFacade;
     private final OrderModifier orderModifier;
     private final OrderReader orderReader;
+    private final PaymentReader paymentReader;
 
     public OrderController(
             CheckoutFacade checkoutFacade,
             OrderCancellationFacade orderCancellationFacade,
             OrderModifier orderModifier,
-            OrderReader orderReader) {
+            OrderReader orderReader,
+            PaymentReader paymentReader) {
         this.checkoutFacade = checkoutFacade;
         this.orderCancellationFacade = orderCancellationFacade;
         this.orderModifier = orderModifier;
         this.orderReader = orderReader;
+        this.paymentReader = paymentReader;
     }
 
     /** 장바구니를 주문·결제로 전환하고 결제 완료된 주문 ID를 반환한다. */
@@ -110,5 +115,11 @@ public class OrderController {
         return orderReader.getOrdersByMember(memberId).stream()
                 .map(OrderResponse::from)
                 .toList();
+    }
+
+    /** 주문의 결제 정보(승인·환불 거래)를 조회한다. */
+    @GetMapping("/{orderId}/payment")
+    public PaymentResponse getPayment(@PathVariable UUID orderId) {
+        return PaymentResponse.from(paymentReader.getByOrderId(orderId));
     }
 }
