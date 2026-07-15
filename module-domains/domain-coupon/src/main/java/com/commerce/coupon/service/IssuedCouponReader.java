@@ -9,6 +9,7 @@ import com.commerce.coupon.exception.IssuedCouponNotFoundException;
 import com.commerce.coupon.info.IssuedCouponInfo;
 import com.commerce.coupon.repository.CouponRepository;
 import com.commerce.coupon.repository.IssuedCouponRepository;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +37,14 @@ public class IssuedCouponReader {
                 .findByIdAndMemberId(issuedCouponId, memberId)
                 .map(IssuedCouponInfo::from)
                 .orElseThrow(() -> new IssuedCouponNotFoundException(CouponErrorCode.ISSUED_COUPON_NOT_FOUND));
+    }
+
+    /** 회원의 발급 쿠폰 목록을 최신순으로 조회한다. 없으면 빈 목록이다. 같은 생성 시각은 id로 결정적 순서를 둔다. */
+    @Transactional(readOnly = true)
+    public List<IssuedCouponInfo> getIssuedCouponsByMember(UUID memberId) {
+        return issuedCouponRepository.findByMemberIdOrderByCreatedAtDescIdDesc(memberId).stream()
+                .map(IssuedCouponInfo::from)
+                .toList();
     }
 
     /**

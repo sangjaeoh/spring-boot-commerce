@@ -7,6 +7,7 @@ import com.commerce.api.presentation.v1.response.CouponCreationResponse;
 import com.commerce.api.presentation.v1.response.CouponIssuanceResponse;
 import com.commerce.core.money.Money;
 import com.commerce.coupon.service.CouponAppender;
+import com.commerce.coupon.service.CouponModifier;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -18,21 +19,26 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 쿠폰 정책 생성·발급 엔드포인트다.
+ * 쿠폰 정책 생성·발급·전환(중지·재개) 엔드포인트다.
  *
  * <p>생성은 쿠폰 도메인 Appender에 얇게 위임하고(할인 조합·유효 기간·사용 창 불변식은 도메인이 검증), 발급은
- * 발급 파사드에 위임해 회원 자격 게이트를 적용한다. 크로스 도메인 정책 거부·도메인 불변식 위반은 도메인/파사드가
- * 던지는 예외를 전역 핸들러가 problem+json으로 매핑한다. 인증이 범위 밖이라 발급 대상 회원은 요청이 싣는다.
+ * 발급 파사드에 위임해 회원 자격 게이트를 적용한다. 전환은 단일 도메인 쓰기라 파사드 없이 쿠폰 도메인 Modifier에
+ * 얇게 위임하며, 중지는 신규 발급만 막고 기발급분 사용에는 소급하지 않는다. 크로스 도메인 정책 거부·도메인
+ * 불변식 위반은 도메인/파사드가 던지는 예외를 전역 핸들러가 problem+json으로 매핑한다. 인증이 범위 밖이라
+ * 발급 대상 회원은 요청이 싣는다.
  */
 @RestController
 @RequestMapping("/api/v1/coupons")
 public class CouponController {
 
     private final CouponAppender couponAppender;
+    private final CouponModifier couponModifier;
     private final CouponIssuanceFacade couponIssuanceFacade;
 
-    public CouponController(CouponAppender couponAppender, CouponIssuanceFacade couponIssuanceFacade) {
+    public CouponController(
+            CouponAppender couponAppender, CouponModifier couponModifier, CouponIssuanceFacade couponIssuanceFacade) {
         this.couponAppender = couponAppender;
+        this.couponModifier = couponModifier;
         this.couponIssuanceFacade = couponIssuanceFacade;
     }
 
@@ -56,5 +62,19 @@ public class CouponController {
             @PathVariable UUID couponId, @Valid @RequestBody CouponIssuanceRequest request) {
         UUID issuedCouponId = couponIssuanceFacade.issue(couponId, request.memberId());
         return CouponIssuanceResponse.from(issuedCouponId);
+    }
+
+    /** 쿠폰 정책의 신규 발급을 중지한다. 기발급분 사용에는 소급하지 않는다. */
+    @PostMapping("/{couponId}/disable")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void disable(@PathVariable UUID couponId) {
+        couponModifier.disable(couponId);
+    }
+
+    /** 쿠폰 정책의 신규 발급을 재개한다. */
+    @PostMapping("/{couponId}/enable")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void enable(@PathVariable UUID couponId) {
+        couponModifier.enable(couponId);
     }
 }
