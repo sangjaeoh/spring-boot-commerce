@@ -193,7 +193,7 @@ class ProductControllerTest extends WebIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.variants.length()").value(2));
 
-        UUID memberId = memberAppender.register("user-" + UUID.randomUUID() + "@example.com", "테스터");
+        UUID memberId = memberAppender.register("user-" + UUID.randomUUID() + "@example.com", "테스터", "password-123!");
         cartAppender.addItem(memberId, variantId, 2);
         CheckoutRequest request = new CheckoutRequest(memberId, addressRequest(), 0L, null, PaymentMethod.CARD);
         mvc.perform(post("/api/v1/orders")
@@ -286,7 +286,7 @@ class ProductControllerTest extends WebIntegrationTest {
     void hiddenProductRejectsCheckout() throws Exception {
         UUID productId = registerProductViaHttp("숨김셔츠", 10000L, 5);
         UUID variantId = variantReader.getByProductId(productId).get(0).id();
-        UUID memberId = memberAppender.register("user-" + UUID.randomUUID() + "@example.com", "테스터");
+        UUID memberId = memberAppender.register("user-" + UUID.randomUUID() + "@example.com", "테스터", "password-123!");
         cartAppender.addItem(memberId, variantId, 1);
 
         mvc.perform(post("/api/v1/products/{productId}/hide", productId)).andExpect(status().isNoContent());
@@ -304,7 +304,7 @@ class ProductControllerTest extends WebIntegrationTest {
     void editDoesNotAffectExistingOrderSnapshot() throws Exception {
         UUID productId = registerProductViaHttp("원래셔츠", 10000L, 5);
         UUID variantId = variantReader.getByProductId(productId).get(0).id();
-        UUID memberId = memberAppender.register("user-" + UUID.randomUUID() + "@example.com", "테스터");
+        UUID memberId = memberAppender.register("user-" + UUID.randomUUID() + "@example.com", "테스터", "password-123!");
         cartAppender.addItem(memberId, variantId, 1);
         UUID orderId = checkoutViaHttp(memberId);
 

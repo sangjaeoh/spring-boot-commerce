@@ -6,6 +6,7 @@ dependencies {
     implementation(project(":module-common:common-core"))
     implementation(project(":module-common:common-jpa"))
     implementation(project(":module-common:common-messaging"))
+    implementation(project(":module-common:common-auth"))
     implementation(project(":module-domains:domain-member"))
     implementation(project(":module-domains:domain-product"))
     implementation(project(":module-domains:domain-stock"))

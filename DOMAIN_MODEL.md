@@ -8,7 +8,7 @@
 
 범위는 7개 도메인: 회원(member) · 상품(product) · 재고(stock) · 장바구니(cart) · 쿠폰(coupon) · 주문(order) · 결제(payment).
 
-기준선(이 문서의 전제): 결제 게이트웨이는 동기 stub, 도메인 이벤트 transport는 in-process(무손실 보장 아님), 로그인·인증은 범위 밖.
+기준선(이 문서의 전제): 결제 게이트웨이는 동기 stub, 도메인 이벤트 transport는 in-process(무손실 보장 아님), 인증은 이메일+패스워드 로그인·JWT 액세스 토큰 발급까지(토큰 강제·역할은 아직 밖 — 경계는 [`REQUIREMENTS.md`](./REQUIREMENTS.md)).
 
 ## 공통 규약
 
@@ -34,7 +34,7 @@
 
 ## 1. 회원 (member)
 
-회원의 식별을 소유한다. 인증(로그인·토큰)은 범위 밖이라 자격증명(비밀번호)을 두지 않는다.
+회원의 식별과 자격증명(패스워드 해시)을 소유한다. 자격증명 검증(이메일+패스워드)은 이 도메인이 담당하고, JWT 액세스 토큰 발급·검증은 앱 경계(common-auth 원자재)가 담당한다.
 
 - 애그리거트 루트: `Member`
 - 스키마/테이블: `member` / `member`
@@ -46,6 +46,7 @@
 | id | UUID | 필수 | PK, UUIDv7 |
 | email | Email(VO) | 필수 | 활성 회원 중 유니크. 형식 검증(VO). 식별 키 |
 | name | String | 필수 | 표시 이름 |
+| passwordHash | String | 필수 | bcrypt 해시(60자). Info·응답에 비노출 |
 | status | MemberStatus | 필수 | 아래 상태표 |
 | suspensionReason | SuspensionReason | 선택 | 정지 사유. SUSPENDED에서만 존재, `reinstate` 시 clear |
 | createdAt | Instant | 필수 | 생성 시각(Auditing 자동 기록) |
@@ -71,7 +72,9 @@
 
 ### 정책·불변식
 
-- 가입(register): 필수값은 email, name. 가입 즉시 주문·장바구니를 쓸 수 있다(별도 활성화 절차 없음).
+- 가입(register): 필수값은 email, name, password. 가입 즉시 주문·장바구니를 쓸 수 있다(별도 활성화 절차 없음).
+- 패스워드 정책: 8자 이상 72바이트(bcrypt 입력 한계) 이하. bcrypt 해시로만 저장하고 평문·해시를 도메인 경계 밖(Info·응답)으로 내보내지 않는다.
+- 자격증명 검증(authenticate): 미탈퇴 회원의 해시 일치로 검증한다. 미존재·탈퇴·불일치는 같은 거부(401)로 응답해 계정 존재를 노출하지 않는다 — 탈퇴 이메일은 재가입 가능하므로 탈퇴분은 조회에서부터 제외된다. 정지 회원은 검증을 통과한다(로그인 허용) — 차단은 담기·체크아웃 자격 게이트가 담당한다(탈퇴·정지 비연쇄 원칙과 동일 축).
 - 이메일 유니크: 활성 회원 사이에서 유니크. 탈퇴한 이메일은 재가입 가능 — DB에서 부분 유니크 인덱스(`WHERE deleted_at IS NULL`)로 강제한다.
 - 탈퇴(delete): `deletedAt`·`withdrawalReason`(`NO_LONGER_USED`·`PRIVACY_CONCERN`·`DISSATISFIED`·`SWITCHED_SERVICE`) 세팅(논리삭제). 탈퇴 회원은 기본 조회에서 제외.
 - 주문 자격: 담기·주문은 자격 활성 회원만 — `status = ACTIVE` 이고 미탈퇴(`deletedAt IS NULL`). 체크아웃·담기에서 검증.
@@ -82,7 +85,8 @@
 
 | 연산 | 입력 | 강제 불변식 | 거부 |
 |---|---|---|---|
-| register | email, name | 활성 회원 사이 이메일 유니크, 이메일 형식 | 이메일 중복; 이메일 형식 오류 |
+| register | email, name, password | 활성 회원 사이 이메일 유니크, 이메일 형식, 패스워드 정책(8자 이상 72바이트 이하), bcrypt 해시 저장 | 이메일 중복; 이메일 형식 오류; 패스워드 형식 오류 |
+| authenticate | email, password | 미탈퇴 회원 + 해시 일치(정지 회원 통과) | 자격증명 불일치(미존재·탈퇴·불일치 동일 거부) |
 | suspend | memberId, reason | ACTIVE→SUSPENDED, `suspensionReason` 세팅 | 미존재; 잘못된 전이 |
 | reinstate | memberId | SUSPENDED→ACTIVE, `suspensionReason` clear | 미존재; 잘못된 전이 |
 | rename | memberId, newName | `name` 갱신(`email` 불변) | 미존재 |
@@ -676,7 +680,7 @@
 
 핵심 설계 결정을 요약한다.
 
-- 회원: `MemberStatus{ACTIVE, SUSPENDED}`(정지/해제 `suspend`/`reinstate`, 정지 사유 `suspensionReason`), 표시이름 변경 `rename`, 탈퇴는 deletedAt(status 아님) + `withdrawalReason`, 자격 활성 = ACTIVE ∧ 미탈퇴, 가입 즉시 ACTIVE, 이메일 부분 유니크로 재가입 허용, 탈퇴·정지 비연쇄, 미배송 PAID 주문 있으면 탈퇴 거부(파사드 정책).
+- 회원: `MemberStatus{ACTIVE, SUSPENDED}`(정지/해제 `suspend`/`reinstate`, 정지 사유 `suspensionReason`), 표시이름 변경 `rename`, 탈퇴는 deletedAt(status 아님) + `withdrawalReason`, 자격 활성 = ACTIVE ∧ 미탈퇴, 가입 즉시 ACTIVE, 이메일 부분 유니크로 재가입 허용, 탈퇴·정지 비연쇄, 미배송 PAID 주문 있으면 탈퇴 거부(파사드 정책), 자격증명은 `passwordHash`(bcrypt)로 저장·`authenticate`로 검증(미존재·탈퇴·불일치 동일 거부, 정지 통과).
 - 상품: 카탈로그 그룹(가격 미소유), 등록 시 HIDDEN → 첫 변형·재고 시딩·변형 활성화 후 `show()`로 ON_SALE, `hide`/`show` 의도 동사, 상품명·설명 편집(`rename`/`changeDescription`, 주문 스냅샷 무영향), 시딩은 앱 계층이 순차 조율(HIDDEN-first, 파괴적 보상 없음).
 - 상품변형(SKU): product 도메인 독립 루트(productId로 연결), 판매·재고 단위. 가격 소유(≥1, `changePrice`), `ProductVariantStatus{ACTIVE, DISABLED, RETIRED}`(최초 DISABLED, 재고 시딩 후 `enable`, RETIRED 완전 종료), 옵션은 평탄 optionSignature·optionLabel(생성 시 불변), `(product_id, option_signature)` 부분 유니크(`status <> RETIRED`)로 은퇴 조합 재등록 허용, add-only·삭제 없음(deletedAt·@Version 없음).
 - 재고: `StockStatus{SELLABLE, SOLD_OUT, DISCONTINUED}`(수동 품절·단종을 quantity=0과 분리), 변형당 1행(variant_id 유니크), 재입고 `increase`, 주문가능 = 상품 ON_SALE·미삭제 ∧ 변형 ACTIVE ∧ 재고 SELLABLE ∧ 수량(합성은 체크아웃), 즉시 차감(예약 모델 아님), 차감은 낙관락 가드·판매성은 체크아웃 게이트, 복원은 status 무관 가산·재시도 안전(멱등 아님, 전이 게이트로 1회 복원).
@@ -695,7 +699,8 @@
 - 배송 추적·배송사(택배) 연동·운송장 번호(이행 상태 SHIPPED·DELIVERED 자체는 범위 내).
 - 부분 취소·부분 환불·부분 선택 주문.
 - 회원 주소록(배송지는 체크아웃 요청이 매번 제공).
-- 인증·로그인(JWT), 회원 자격증명.
+- 소셜 로그인·리프레시 토큰·비밀번호 재설정·이메일 인증(인증은 이메일+패스워드 로그인·JWT 액세스 토큰 발급까지 범위 내).
+- 기존 엔드포인트에 대한 토큰 인증 강제·역할(권한) 모델 — 토큰은 주체(회원 ID)만 싣는다.
 - 실 PG·비동기 웹훅과 그에 따른 PENDING 리컨실·아웃박스(내구성 메시징).
 - 쿠폰 선착순 발급 한도.
 - 발급된 쿠폰의 회수·관리자 무효화(정책 DISABLED는 신규 발급만 막고 기발급분은 계속 사용 가능).

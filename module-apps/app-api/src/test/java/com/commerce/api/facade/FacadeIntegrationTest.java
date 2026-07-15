@@ -20,5 +20,6 @@ abstract class FacadeIntegrationTest {
         registry.add("spring.datasource.url", SharedPostgresContainer.INSTANCE::getJdbcUrl);
         registry.add("spring.datasource.username", SharedPostgresContainer.INSTANCE::getUsername);
         registry.add("spring.datasource.password", SharedPostgresContainer.INSTANCE::getPassword);
+        registry.add("auth.jwt.secret", () -> "test-secret-key-of-at-least-32-bytes!!");
     }
 }

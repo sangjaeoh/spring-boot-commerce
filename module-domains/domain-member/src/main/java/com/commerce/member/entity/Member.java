@@ -16,7 +16,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
 /**
- * 회원 애그리거트 루트다. 식별(이메일·표시 이름)을 소유하고 자격증명은 두지 않는다.
+ * 회원 애그리거트 루트다. 식별(이메일·표시 이름)과 자격증명(패스워드 해시)을 소유한다.
  *
  * <p>정지(status)와 탈퇴(deletedAt)는 독립 축이라 겹치지 않는다. 최초 상태는 {@code ACTIVE}다.
  */
@@ -33,6 +33,9 @@ public class Member extends BaseTimeEntity<UUID> {
 
     @Column(name = "name")
     private String name;
+
+    @Column(name = "password_hash")
+    private String passwordHash;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status")
@@ -54,16 +57,17 @@ public class Member extends BaseTimeEntity<UUID> {
 
     protected Member() {}
 
-    private Member(UUID id, Email email, String name) {
+    private Member(UUID id, Email email, String name, String passwordHash) {
         this.id = id;
         this.email = email;
         this.name = name;
+        this.passwordHash = passwordHash;
         this.status = MemberStatus.ACTIVE;
     }
 
-    /** 활성({@code ACTIVE}) 회원을 생성한다. */
-    public static Member create(Email email, String name) {
-        return new Member(UuidV7Generator.generate(), email, name);
+    /** 활성({@code ACTIVE}) 회원을 생성한다. 자격증명은 이미 해시된 값을 받는다(평문 비보관). */
+    public static Member create(Email email, String name, String passwordHash) {
+        return new Member(UuidV7Generator.generate(), email, name, passwordHash);
     }
 
     /** 회원을 정지하고 사유를 기록한다. */
@@ -106,6 +110,10 @@ public class Member extends BaseTimeEntity<UUID> {
 
     public String getName() {
         return name;
+    }
+
+    public String getPasswordHash() {
+        return passwordHash;
     }
 
     public MemberStatus getStatus() {

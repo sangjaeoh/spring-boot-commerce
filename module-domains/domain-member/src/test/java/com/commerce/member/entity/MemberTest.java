@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 class MemberTest {
 
     private Member activeMember() {
-        return Member.create(Email.of("user@example.com"), "홍길동");
+        return Member.create(Email.of("user@example.com"), "홍길동", "{hashed}password");
     }
 
     @Test
