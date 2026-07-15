@@ -6,9 +6,16 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.commerce.api.presentation.v1.request.AddressRequest;
+import com.commerce.api.presentation.v1.request.CheckoutRequest;
 import com.commerce.api.presentation.v1.request.OptionRequest;
 import com.commerce.api.presentation.v1.request.ProductRegistrationRequest;
+import com.commerce.api.presentation.v1.request.VariantRegistrationRequest;
 import com.commerce.api.presentation.v1.response.ProductRegistrationResponse;
+import com.commerce.api.presentation.v1.response.VariantRegistrationResponse;
+import com.commerce.cart.service.CartAppender;
+import com.commerce.member.service.MemberAppender;
+import com.commerce.payment.entity.PaymentMethod;
 import com.commerce.product.entity.ProductStatus;
 import com.commerce.product.service.ProductReader;
 import com.commerce.product.service.ProductVariantReader;
@@ -30,13 +37,22 @@ class ProductControllerTest extends WebIntegrationTest {
     private final ObjectMapper objectMapper;
     private final ProductReader productReader;
     private final ProductVariantReader variantReader;
+    private final MemberAppender memberAppender;
+    private final CartAppender cartAppender;
 
     ProductControllerTest(
-            MockMvc mvc, ObjectMapper objectMapper, ProductReader productReader, ProductVariantReader variantReader) {
+            MockMvc mvc,
+            ObjectMapper objectMapper,
+            ProductReader productReader,
+            ProductVariantReader variantReader,
+            MemberAppender memberAppender,
+            CartAppender cartAppender) {
         this.mvc = mvc;
         this.objectMapper = objectMapper;
         this.productReader = productReader;
         this.variantReader = variantReader;
+        this.memberAppender = memberAppender;
+        this.cartAppender = cartAppender;
     }
 
     @Test
@@ -158,6 +174,77 @@ class ProductControllerTest extends WebIntegrationTest {
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
     }
 
+    @Test
+    @DisplayName("추가 변형 등록이 201로 변형 ID를 반환하고 상세에 두 변형이 노출되며 새 변형이 체크아웃된다")
+    void addVariantExposesBothVariantsAndChecksOut() throws Exception {
+        UUID productId = registerProductViaHttp("옵션셔츠", 10000L, 5);
+        UUID variantId = addVariantViaHttp(productId, 12000L, List.of(new OptionRequest("색상", "파랑")), 3);
+
+        mvc.perform(get("/api/v1/products/{productId}", productId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.variants.length()").value(2));
+
+        UUID memberId = memberAppender.register("user-" + UUID.randomUUID() + "@example.com", "테스터");
+        cartAppender.addItem(memberId, variantId, 2);
+        CheckoutRequest request = new CheckoutRequest(memberId, addressRequest(), 0L, null, PaymentMethod.CARD);
+        mvc.perform(post("/api/v1/orders")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    @DisplayName("비-RETIRED 변형과 같은 옵션 조합의 추가 등록은 409 PRODUCT_VARIANT_DUPLICATE_OPTION으로 거부된다")
+    void addVariantRejectsDuplicateOptionCombination() throws Exception {
+        UUID productId = registerProductViaHttp("중복셔츠", 10000L, 5);
+        addVariantViaHttp(productId, 12000L, List.of(new OptionRequest("색상", "파랑")), 3);
+
+        VariantRegistrationRequest duplicate =
+                new VariantRegistrationRequest(13000L, List.of(new OptionRequest("색상", "파랑")), 1);
+        mvc.perform(post("/api/v1/products/{productId}/variants", productId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(duplicate)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("PRODUCT_VARIANT_DUPLICATE_OPTION"));
+    }
+
+    @Test
+    @DisplayName("은퇴한 옵션 조합은 새 변형으로 재등록된다")
+    void addVariantAllowsRetiredCombinationAgain() throws Exception {
+        UUID productId = registerProductViaHttp("재등록셔츠", 10000L, 5);
+        UUID variantId = addVariantViaHttp(productId, 12000L, List.of(new OptionRequest("색상", "파랑")), 3);
+        mvc.perform(post("/api/v1/product-variants/{variantId}/retire", variantId))
+                .andExpect(status().isNoContent());
+
+        UUID reRegistered = addVariantViaHttp(productId, 15000L, List.of(new OptionRequest("색상", "파랑")), 2);
+
+        assertThat(reRegistered).isNotEqualTo(variantId);
+    }
+
+    @Test
+    @DisplayName("없는 상품의 추가 변형 등록은 404 PRODUCT_NOT_FOUND로 거부된다")
+    void addVariantReturns404ForMissingProduct() throws Exception {
+        VariantRegistrationRequest request = new VariantRegistrationRequest(10000L, List.of(), 1);
+
+        mvc.perform(post("/api/v1/products/{productId}/variants", UUID.randomUUID())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("PRODUCT_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("가격 0의 추가 변형 등록은 400 VALIDATION_FAILED로 거부된다")
+    void addVariantRejectsNonPositivePrice() throws Exception {
+        UUID productId = registerProductViaHttp("검증셔츠", 10000L, 5);
+
+        mvc.perform(post("/api/v1/products/{productId}/variants", productId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"price\":0,\"options\":[],\"initialQuantity\":1}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+    }
+
     private UUID registerProductViaHttp(String name, long price, int initialQuantity) throws Exception {
         ProductRegistrationRequest request =
                 new ProductRegistrationRequest(name, null, price, List.of(), initialQuantity);
@@ -170,6 +257,25 @@ class ProductControllerTest extends WebIntegrationTest {
                 .getContentAsString();
         return UUID.fromString(
                 objectMapper.readValue(body, ProductRegistrationResponse.class).productId());
+    }
+
+    private UUID addVariantViaHttp(UUID productId, long price, List<OptionRequest> options, int initialQuantity)
+            throws Exception {
+        VariantRegistrationRequest request = new VariantRegistrationRequest(price, options, initialQuantity);
+        String body = mvc.perform(post("/api/v1/products/{productId}/variants", productId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.variantId").exists())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        return UUID.fromString(
+                objectMapper.readValue(body, VariantRegistrationResponse.class).variantId());
+    }
+
+    private static AddressRequest addressRequest() {
+        return new AddressRequest("홍길동", "04524", "서울특별시 중구 세종대로 110", "3층", "010-1234-5678");
     }
 
     @Test

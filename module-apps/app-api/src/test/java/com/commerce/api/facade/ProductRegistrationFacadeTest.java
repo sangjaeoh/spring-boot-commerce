@@ -51,4 +51,21 @@ class ProductRegistrationFacadeTest extends FacadeIntegrationTest {
         assertThat(variant.optionLabel()).isEqualTo("빨강");
         assertThat(stockReader.getByVariantId(variant.id()).quantity()).isEqualTo(50);
     }
+
+    @Test
+    @DisplayName("추가 변형 등록이 기존 상품에 ACTIVE 변형·재고를 시딩한다")
+    void addVariantSeedsSecondSellableVariant() {
+        UUID productId = productRegistrationFacade.registerProduct(
+                "티셔츠", null, Money.of(10000L), List.of(new ProductOption("색상", "빨강")), 50);
+
+        UUID variantId = productRegistrationFacade.addVariant(
+                productId, Money.of(12000L), List.of(new ProductOption("색상", "파랑")), 30);
+
+        assertThat(variantReader.getByProductId(productId)).hasSize(2);
+        ProductVariantInfo added = variantReader.getVariant(variantId);
+        assertThat(added.status()).isEqualTo(ProductVariantStatus.ACTIVE);
+        assertThat(added.price()).isEqualTo(Money.of(12000L));
+        assertThat(added.optionLabel()).isEqualTo("파랑");
+        assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(30);
+    }
 }
