@@ -24,5 +24,5 @@
 
 ## P3 — 프로젝트 완성도
 
-- [ ] **9. 로컬 실행 구성 + README** — app-api에 datasource 설정이 없고 docker-compose·README가 없어 리포만으로 기동 불가(테스트는 Testcontainers로만 돎).
+- [x] **9. 로컬 실행 구성 + README** — app-api에 datasource 설정이 없고 docker-compose·README가 없어 리포만으로 기동 불가(테스트는 Testcontainers로만 돎).
 - [ ] **10. 문서 현행화(멱등 필터)** — REQUIREMENTS "향후 확장"과 DOMAIN_MODEL "명시적 범위 밖"에 멱등 필터가 미래 항목으로 남아 있으나 실제로는 common-web에 구현·배선·회귀 테스트 완료.
