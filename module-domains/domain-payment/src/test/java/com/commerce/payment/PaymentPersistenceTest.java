@@ -20,6 +20,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration;
@@ -29,6 +30,8 @@ import org.springframework.boot.testcontainers.service.connection.ServiceConnect
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.TestConstructor;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
@@ -190,6 +193,40 @@ class PaymentPersistenceTest {
         assertThatThrownBy(() -> paymentProcessor.approve(paymentId)).isInstanceOf(IllegalStateException.class);
 
         assertThat(gateway.cancelCalled).isTrue();
+    }
+
+    @Test
+    @DisplayName("환불 성공 후 영속이 실패해도 재시도는 이중 환불하지 않는다 — 같은 멱등 키로 PG가 환불을 한 번만 수행한다")
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void cancelDoesNotDoubleRefundWhenPersistFailsThenRetries() {
+        // NOT_SUPPORTED로 @DataJpaTest의 롤백 트랜잭션을 걷어내, 두 취소 시도가 각자 실제 물리 트랜잭션으로
+        // 커밋한다(운영과 동일: 파사드는 트랜잭션을 열지 않는다). 상태는 em이 아니라 리포지토리로 되읽는다.
+        UUID paymentId = paymentAppender.request(UUID.randomUUID(), Money.of(10000L), PaymentMethod.CARD);
+        paymentProcessor.approve(paymentId);
+        gateway.reset();
+        Payment approved = paymentRepository.findById(paymentId).orElseThrow();
+
+        // 1차: 트랜잭션 밖 사전조회는 통과시키고, 결과 영속 안의 재조회에서 인프라 실패를 주입한다.
+        doReturn(Optional.of(approved))
+                .doThrow(new IllegalStateException("persist boom"))
+                .when(paymentRepository)
+                .findById(paymentId);
+        assertThatThrownBy(() -> paymentProcessor.cancel(paymentId)).isInstanceOf(IllegalStateException.class);
+        assertThat(gateway.refundCount).isEqualTo(1); // 환불은 실제로 한 번 일어났다
+
+        // 영속이 롤백돼 결제 행은 APPROVED로 남고 창이 열려 있다. 스텁을 걷어내고 실제 리포지토리로 되읽는다.
+        Mockito.reset(paymentRepository);
+        assertThat(paymentRepository.findById(paymentId).orElseThrow().getStatus())
+                .isEqualTo(PaymentStatus.APPROVED);
+
+        // 재시도: 같은 멱등 키로 PG.cancel이 다시 불려도 환불은 늘지 않고 취소가 확정된다.
+        // (스텁이 키로 멱등이라 성립한다 — 실 벤더의 멱등을 증명하지는 못한다.)
+        paymentProcessor.cancel(paymentId);
+
+        assertThat(gateway.refundCount).isEqualTo(1);
+        Payment cancelled = paymentRepository.findById(paymentId).orElseThrow();
+        assertThat(cancelled.getStatus()).isEqualTo(PaymentStatus.CANCELLED);
+        assertThat(cancelled.getPgCancelTransactionId()).isNotNull();
     }
 
     @Test

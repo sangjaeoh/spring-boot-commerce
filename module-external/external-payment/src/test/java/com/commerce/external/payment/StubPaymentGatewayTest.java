@@ -34,7 +34,7 @@ class StubPaymentGatewayTest {
     @Test
     @DisplayName("취소는 취소 거래 ID를 반환한다")
     void cancelReturnsCancelTransactionId() {
-        String cancelTransactionId = gateway.cancel("STUB-APPROVE-abc");
+        String cancelTransactionId = gateway.cancel("STUB-APPROVE-abc", "CANCEL:STUB-APPROVE-abc");
 
         assertThat(cancelTransactionId).startsWith("STUB-CANCEL-");
     }
