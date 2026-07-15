@@ -16,7 +16,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
 /**
- * 회원 애그리거트 루트다. 식별(이메일·표시 이름)과 자격증명(패스워드 해시)을 소유한다.
+ * 회원 애그리거트 루트다. 식별(이메일·표시 이름)과 자격증명(패스워드 해시)·역할을 소유한다.
  *
  * <p>정지(status)와 탈퇴(deletedAt)는 독립 축이라 겹치지 않는다. 최초 상태는 {@code ACTIVE}다.
  */
@@ -38,6 +38,10 @@ public class Member extends BaseTimeEntity<UUID> {
     private String passwordHash;
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "role")
+    private MemberRole role;
+
+    @Enumerated(EnumType.STRING)
     @Column(name = "status")
     private MemberStatus status;
 
@@ -57,17 +61,18 @@ public class Member extends BaseTimeEntity<UUID> {
 
     protected Member() {}
 
-    private Member(UUID id, Email email, String name, String passwordHash) {
+    private Member(UUID id, Email email, String name, String passwordHash, MemberRole role) {
         this.id = id;
         this.email = email;
         this.name = name;
         this.passwordHash = passwordHash;
+        this.role = role;
         this.status = MemberStatus.ACTIVE;
     }
 
-    /** 활성({@code ACTIVE}) 회원을 생성한다. 자격증명은 이미 해시된 값을 받는다(평문 비보관). */
-    public static Member create(Email email, String name, String passwordHash) {
-        return new Member(UuidV7Generator.generate(), email, name, passwordHash);
+    /** 활성({@code ACTIVE}) 회원을 역할과 함께 생성한다. 자격증명은 이미 해시된 값을 받는다(평문 비보관). */
+    public static Member create(Email email, String name, String passwordHash, MemberRole role) {
+        return new Member(UuidV7Generator.generate(), email, name, passwordHash, role);
     }
 
     /** 회원을 정지하고 사유를 기록한다. */
@@ -114,6 +119,10 @@ public class Member extends BaseTimeEntity<UUID> {
 
     public String getPasswordHash() {
         return passwordHash;
+    }
+
+    public MemberRole getRole() {
+        return role;
     }
 
     public MemberStatus getStatus() {

@@ -73,6 +73,7 @@ class ProductVariantControllerTest extends WebIntegrationTest {
         UUID variantId = seedVariant(10000L, 10);
 
         mvc.perform(post("/api/v1/product-variants/{variantId}/price-change", variantId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"price\":0}"))
                 .andExpect(status().isBadRequest())
@@ -94,11 +95,13 @@ class ProductVariantControllerTest extends WebIntegrationTest {
     void disableAndEnableRoundTrip() throws Exception {
         UUID variantId = seedVariant(10000L, 10);
 
-        mvc.perform(post("/api/v1/product-variants/{variantId}/disable", variantId))
+        mvc.perform(post("/api/v1/product-variants/{variantId}/disable", variantId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
                 .andExpect(status().isNoContent());
         assertThat(variantReader.getVariant(variantId).status()).isEqualTo(ProductVariantStatus.DISABLED);
 
-        mvc.perform(post("/api/v1/product-variants/{variantId}/enable", variantId))
+        mvc.perform(post("/api/v1/product-variants/{variantId}/enable", variantId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
                 .andExpect(status().isNoContent());
         assertThat(variantReader.getVariant(variantId).status()).isEqualTo(ProductVariantStatus.ACTIVE);
     }
@@ -108,9 +111,24 @@ class ProductVariantControllerTest extends WebIntegrationTest {
     void enableRejectsActiveVariant() throws Exception {
         UUID variantId = seedVariant(10000L, 10);
 
-        mvc.perform(post("/api/v1/product-variants/{variantId}/enable", variantId))
+        mvc.perform(post("/api/v1/product-variants/{variantId}/enable", variantId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("PRODUCT_VARIANT_INVALID_STATE_TRANSITION"));
+    }
+
+    @Test
+    @DisplayName("구매자 토큰의 변형 비활성은 403 FORBIDDEN으로 거부되고 상태를 바꾸지 않는다")
+    void disableRejectsBuyerToken() throws Exception {
+        UUID buyerId = memberAppender.register("user-" + UUID.randomUUID() + "@example.com", "테스터", "password-123!");
+        UUID variantId = seedVariant(10000L, 10);
+
+        mvc.perform(post("/api/v1/product-variants/{variantId}/disable", variantId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(buyerId)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        assertThat(variantReader.getVariant(variantId).status()).isEqualTo(ProductVariantStatus.ACTIVE);
     }
 
     @Test
@@ -118,7 +136,8 @@ class ProductVariantControllerTest extends WebIntegrationTest {
     void retiredVariantRejectsPriceChangeAndEnable() throws Exception {
         UUID variantId = seedVariant(10000L, 10);
 
-        mvc.perform(post("/api/v1/product-variants/{variantId}/retire", variantId))
+        mvc.perform(post("/api/v1/product-variants/{variantId}/retire", variantId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
                 .andExpect(status().isNoContent());
         assertThat(variantReader.getVariant(variantId).status()).isEqualTo(ProductVariantStatus.RETIRED);
 
@@ -127,7 +146,8 @@ class ProductVariantControllerTest extends WebIntegrationTest {
                 .andExpect(jsonPath("$.code").value("PRODUCT_VARIANT_INVALID_STATE_TRANSITION"));
         assertThat(variantReader.getVariant(variantId).price()).isEqualTo(Money.of(10000L));
 
-        mvc.perform(post("/api/v1/product-variants/{variantId}/enable", variantId))
+        mvc.perform(post("/api/v1/product-variants/{variantId}/enable", variantId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("PRODUCT_VARIANT_INVALID_STATE_TRANSITION"));
     }
@@ -159,6 +179,7 @@ class ProductVariantControllerTest extends WebIntegrationTest {
 
     private ResultActions changePrice(UUID variantId, long price) throws Exception {
         return mvc.perform(post("/api/v1/product-variants/{variantId}/price-change", variantId)
+                .header(HttpHeaders.AUTHORIZATION, adminBearer())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(new VariantPriceChangeRequest(price))));
     }

@@ -153,12 +153,12 @@ class MemberControllerTest extends WebIntegrationTest {
     }
 
     @Test
-    @DisplayName("회원 상세 조회는 200으로 ACTIVE 상태·이메일·이름을 싣는다")
+    @DisplayName("관리자의 회원 상세 조회는 200으로 ACTIVE 상태·이메일·이름을 싣는다")
     void getMemberReturnsActiveMember() throws Exception {
         String email = "user-" + UUID.randomUUID() + "@example.com";
         UUID memberId = memberAppender.register(email, "테스터", "password-123!");
 
-        mvc.perform(get("/api/v1/members/{memberId}", memberId))
+        mvc.perform(get("/api/v1/members/{memberId}", memberId).header(HttpHeaders.AUTHORIZATION, adminBearer()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(memberId.toString()))
                 .andExpect(jsonPath("$.status").value("ACTIVE"))
@@ -192,7 +192,7 @@ class MemberControllerTest extends WebIntegrationTest {
         UUID memberId = registerMember();
         memberModifier.suspend(memberId, SuspensionReason.POLICY_VIOLATION);
 
-        mvc.perform(get("/api/v1/members/{memberId}", memberId))
+        mvc.perform(get("/api/v1/members/{memberId}", memberId).header(HttpHeaders.AUTHORIZATION, adminBearer()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("SUSPENDED"))
                 .andExpect(jsonPath("$.suspensionReason").value("POLICY_VIOLATION"));
@@ -201,23 +201,63 @@ class MemberControllerTest extends WebIntegrationTest {
     @Test
     @DisplayName("없는 회원 상세 조회는 404 MEMBER_NOT_FOUND로 거부된다")
     void getMemberReturns404ForMissingMember() throws Exception {
-        mvc.perform(get("/api/v1/members/{memberId}", UUID.randomUUID()))
+        mvc.perform(get("/api/v1/members/{memberId}", UUID.randomUUID())
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("MEMBER_NOT_FOUND"));
     }
 
     @Test
-    @DisplayName("정지 후 해제 왕복이 사유를 기록했다가 지운다")
+    @DisplayName("구매자 토큰의 회원 지정 조회는 403 FORBIDDEN으로 거부된다")
+    void getMemberRejectsBuyerToken() throws Exception {
+        UUID buyerId = registerMember();
+
+        mvc.perform(get("/api/v1/members/{memberId}", buyerId).header(HttpHeaders.AUTHORIZATION, bearer(buyerId)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    @DisplayName("구매자 토큰의 회원 정지는 403 FORBIDDEN으로 거부된다")
+    void suspendRejectsBuyerToken() throws Exception {
+        UUID buyerId = registerMember();
+        UUID targetId = registerMember();
+
+        mvc.perform(post("/api/v1/members/{memberId}/suspend", targetId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(buyerId))
+                        .param("reason", "FRAUD_SUSPECTED"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        assertThat(memberReader.getMember(targetId).status()).isEqualTo(MemberStatus.ACTIVE);
+    }
+
+    @Test
+    @DisplayName("미인증 회원 정지는 401 UNAUTHENTICATED로 거부된다")
+    void suspendRejectsUnauthenticated() throws Exception {
+        UUID targetId = registerMember();
+
+        mvc.perform(post("/api/v1/members/{memberId}/suspend", targetId).param("reason", "FRAUD_SUSPECTED"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+    }
+
+    @Test
+    @DisplayName("관리자의 정지 후 해제 왕복이 사유를 기록했다가 지운다")
     void suspendAndReinstateRoundTrip() throws Exception {
         UUID memberId = registerMember();
 
-        mvc.perform(post("/api/v1/members/{memberId}/suspend", memberId).param("reason", "FRAUD_SUSPECTED"))
+        mvc.perform(post("/api/v1/members/{memberId}/suspend", memberId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
+                        .param("reason", "FRAUD_SUSPECTED"))
                 .andExpect(status().isNoContent());
         MemberInfo suspended = memberReader.getMember(memberId);
         assertThat(suspended.status()).isEqualTo(MemberStatus.SUSPENDED);
         assertThat(suspended.suspensionReason()).isEqualTo(SuspensionReason.FRAUD_SUSPECTED);
 
-        mvc.perform(post("/api/v1/members/{memberId}/reinstate", memberId)).andExpect(status().isNoContent());
+        mvc.perform(post("/api/v1/members/{memberId}/reinstate", memberId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
+                .andExpect(status().isNoContent());
         MemberInfo reinstated = memberReader.getMember(memberId);
         assertThat(reinstated.status()).isEqualTo(MemberStatus.ACTIVE);
         assertThat(reinstated.suspensionReason()).isNull();
@@ -228,7 +268,9 @@ class MemberControllerTest extends WebIntegrationTest {
     void suspendedMemberCannotAddCartItem() throws Exception {
         UUID memberId = registerMember();
         UUID variantId = seedProduct(50);
-        mvc.perform(post("/api/v1/members/{memberId}/suspend", memberId).param("reason", "PAYMENT_ABUSE"))
+        mvc.perform(post("/api/v1/members/{memberId}/suspend", memberId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
+                        .param("reason", "PAYMENT_ABUSE"))
                 .andExpect(status().isNoContent());
 
         AddCartItemRequest request = new AddCartItemRequest(variantId, 1);
@@ -244,7 +286,9 @@ class MemberControllerTest extends WebIntegrationTest {
     @DisplayName("정지 회원도 탈퇴가 204로 성공한다")
     void suspendedMemberCanWithdraw() throws Exception {
         UUID memberId = registerMember();
-        mvc.perform(post("/api/v1/members/{memberId}/suspend", memberId).param("reason", "CS_MANUAL"))
+        mvc.perform(post("/api/v1/members/{memberId}/suspend", memberId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
+                        .param("reason", "CS_MANUAL"))
                 .andExpect(status().isNoContent());
 
         mvc.perform(delete("/api/v1/members/me")
@@ -260,7 +304,8 @@ class MemberControllerTest extends WebIntegrationTest {
     void reinstateRejectsActiveMember() throws Exception {
         UUID memberId = registerMember();
 
-        mvc.perform(post("/api/v1/members/{memberId}/reinstate", memberId))
+        mvc.perform(post("/api/v1/members/{memberId}/reinstate", memberId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("MEMBER_INVALID_STATUS_TRANSITION"));
     }
@@ -320,8 +365,10 @@ class MemberControllerTest extends WebIntegrationTest {
         UUID variantId = seedProduct(50);
         cartAppender.addItem(memberId, variantId, 1);
         UUID orderId = checkoutFacade.checkout(memberId, address(), Money.ZERO, null, PaymentMethod.CARD);
-        mvc.perform(post("/api/v1/orders/{orderId}/ship", orderId)).andExpect(status().isNoContent());
-        mvc.perform(post("/api/v1/orders/{orderId}/delivery-confirmation", orderId))
+        mvc.perform(post("/api/v1/orders/{orderId}/ship", orderId).header(HttpHeaders.AUTHORIZATION, adminBearer()))
+                .andExpect(status().isNoContent());
+        mvc.perform(post("/api/v1/orders/{orderId}/delivery-confirmation", orderId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
                 .andExpect(status().isNoContent());
 
         mvc.perform(delete("/api/v1/members/me")

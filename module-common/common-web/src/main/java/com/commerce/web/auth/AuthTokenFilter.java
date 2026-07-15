@@ -34,7 +34,8 @@ public final class AuthTokenFilter extends OncePerRequestFilter {
         if (header != null && header.startsWith(BEARER_PREFIX)) {
             jwtTokenCodec
                     .verify(header.substring(BEARER_PREFIX.length()))
-                    .ifPresent(memberId -> request.setAttribute(AuthUser.ATTRIBUTE, new AuthUser(memberId)));
+                    .ifPresent(claims ->
+                            request.setAttribute(AuthUser.ATTRIBUTE, new AuthUser(claims.subject(), claims.role())));
         }
         filterChain.doFilter(request, response);
     }

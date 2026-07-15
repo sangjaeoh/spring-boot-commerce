@@ -4,6 +4,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.commerce.auth.token.AuthRole;
 import com.commerce.auth.token.JwtTokenCodec;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -33,7 +34,7 @@ class AuthTokenFilterTest {
     @DisplayName("유효한 Bearer 토큰은 인증 주체를 요청에 부착한다")
     void validBearerTokenAttachesAuthUser() throws Exception {
         UUID memberId = UUID.randomUUID();
-        String token = codec.issue(memberId);
+        String token = codec.issue(memberId, AuthRole.BUYER);
 
         mvc.perform(get("/test/auth-user").header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .andExpect(status().isOk())

@@ -86,6 +86,7 @@ class CouponControllerTest extends WebIntegrationTest {
                 "정액 쿠폰", new DiscountRequest(DiscountType.FIXED, 1000L, null, null), 0L, VALID_FROM, VALID_UNTIL, 30);
 
         String body = mvc.perform(post("/api/v1/coupons")
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
@@ -110,6 +111,7 @@ class CouponControllerTest extends WebIntegrationTest {
                 "정률 쿠폰", new DiscountRequest(DiscountType.RATE, null, 10, 5000L), 0L, VALID_FROM, VALID_UNTIL, 30);
 
         mvc.perform(post("/api/v1/coupons")
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
@@ -123,6 +125,7 @@ class CouponControllerTest extends WebIntegrationTest {
                 "  ", new DiscountRequest(DiscountType.FIXED, 1000L, null, null), 0L, VALID_FROM, VALID_UNTIL, 30);
 
         mvc.perform(post("/api/v1/coupons")
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
@@ -136,6 +139,7 @@ class CouponControllerTest extends WebIntegrationTest {
                 "잘못된 쿠폰", new DiscountRequest(DiscountType.FIXED, 1000L, 10, null), 0L, VALID_FROM, VALID_UNTIL, 30);
 
         mvc.perform(post("/api/v1/coupons")
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
@@ -154,6 +158,7 @@ class CouponControllerTest extends WebIntegrationTest {
                 30);
 
         mvc.perform(post("/api/v1/coupons")
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
@@ -167,6 +172,7 @@ class CouponControllerTest extends WebIntegrationTest {
                 "음수 상한 쿠폰", new DiscountRequest(DiscountType.RATE, null, 10, -1L), 0L, VALID_FROM, VALID_UNTIL, 30);
 
         mvc.perform(post("/api/v1/coupons")
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
@@ -185,6 +191,7 @@ class CouponControllerTest extends WebIntegrationTest {
                 30);
 
         mvc.perform(post("/api/v1/coupons")
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
@@ -243,12 +250,45 @@ class CouponControllerTest extends WebIntegrationTest {
     }
 
     @Test
+    @DisplayName("구매자 토큰의 쿠폰 정책 생성은 403 FORBIDDEN으로 거부된다")
+    void createRejectsBuyerToken() throws Exception {
+        UUID buyerId = registerMember();
+        CouponCreationRequest request = new CouponCreationRequest(
+                "정액 쿠폰", new DiscountRequest(DiscountType.FIXED, 1000L, null, null), 0L, VALID_FROM, VALID_UNTIL, 30);
+
+        mvc.perform(post("/api/v1/coupons")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(buyerId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    @DisplayName("구매자 토큰의 쿠폰 정책 중지는 403 FORBIDDEN으로 거부되고 발급은 계속된다")
+    void disableRejectsBuyerToken() throws Exception {
+        UUID buyerId = registerMember();
+        UUID couponId = createCoupon();
+
+        mvc.perform(post("/api/v1/coupons/{couponId}/disable", couponId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(buyerId)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        mvc.perform(post("/api/v1/coupons/{couponId}/issues", couponId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(buyerId)))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
     @DisplayName("중지가 204로 성공하고 이후 발급은 409 COUPON_DISABLED로 거부된다")
     void disableRejectsNewIssuance() throws Exception {
         UUID memberId = registerMember();
         UUID couponId = createCoupon();
 
-        mvc.perform(post("/api/v1/coupons/{couponId}/disable", couponId)).andExpect(status().isNoContent());
+        mvc.perform(post("/api/v1/coupons/{couponId}/disable", couponId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
+                .andExpect(status().isNoContent());
 
         mvc.perform(post("/api/v1/coupons/{couponId}/issues", couponId)
                         .header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
@@ -265,7 +305,9 @@ class CouponControllerTest extends WebIntegrationTest {
         UUID variantId = seedProduct(50);
         cartAppender.addItem(memberId, variantId, 1);
 
-        mvc.perform(post("/api/v1/coupons/{couponId}/disable", couponId)).andExpect(status().isNoContent());
+        mvc.perform(post("/api/v1/coupons/{couponId}/disable", couponId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
+                .andExpect(status().isNoContent());
 
         UUID orderId = checkoutFacade.checkout(memberId, address(), Money.ZERO, issuedId, PaymentMethod.CARD);
         assertThat(issuedCouponReader.getIssuedCoupon(issuedId, memberId).status())
@@ -279,9 +321,13 @@ class CouponControllerTest extends WebIntegrationTest {
     void enableResumesIssuance() throws Exception {
         UUID memberId = registerMember();
         UUID couponId = createCoupon();
-        mvc.perform(post("/api/v1/coupons/{couponId}/disable", couponId)).andExpect(status().isNoContent());
+        mvc.perform(post("/api/v1/coupons/{couponId}/disable", couponId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
+                .andExpect(status().isNoContent());
 
-        mvc.perform(post("/api/v1/coupons/{couponId}/enable", couponId)).andExpect(status().isNoContent());
+        mvc.perform(post("/api/v1/coupons/{couponId}/enable", couponId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
+                .andExpect(status().isNoContent());
 
         mvc.perform(post("/api/v1/coupons/{couponId}/issues", couponId)
                         .header(HttpHeaders.AUTHORIZATION, bearer(memberId)))

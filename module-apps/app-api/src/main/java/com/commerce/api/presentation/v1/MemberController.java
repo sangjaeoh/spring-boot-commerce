@@ -10,6 +10,7 @@ import com.commerce.member.entity.WithdrawalReason;
 import com.commerce.member.service.MemberAppender;
 import com.commerce.member.service.MemberModifier;
 import com.commerce.member.service.MemberReader;
+import com.commerce.web.auth.AdminOnly;
 import com.commerce.web.auth.AuthUser;
 import jakarta.validation.Valid;
 import java.util.UUID;
@@ -29,8 +30,8 @@ import org.springframework.web.bind.annotation.RestController;
  * 회원 가입·조회·탈퇴·관리(정지·해제·이름 변경) 엔드포인트다.
  *
  * <p>가입은 공개, 본인 조회({@code /me})·이름 변경·탈퇴는 토큰 주체({@link AuthUser})에서 회원을 도출하는
- * 본인용 표면이다(미인증은 401). 회원 지정 조회·정지·해제는 관리자 오퍼레이션이라 대상 회원을 경로로
- * 받는다(역할 가드는 후속). 가입·조회는 회원 도메인 서비스에, 탈퇴는 탈퇴 파사드에 위임한다. 관리는 단일
+ * 본인용 표면이다(미인증은 401). 회원 지정 조회·정지·해제는 대상 회원을 경로로 받는 관리자 표면이라
+ * 관리자 토큰만 허용한다({@link AdminOnly}). 가입·조회는 회원 도메인 서비스에, 탈퇴는 탈퇴 파사드에 위임한다. 관리는 단일
  * 도메인 쓰기라 파사드 없이 회원 도메인 Modifier에 얇게 위임하고, 이메일 형식 오류·중복·미존재·탈퇴 거부·
  * 허용되지 않은 상태 전이는 도메인/파사드가 던지는 예외를 전역 핸들러가 problem+json으로 매핑한다. 정지와
  * 탈퇴는 독립 축이라 정지 회원도 탈퇴할 수 있다.
@@ -70,12 +71,14 @@ public class MemberController {
     }
 
     /** 회원 상세를 계정 상태·정지 사유와 함께 조회한다. */
+    @AdminOnly
     @GetMapping("/{memberId}")
     public MemberResponse getMember(@PathVariable UUID memberId) {
         return MemberResponse.from(memberReader.getMember(memberId));
     }
 
     /** 회원을 정지하고 사유를 기록한다. */
+    @AdminOnly
     @PostMapping("/{memberId}/suspend")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void suspend(@PathVariable UUID memberId, @RequestParam SuspensionReason reason) {
@@ -83,6 +86,7 @@ public class MemberController {
     }
 
     /** 회원 정지를 해제하고 사유를 지운다. */
+    @AdminOnly
     @PostMapping("/{memberId}/reinstate")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void reinstate(@PathVariable UUID memberId) {

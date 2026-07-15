@@ -2,6 +2,7 @@ package com.commerce.api.presentation.v1;
 
 import com.commerce.api.presentation.v1.request.StockIncreaseRequest;
 import com.commerce.stock.service.StockModifier;
+import com.commerce.web.auth.AdminOnly;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -15,10 +16,11 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 재고 운영(재입고·수동 품절/재개·단종) 엔드포인트다.
  *
- * <p>재고는 변형당 1행이라 variantId가 자연 키다. 단일 도메인 쓰기라 파사드 없이 재고 도메인 Modifier에
- * 얇게 위임하고, 미존재·허용되지 않은 전이·단종 재입고 거부는 도메인이 던지는 예외를 전역 핸들러가
- * problem+json으로 매핑한다.
+ * <p>전부 관리자 표면이라 관리자 토큰만 허용한다({@link AdminOnly}). 재고는 변형당 1행이라 variantId가
+ * 자연 키다. 단일 도메인 쓰기라 파사드 없이 재고 도메인 Modifier에 얇게 위임하고, 미존재·허용되지 않은
+ * 전이·단종 재입고 거부는 도메인이 던지는 예외를 전역 핸들러가 problem+json으로 매핑한다.
  */
+@AdminOnly
 @RestController
 @RequestMapping("/api/v1/stocks")
 public class StockController {

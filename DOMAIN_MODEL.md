@@ -8,7 +8,7 @@
 
 범위는 7개 도메인: 회원(member) · 상품(product) · 재고(stock) · 장바구니(cart) · 쿠폰(coupon) · 주문(order) · 결제(payment).
 
-기준선(이 문서의 전제): 결제 게이트웨이는 동기 stub, 도메인 이벤트 transport는 in-process(무손실 보장 아님), 인증은 이메일+패스워드 로그인·JWT 액세스 토큰 발급·구매자 셀프서비스의 토큰 주체 강제까지(역할은 아직 밖 — 경계는 [`REQUIREMENTS.md`](./REQUIREMENTS.md)).
+기준선(이 문서의 전제): 결제 게이트웨이는 동기 stub, 도메인 이벤트 transport는 in-process(무손실 보장 아님), 인증은 이메일+패스워드 로그인·JWT 액세스 토큰 발급·구매자 셀프서비스의 토큰 주체 강제·역할(BUYER/ADMIN) 기반 관리자 오퍼레이션 가드까지(경계는 [`REQUIREMENTS.md`](./REQUIREMENTS.md)).
 
 ## 공통 규약
 
@@ -34,7 +34,7 @@
 
 ## 1. 회원 (member)
 
-회원의 식별과 자격증명(패스워드 해시)을 소유한다. 자격증명 검증(이메일+패스워드)은 이 도메인이 담당하고, JWT 액세스 토큰 발급·검증은 앱 경계(common-auth 원자재)가 담당한다.
+회원의 식별과 자격증명(패스워드 해시)·역할을 소유한다. 자격증명 검증(이메일+패스워드)은 이 도메인이 담당하고, JWT 액세스 토큰 발급·검증은 앱 경계(common-auth 원자재)가 담당한다.
 
 - 애그리거트 루트: `Member`
 - 스키마/테이블: `member` / `member`
@@ -47,6 +47,7 @@
 | email | Email(VO) | 필수 | 활성 회원 중 유니크. 형식 검증(VO). 식별 키 |
 | name | String | 필수 | 표시 이름 |
 | passwordHash | String | 필수 | bcrypt 해시(60자). Info·응답에 비노출 |
+| role | MemberRole | 필수 | `BUYER`·`ADMIN`. 가입은 항상 BUYER, ADMIN은 설정 기반 기동 시딩으로만 생성. 생성 후 불변(변경 오퍼레이션 없음) |
 | status | MemberStatus | 필수 | 아래 상태표 |
 | suspensionReason | SuspensionReason | 선택 | 정지 사유. SUSPENDED에서만 존재, `reinstate` 시 clear |
 | createdAt | Instant | 필수 | 생성 시각(Auditing 자동 기록) |
@@ -700,7 +701,7 @@
 - 부분 취소·부분 환불·부분 선택 주문.
 - 회원 주소록(배송지는 체크아웃 요청이 매번 제공).
 - 소셜 로그인·리프레시 토큰·비밀번호 재설정·이메일 인증(인증은 이메일+패스워드 로그인·JWT 액세스 토큰 발급까지 범위 내).
-- 기존 엔드포인트에 대한 토큰 인증 강제·역할(권한) 모델 — 토큰은 주체(회원 ID)만 싣는다.
+- 세분화된 퍼미션·권한 매트릭스 — 역할은 BUYER/ADMIN 이분법이고 토큰은 주체(회원 ID)·역할 클레임을 싣는다. 역할 변경 오퍼레이션도 범위 밖(관리자는 시딩으로만 생성).
 - 실 PG·비동기 웹훅과 그에 따른 PENDING 리컨실·아웃박스(내구성 메시징).
 - 쿠폰 선착순 발급 한도.
 - 발급된 쿠폰의 회수·관리자 무효화(정책 DISABLED는 신규 발급만 막고 기발급분은 계속 사용 가능).

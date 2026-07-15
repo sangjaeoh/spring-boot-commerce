@@ -11,6 +11,7 @@ import com.commerce.core.money.Money;
 import com.commerce.order.service.OrderModifier;
 import com.commerce.order.service.OrderReader;
 import com.commerce.payment.service.PaymentReader;
+import com.commerce.web.auth.AdminOnly;
 import com.commerce.web.auth.AuthUser;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -29,7 +30,7 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <p>본인용 표면(체크아웃·취소·조회)은 회원을 토큰 주체({@link AuthUser})에서 도출하고 미인증 요청은
  * 401로 거부된다. 타인 주문은 존재 누출 방지로 미존재(404) 취급한다(발급 쿠폰 관례와 동일). 이행 전이는
- * 관리자 오퍼레이션이라 주체를 받지 않는다(역할 가드는 후속). 크로스 도메인 쓰기(체크아웃·취소)는 파사드에,
+ * 관리자 표면이라 관리자 토큰만 허용한다({@link AdminOnly}). 크로스 도메인 쓰기(체크아웃·취소)는 파사드에,
  * 단일 도메인 쓰기인 이행 전이는 주문 도메인 Modifier에 얇게 위임하고, 조회는 주문·결제 각 도메인 Reader에
  * 위임해 결과를 응답 DTO로 변환한다. 정책 거부·전이 위반·미존재는 도메인/파사드가 던지는 예외를 전역
  * 핸들러가 problem+json으로 매핑한다.
@@ -78,6 +79,7 @@ public class OrderController {
     }
 
     /** 결제 완료 주문을 출고 처리한다. */
+    @AdminOnly
     @PostMapping("/{orderId}/ship")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void ship(@PathVariable UUID orderId) {
@@ -85,6 +87,7 @@ public class OrderController {
     }
 
     /** 출고된 주문을 배송 완료 처리한다. */
+    @AdminOnly
     @PostMapping("/{orderId}/delivery-confirmation")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void confirmDelivery(@PathVariable UUID orderId) {
@@ -92,6 +95,7 @@ public class OrderController {
     }
 
     /** 준비 중인 주문의 이행을 보류한다. */
+    @AdminOnly
     @PostMapping("/{orderId}/fulfillment-hold")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void holdFulfillment(@PathVariable UUID orderId, @Valid @RequestBody FulfillmentHoldRequest request) {
@@ -99,6 +103,7 @@ public class OrderController {
     }
 
     /** 보류된 주문의 이행을 준비 중으로 되돌린다. */
+    @AdminOnly
     @PostMapping("/{orderId}/fulfillment-release")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void releaseFulfillment(@PathVariable UUID orderId) {

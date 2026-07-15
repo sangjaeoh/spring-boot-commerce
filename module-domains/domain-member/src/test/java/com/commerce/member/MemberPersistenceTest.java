@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.commerce.member.entity.Member;
+import com.commerce.member.entity.MemberRole;
 import com.commerce.member.entity.MemberStatus;
 import com.commerce.member.entity.SuspensionReason;
 import com.commerce.member.entity.WithdrawalReason;
@@ -99,7 +100,18 @@ class MemberPersistenceTest {
 
         assertThat(info.email()).isEqualTo("user@example.com");
         assertThat(info.name()).isEqualTo("홍길동");
+        assertThat(info.role()).isEqualTo(MemberRole.BUYER);
         assertThat(info.status()).isEqualTo(MemberStatus.ACTIVE);
+    }
+
+    @Test
+    @DisplayName("관리자 가입은 ADMIN 역할로 저장된다")
+    void registerAdminPersistsAdminRole() {
+        UUID id = memberAppender.registerAdmin("admin@example.com", "관리자", PASSWORD);
+        em.flush();
+        em.clear();
+
+        assertThat(memberReader.getMember(id).role()).isEqualTo(MemberRole.ADMIN);
     }
 
     @Test
@@ -149,19 +161,23 @@ class MemberPersistenceTest {
     }
 
     @Test
-    @DisplayName("올바른 자격증명 검증은 회원 ID를 반환하고, 정지 회원도 통과한다")
-    void authenticateReturnsMemberIdAndPassesSuspended() {
+    @DisplayName("올바른 자격증명 검증은 검증된 회원을 반환하고, 정지 회원도 통과한다")
+    void authenticateReturnsMemberAndPassesSuspended() {
         UUID id = memberAppender.register("login@example.com", "홍길동", PASSWORD);
         em.flush();
 
-        assertThat(memberCredentialValidator.authenticate("login@example.com", PASSWORD))
+        assertThat(memberCredentialValidator
+                        .authenticate("login@example.com", PASSWORD)
+                        .id())
                 .isEqualTo(id);
 
         memberModifier.suspend(id, SuspensionReason.POLICY_VIOLATION);
         em.flush();
         em.clear();
 
-        assertThat(memberCredentialValidator.authenticate("login@example.com", PASSWORD))
+        assertThat(memberCredentialValidator
+                        .authenticate("login@example.com", PASSWORD)
+                        .id())
                 .isEqualTo(id);
     }
 
