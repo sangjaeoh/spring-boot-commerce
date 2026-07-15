@@ -1,5 +1,9 @@
-# 로컬 실행용 PostgreSQL. DB·계정·포트는 app-api/app-migration의 local 프로필과 일치한다.
-# 호스트 포트는 개발자 로컬의 기존 PostgreSQL(5432)과 충돌하지 않도록 55432를 쓴다.
+# 기본(프로필 없음)은 로컬 실행용 PostgreSQL만 띄운다. DB·계정·포트는 app-api/app-migration의
+# local 프로필과 일치한다. 호스트 포트는 개발자 로컬의 기존 PostgreSQL(5432)과 충돌하지 않도록
+# 55432를 쓴다.
+# --profile full은 앱 이미지를 빌드해 postgres → migration(원샷) → api 순서로 풀스택을 띄운다.
+# 컨테이너 안에서는 호스트 포트가 아닌 서비스명(postgres:5432)으로 접속하므로 local 프로필 대신
+# datasource를 환경변수로 주입한다.
 services:
   postgres:
     image: postgres:17-alpine
@@ -15,3 +19,46 @@ services:
       interval: 2s
       timeout: 2s
       retries: 15
+
+  migration:
+    build:
+      context: .
+      target: app-migration
+    container_name: commerce-migration
+    profiles: ["full"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/commerce
+      SPRING_DATASOURCE_USERNAME: commerce
+      SPRING_DATASOURCE_PASSWORD: commerce
+
+  api:
+    build:
+      context: .
+      target: app-api
+    container_name: commerce-api
+    profiles: ["full"]
+    depends_on:
+      migration:
+        condition: service_completed_successfully
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/commerce
+      SPRING_DATASOURCE_USERNAME: commerce
+      SPRING_DATASOURCE_PASSWORD: commerce
+      # 로컬 전용 개발 시크릿·관리자 시딩 계정 — application-local.yml의 기본값과 같은 값이다. 운영은 별도 주입.
+      AUTH_JWT_SECRET: local-dev-only-secret-key-32bytes-min!
+      PAYMENT_WEBHOOK_SECRET: local-dev-only-webhook-secret
+      AUTH_ADMIN_EMAIL: admin@local.dev
+      AUTH_ADMIN_PASSWORD: local-admin-password
+    healthcheck:
+      # JRE 베이스 이미지에 curl/wget이 없어 bash의 /dev/tcp로 리슨 여부를 본다.
+      # Tomcat은 컨텍스트 기동 완료 후에야 리슨하므로 준비 신호로 충분하다.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+      start_period: 10s
