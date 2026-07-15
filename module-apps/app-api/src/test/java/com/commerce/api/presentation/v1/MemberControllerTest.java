@@ -196,6 +196,23 @@ class MemberControllerTest extends WebIntegrationTest {
     }
 
     @Test
+    @DisplayName("결제 주문이 배송 완료되면 탈퇴가 204로 성공한다")
+    void withdrawSucceedsAfterDelivery() throws Exception {
+        UUID memberId = registerMember();
+        UUID variantId = seedProduct(50);
+        cartAppender.addItem(memberId, variantId, 1);
+        UUID orderId = checkoutFacade.checkout(memberId, address(), Money.ZERO, null, PaymentMethod.CARD);
+        mvc.perform(post("/api/v1/orders/{orderId}/ship", orderId)).andExpect(status().isNoContent());
+        mvc.perform(post("/api/v1/orders/{orderId}/delivery-confirmation", orderId))
+                .andExpect(status().isNoContent());
+
+        mvc.perform(delete("/api/v1/members/{memberId}", memberId).param("reason", "NO_LONGER_USED"))
+                .andExpect(status().isNoContent());
+
+        assertThatThrownBy(() -> memberReader.getMember(memberId)).isInstanceOf(MemberNotFoundException.class);
+    }
+
+    @Test
     @DisplayName("탈퇴 사유가 없는 요청은 400 problem+json으로 거부된다")
     void withdrawRejectsMissingReason() throws Exception {
         UUID memberId = registerMember();

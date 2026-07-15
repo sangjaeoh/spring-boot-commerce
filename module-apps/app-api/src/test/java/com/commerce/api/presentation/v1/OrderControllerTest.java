@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.commerce.api.facade.ProductRegistrationFacade;
 import com.commerce.api.presentation.v1.request.AddressRequest;
 import com.commerce.api.presentation.v1.request.CheckoutRequest;
+import com.commerce.api.presentation.v1.request.FulfillmentHoldRequest;
 import com.commerce.api.presentation.v1.response.CheckoutResponse;
 import com.commerce.cart.service.CartAppender;
 import com.commerce.core.money.Money;
@@ -17,8 +18,13 @@ import com.commerce.coupon.entity.ValidityPeriod;
 import com.commerce.coupon.service.CouponAppender;
 import com.commerce.coupon.service.IssuedCouponAppender;
 import com.commerce.member.service.MemberAppender;
+import com.commerce.order.entity.Address;
+import com.commerce.order.entity.FulfillmentStatus;
+import com.commerce.order.entity.HoldReason;
+import com.commerce.order.entity.OrderLineSnapshot;
 import com.commerce.order.entity.OrderStatus;
 import com.commerce.order.info.OrderInfo;
+import com.commerce.order.service.OrderAppender;
 import com.commerce.order.service.OrderModifier;
 import com.commerce.order.service.OrderReader;
 import com.commerce.payment.entity.PaymentMethod;
@@ -47,6 +53,7 @@ class OrderControllerTest extends WebIntegrationTest {
     private final ProductVariantReader variantReader;
     private final CouponAppender couponAppender;
     private final IssuedCouponAppender issuedCouponAppender;
+    private final OrderAppender orderAppender;
     private final OrderReader orderReader;
     private final OrderModifier orderModifier;
     private final StockReader stockReader;
@@ -60,6 +67,7 @@ class OrderControllerTest extends WebIntegrationTest {
             ProductVariantReader variantReader,
             CouponAppender couponAppender,
             IssuedCouponAppender issuedCouponAppender,
+            OrderAppender orderAppender,
             OrderReader orderReader,
             OrderModifier orderModifier,
             StockReader stockReader) {
@@ -71,6 +79,7 @@ class OrderControllerTest extends WebIntegrationTest {
         this.variantReader = variantReader;
         this.couponAppender = couponAppender;
         this.issuedCouponAppender = issuedCouponAppender;
+        this.orderAppender = orderAppender;
         this.orderReader = orderReader;
         this.orderModifier = orderModifier;
         this.stockReader = stockReader;
@@ -155,6 +164,21 @@ class OrderControllerTest extends WebIntegrationTest {
     }
 
     @Test
+    @DisplayName("HTTP로 출고한 주문의 취소 요청은 409 API_ORDER_NOT_CANCELLABLE로 거부되고 상태를 바꾸지 않는다")
+    void cancelRejectsShippedOrderViaHttp() throws Exception {
+        UUID orderId = checkoutViaHttp();
+        mvc.perform(post("/api/v1/orders/{orderId}/ship", orderId)).andExpect(status().isNoContent());
+
+        mvc.perform(post("/api/v1/orders/{orderId}/cancel", orderId))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("API_ORDER_NOT_CANCELLABLE"));
+
+        OrderInfo order = orderReader.getOrder(orderId);
+        assertThat(order.status()).isEqualTo(OrderStatus.PAID);
+        assertThat(order.fulfillmentStatus()).isEqualTo(FulfillmentStatus.SHIPPED);
+    }
+
+    @Test
     @DisplayName("같은 Idempotency-Key로 취소를 재요청하면 409로 거부되고 재고를 이중 복원하지 않는다")
     void duplicateKeyedCancelIsRejectedAndDoesNotDoubleRestore() throws Exception {
         UUID memberId = registerMember();
@@ -196,6 +220,102 @@ class OrderControllerTest extends WebIntegrationTest {
         mvc.perform(get("/api/v1/orders").param("memberId", memberId.toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1));
+    }
+
+    @Test
+    @DisplayName("출고·배송완료 전이가 각각 204로 성공하고 이행 축 상태·시각을 전진시킨다")
+    void shipThenConfirmDeliveryProgressesFulfillment() throws Exception {
+        UUID orderId = checkoutViaHttp();
+
+        mvc.perform(post("/api/v1/orders/{orderId}/ship", orderId)).andExpect(status().isNoContent());
+        mvc.perform(get("/api/v1/orders/{orderId}", orderId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PAID"))
+                .andExpect(jsonPath("$.fulfillmentStatus").value("SHIPPED"))
+                .andExpect(jsonPath("$.shippedAt").exists());
+
+        mvc.perform(post("/api/v1/orders/{orderId}/delivery-confirmation", orderId))
+                .andExpect(status().isNoContent());
+        mvc.perform(get("/api/v1/orders/{orderId}", orderId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PAID"))
+                .andExpect(jsonPath("$.fulfillmentStatus").value("DELIVERED"))
+                .andExpect(jsonPath("$.deliveredAt").exists());
+    }
+
+    @Test
+    @DisplayName("보류·해제 왕복이 각각 204로 사유를 세팅·클리어하고 해제 후 출고가 가능하다")
+    void holdAndReleaseRoundTripRestoresShippability() throws Exception {
+        UUID orderId = checkoutViaHttp();
+
+        mvc.perform(post("/api/v1/orders/{orderId}/fulfillment-hold", orderId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new FulfillmentHoldRequest(HoldReason.FRAUD_REVIEW))))
+                .andExpect(status().isNoContent());
+        mvc.perform(get("/api/v1/orders/{orderId}", orderId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.fulfillmentStatus").value("ON_HOLD"))
+                .andExpect(jsonPath("$.holdReason").value("FRAUD_REVIEW"));
+
+        mvc.perform(post("/api/v1/orders/{orderId}/fulfillment-release", orderId))
+                .andExpect(status().isNoContent());
+        mvc.perform(get("/api/v1/orders/{orderId}", orderId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.fulfillmentStatus").value("PREPARING"))
+                .andExpect(jsonPath("$.holdReason").doesNotExist());
+
+        mvc.perform(post("/api/v1/orders/{orderId}/ship", orderId)).andExpect(status().isNoContent());
+    }
+
+    @Test
+    @DisplayName("미결제(PENDING) 주문 출고는 409 ORDER_NOT_PAID로 거부된다")
+    void shipRejectsPendingOrder() throws Exception {
+        UUID orderId = placePendingOrder();
+
+        mvc.perform(post("/api/v1/orders/{orderId}/ship", orderId))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("ORDER_NOT_PAID"));
+    }
+
+    @Test
+    @DisplayName("취소된 주문 출고는 409 ORDER_NOT_PAID로 거부된다")
+    void shipRejectsCancelledOrder() throws Exception {
+        UUID orderId = checkoutViaHttp();
+        mvc.perform(post("/api/v1/orders/{orderId}/cancel", orderId)).andExpect(status().isNoContent());
+
+        mvc.perform(post("/api/v1/orders/{orderId}/ship", orderId))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("ORDER_NOT_PAID"));
+    }
+
+    @Test
+    @DisplayName("출고 전 배송완료는 409 ORDER_INVALID_FULFILLMENT_TRANSITION으로 거부된다")
+    void confirmDeliveryRejectsUnshippedOrder() throws Exception {
+        UUID orderId = checkoutViaHttp();
+
+        mvc.perform(post("/api/v1/orders/{orderId}/delivery-confirmation", orderId))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("ORDER_INVALID_FULFILLMENT_TRANSITION"));
+    }
+
+    @Test
+    @DisplayName("없는 주문 출고는 404 ORDER_NOT_FOUND로 거부된다")
+    void shipReturns404ForMissingOrder() throws Exception {
+        mvc.perform(post("/api/v1/orders/{orderId}/ship", UUID.randomUUID()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("ORDER_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("사유가 없는 보류 요청은 400 VALIDATION_FAILED로 거부된다")
+    void holdRejectsMissingReason() throws Exception {
+        UUID orderId = checkoutViaHttp();
+
+        mvc.perform(post("/api/v1/orders/{orderId}/fulfillment-hold", orderId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
     }
 
     @Test
@@ -298,6 +418,13 @@ class OrderControllerTest extends WebIntegrationTest {
                 .getContentAsString();
         return UUID.fromString(
                 objectMapper.readValue(body, CheckoutResponse.class).orderId());
+    }
+
+    private UUID placePendingOrder() {
+        OrderLineSnapshot line =
+                new OrderLineSnapshot(UUID.randomUUID(), UUID.randomUUID(), "상품", null, Money.of(10000L), 1);
+        Address address = Address.of("홍길동", "04524", "서울특별시 중구 세종대로 110", "3층", "010-1234-5678");
+        return orderAppender.place(registerMember(), List.of(line), address, Money.ZERO, Money.ZERO, null);
     }
 
     private UUID registerMember() {
