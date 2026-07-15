@@ -49,4 +49,12 @@ public class ProductVariantReader {
                 .map(ProductVariantInfo::from)
                 .toList();
     }
+
+    /** 주어진 상품들의 변형 목록을 조회한다. 없으면 빈 목록이다. */
+    @Transactional(readOnly = true)
+    public List<ProductVariantInfo> getByProductIds(Collection<UUID> productIds) {
+        return variantRepository.findByProductIdIn(productIds).stream()
+                .map(ProductVariantInfo::from)
+                .toList();
+    }
 }

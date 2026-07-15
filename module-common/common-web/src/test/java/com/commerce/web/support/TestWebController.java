@@ -1,11 +1,13 @@
 package com.commerce.web.support;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
 import org.springframework.http.ResponseEntity;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /** 핸들러·필터 검증용 테스트 엔드포인트. 각 경로가 특정 예외·경로를 재현한다. */
@@ -29,6 +31,9 @@ public class TestWebController {
 
     @PostMapping("/test/validate")
     public void validate(@Valid @RequestBody TestRequest request) {}
+
+    @GetMapping("/test/param")
+    public void param(@RequestParam("page") @Min(0) int page) {}
 
     @PostMapping("/test/echo")
     public ResponseEntity<String> echo() {

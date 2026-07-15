@@ -18,6 +18,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 /**
@@ -79,6 +80,27 @@ public class ProblemDetailHandler extends ResponseEntityExceptionHandler {
                                 .map(error -> violation(error.getField(), error.getDefaultMessage())),
                         result.getGlobalErrors().stream()
                                 .map(error -> violation(error.getObjectName(), error.getDefaultMessage())))
+                .toList();
+        body.setProperty("errors", errors);
+        return Objects.requireNonNull(handleExceptionInternal(exception, body, headers, status, request));
+    }
+
+    @Override
+    protected ResponseEntity<Object> handleHandlerMethodValidationException(
+            HandlerMethodValidationException exception,
+            HttpHeaders headers,
+            HttpStatusCode status,
+            WebRequest request) {
+        ProblemDetail body = ProblemDetail.forStatusAndDetail(status, "요청 값이 유효하지 않다.");
+        body.setProperty(CODE, "VALIDATION_FAILED");
+        List<Map<String, String>> errors = exception.getParameterValidationResults().stream()
+                .flatMap(result -> {
+                    // -parameters 미컴파일 클래스패스에서는 파라미터명이 없을 수 있다.
+                    String parameter = Objects.requireNonNullElse(
+                            result.getMethodParameter().getParameterName(), "parameter");
+                    return result.getResolvableErrors().stream()
+                            .map(error -> violation(parameter, error.getDefaultMessage()));
+                })
                 .toList();
         body.setProperty("errors", errors);
         return Objects.requireNonNull(handleExceptionInternal(exception, body, headers, status, request));

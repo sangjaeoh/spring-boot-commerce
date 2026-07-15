@@ -47,6 +47,15 @@ class ProblemDetailHandlerTest {
     }
 
     @Test
+    @DisplayName("@RequestParam 제약 위반은 400 VALIDATION_FAILED로 매핑된다")
+    void paramConstraintViolationMapsToBadRequest() throws Exception {
+        mvc.perform(get("/test/param").param("page", "-1"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.errors[0].message").exists());
+    }
+
+    @Test
     @DisplayName("잘못된 본문(JSON 파싱 실패)은 400으로 매핑되고 500 폴백에 삼켜지지 않는다")
     void malformedBodyMapsToBadRequest() throws Exception {
         mvc.perform(post("/test/validate")
