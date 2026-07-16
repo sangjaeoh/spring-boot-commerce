@@ -1,3 +1,9 @@
+server:
+  # 배포 재시작 시 진행 중 요청(체크아웃 등 돈의 경로)을 끊지 않고 마치고 내려가도록 graceful 종료한다.
+  # Tomcat 스레드(기본 max 200)는 그대로 둔다 — 풀 병목이 커넥션(아래 maximum-pool-size)이라
+  # 스레드를 늘려도 커넥션 대기만 늘어 이득이 없다.
+  shutdown: graceful
+
 spring:
   application:
     name: app-api
@@ -5,6 +11,20 @@ spring:
     open-in-view: false
     hibernate:
       ddl-auto: validate
+  lifecycle:
+    # graceful 종료가 진행 중 요청을 마칠 최대 대기. 동기 결제 최대 처리 시간을 넘도록 두되 배포
+    # 오케스트레이터의 종료 유예 안에 들도록 30s로 둔다. @Scheduled 리컨실·PENDING 스윕은 확정이
+    # 멱등이라(REQUIREMENTS 비기능·제약) 종료 중 중단돼도 다음 주기가 수렴시키므로 별도 대기를 두지 않는다.
+    timeout-per-shutdown-phase: 30s
+  datasource:
+    hikari:
+      # Postgres 기본 max_connections=100 전제. 인스턴스당 10으로 두어 다중 인스턴스·마이그레이션·운영
+      # 도구 커넥션과 합쳐도 여유를 남긴다(동기 결제 경로가 짧아 풀 회전이 빠르다).
+      maximum-pool-size: 10
+      # 풀 고갈 시 기본 30s까지 매달리지 않고 10s에 빠르게 실패시켜, 대기 요청이 스레드를 고갈시키지 않게 한다.
+      connection-timeout: 10000
+      # 커넥션 최대 수명(30분). DB·프록시가 커넥션을 끊는 시간보다 짧게 두어 죽은 커넥션을 미리 회수한다.
+      max-lifetime: 1800000
 
 logging:
   structured:

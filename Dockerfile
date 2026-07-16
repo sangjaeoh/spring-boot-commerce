@@ -8,11 +8,16 @@ COPY . .
 RUN --mount=type=cache,target=/root/.gradle \
     ./gradlew --no-daemon :module-apps:app-migration:bootJar :module-apps:app-api:bootJar
 
-FROM eclipse-temurin:25-jre AS app-migration
+# 두 앱 공통 런타임 베이스 — non-root 사용자로 실행한다(권한 상승 표면 축소).
+FROM eclipse-temurin:25-jre AS runtime
+RUN groupadd --system app && useradd --system --no-create-home --gid app app
+USER app
+
+FROM runtime AS app-migration
 COPY --from=build /workspace/module-apps/app-migration/build/libs/app-migration.jar /app/app.jar
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]
 
-FROM eclipse-temurin:25-jre AS app-api
+FROM runtime AS app-api
 COPY --from=build /workspace/module-apps/app-api/build/libs/app-api.jar /app/app.jar
 EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]

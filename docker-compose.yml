@@ -4,10 +4,13 @@
 # --profile full은 앱 이미지를 빌드해 postgres → migration(원샷) → api 순서로 풀스택을 띄운다.
 # 컨테이너 안에서는 호스트 포트가 아닌 서비스명(postgres:5432)으로 접속하므로 local 프로필 대신
 # datasource를 환경변수로 주입한다.
+# 장수 서비스(postgres·redis·api)는 restart: unless-stopped로 죽으면 다시 뜬다(migration은 원샷이라 제외).
+# 리소스 제한(cpus·mem_limit)은 운영 환경(인스턴스 사양·동시 배포 수)이 미정이라 두지 않는다.
 services:
   postgres:
     image: postgres:17-alpine
     container_name: commerce-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_DB: commerce
       POSTGRES_USER: commerce
@@ -23,6 +26,7 @@ services:
   redis:
     image: redis:8.2-alpine
     container_name: commerce-redis
+    restart: unless-stopped
     # 멱등 키의 재시작 내구성을 위해 AOF를 켠다 — 기본 RDB 스냅숏만으로는 재시작 시 키가 소실된다.
     command: ["redis-server", "--appendonly", "yes"]
     ports:
@@ -38,6 +42,7 @@ services:
       context: .
       target: app-migration
     container_name: commerce-migration
+    # 원샷 잡이라 restart를 두지 않는다 — 성공 종료가 정상이며 재시작하면 무한 반복된다.
     profiles: ["full"]
     depends_on:
       postgres:
@@ -52,6 +57,9 @@ services:
       context: .
       target: app-api
     container_name: commerce-api
+    restart: unless-stopped
+    # graceful 종료(app-api의 timeout-per-shutdown-phase=30s)가 SIGKILL 전에 끝나도록 기본 10s보다 크게 둔다.
+    stop_grace_period: 40s
     profiles: ["full"]
     depends_on:
       migration:
