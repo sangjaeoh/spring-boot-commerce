@@ -1,4 +1,4 @@
-rootProject.name = "spring-boot-commerce-practice"
+rootProject.name = "spring-boot-commerce"
 
 pluginManagement {
     includeBuild("build-logic")
