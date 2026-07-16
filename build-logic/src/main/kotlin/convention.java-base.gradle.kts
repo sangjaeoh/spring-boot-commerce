@@ -10,7 +10,8 @@ val libs = extensions.getByType<VersionCatalogsExtension>().named("libs")
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(25)
+        // Java 버전 정본: gradle/libs.versions.toml [versions] java. 카탈로그를 읽는 이 플러그인이 실소비처다.
+        languageVersion = JavaLanguageVersion.of(libs.findVersion("java").get().requiredVersion.toInt())
     }
 }
 

@@ -54,6 +54,11 @@ management:
       probes:
         # 쿠버네티스 밖에서도 /actuator/health/{liveness,readiness} 프로브 그룹을 연다.
         enabled: true
+      group:
+        # readiness = 트래픽 수용 준비 = 앱 기동 + DB·Redis 도달. 컨테이너·오케스트레이터 헬스체크가 이 그룹을 본다.
+        # liveness에는 DB·Redis를 넣지 않는다(기본 livenessState만) — 일시적 저장소 장애로 컨테이너가 재기동되면 복구가 늦다.
+        readiness:
+          include: readinessState,db,redis
 
 auth:
   jwt:

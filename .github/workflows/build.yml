@@ -18,6 +18,7 @@ jobs:
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
+          # Java 버전 정본: gradle/libs.versions.toml [versions] java. 카탈로그를 못 읽는 워크플로라 리터럴을 두되 정본과 일치시킨다.
           java-version: '25'
       - uses: gradle/actions/setup-gradle@v6
       - run: ./gradlew build

@@ -82,9 +82,10 @@ services:
       SPRINGDOC_API_DOCS_ENABLED: "true"
       SPRINGDOC_SWAGGER_UI_ENABLED: "true"
     healthcheck:
-      # JRE 베이스 이미지에 curl/wget이 없어 bash의 /dev/tcp로 리슨 여부를 본다.
-      # Tomcat은 컨텍스트 기동 완료 후에야 리슨하므로 준비 신호로 충분하다.
-      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080"]
+      # JRE 베이스 이미지에 curl/wget이 없어 bash /dev/tcp로 직접 HTTP GET을 보내 readiness 프로브를 확인한다.
+      # readiness 그룹은 DB·Redis 상태를 포함하므로(app-api management 설정) 리슨만 보던 이전과 달리
+      # 의존 저장소 불능이 healthy로 오판되지 않는다. 내부(localhost) 호출이라 /actuator 외부 미노출 전제와 무관하다.
+      test: ["CMD", "bash", "-c", 'exec 3<>/dev/tcp/127.0.0.1/8080 && printf ''GET /actuator/health/readiness HTTP/1.0\r\nHost: localhost\r\n\r\n'' >&3 && grep -q ''"status":"UP"'' <&3']
       interval: 2s
       timeout: 2s
       retries: 30
