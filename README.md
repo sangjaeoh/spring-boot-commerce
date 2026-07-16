@@ -36,7 +36,7 @@ graph TD
 | 구분 | 기술 |
 | --- | --- |
 | 언어·프레임워크 | Java 25 · Spring Boot 4.1 |
-| 데이터 | PostgreSQL 17 · Redis · Flyway · Spring Data JPA + QueryDSL |
+| 데이터 | PostgreSQL 17 · Redis · Flyway · Spring Data JPA |
 | 테스트·품질 | JUnit 5 · Testcontainers · ArchUnit · Spotless · NullAway · Error Prone |
 | CI | GitHub Actions |
 

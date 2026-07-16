@@ -31,11 +31,8 @@ dependencies {
 
 tasks.withType<JavaCompile>().configureEach {
     options.errorprone {
-        // QueryDSL이 생성한 Q타입 등 @Generated 코드는 손으로 쓴 코드가 아니라 정적분석 대상에서 뺀다.
-        disableWarningsInGeneratedCode.set(true)
         error("NullAway")
         option("NullAway:AnnotatedPackages", "com.commerce")
-        option("NullAway:TreatGeneratedAsUnannotated", "true")
         option(
             "NullAway:ExcludedFieldAnnotations",
             listOf(

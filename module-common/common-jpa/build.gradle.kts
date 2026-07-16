@@ -13,9 +13,4 @@ dependencies {
     // (app-migration)가 제공하므로 compileOnly로 두어 도메인 런타임에 flyway를 전파하지 않는다.
     // 버전은 위 implementation platform BOM이 compileClasspath까지 해석한다(compileClasspath ⊇ implementation).
     compileOnly(libs.flyway.core)
-
-    // BaseTimeEntity(@MappedSuperclass)의 Q타입(QBaseTimeEntity)을 생성해 이를 상속하는
-    // 도메인 엔티티의 QueryDSL 코드가 다운스트림 모듈에서 컴파일되게 한다.
-    implementation(libs.querydsl.jpa)
-    annotationProcessor(variantOf(libs.querydsl.apt) { classifier("jpa") })
 }

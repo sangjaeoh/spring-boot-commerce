@@ -17,7 +17,7 @@
 
   | 플러그인                     | 적용 대상       | 소유 규칙                                                       |
   | ---------------------------- | --------------- | -------------------------------------------------------------- |
-  | `convention.domain-module`   | `domain-{name}` | JPA·QueryDSL + 허용 의존 화이트리스트(common-core·jpa·messaging) |
+  | `convention.domain-module`   | `domain-{name}` | JPA + 허용 의존 화이트리스트(common-core·jpa·messaging) |
   | `convention.app-module`      | `app-{name}`    | Spring Boot 실행 조립 — domains·infra·external·common 의존 허용 |
   | `convention.infra-module`    | `infra-{tech}`  | common만 의존                                                   |
   | `convention.external-module` | `external-{name}` | 구현 대상 domain + common만 의존                             |
@@ -78,7 +78,7 @@
 - 도메인 모듈은 아래 서브 패키지로 구성한다.
   - `entity` — JPA 엔티티·값 객체(VO)·그 `AttributeConverter`(설계·연관·생명주기·VO 매핑은 → [entity-persistence](entity-persistence.md)). JPA 매핑 클래스(`@Entity`·`@MappedSuperclass`)는 모듈 밖 시그니처 등장 금지, 값 타입(enum·record·`@Embeddable` VO)은 경계 계약(명령 입력·Info·포트)으로 통과 허용.
   - `info` — 경계용 불변 record(`Info` 정의는 → [coding-conventions](coding-conventions.md)).
-  - `repository` — Spring Data + QueryDSL(배치·접근 범위는 아래 리포지토리 접근 범위).
+  - `repository` — Spring Data(배치·접근 범위는 아래 리포지토리 접근 범위).
   - `service` — Reader·Appender·Modifier·Remover·Processor·Validator(역할 접미사는 → [coding-conventions](coding-conventions.md)).
   - `port` — 소비하는 외부 기능의 벤더 중립 인터페이스.
   - `event` — 도메인 이벤트 record.
@@ -126,7 +126,7 @@
   - 애그리거트 간 참조는 ID 값만 보관한다(물리 FK 금지·연관 규칙은 → [entity-persistence](entity-persistence.md)).
   - 도메인 서비스의 한 트랜잭션은 하나의 애그리거트만 변경한다.
 - 자식 엔티티 리포지토리의 성능 예외는 조회와 벌크에만 좁게 연다.
-  - 자식 엔티티 직접 조회는 불변식을 깨지 않으므로 부모 전체 로딩 OOM·N+1을 피하려 리포지토리·QueryDSL로 직접 조회한다.
+  - 자식 엔티티 직접 조회는 불변식을 깨지 않으므로 부모 전체 로딩 OOM·N+1을 피하려 리포지토리로 직접 조회한다.
   - 자식 리포지토리를 통한 벌크 `UPDATE`·`DELETE`·대용량 `INSERT`도 허용한다. 막는 것은 자식 단건 `INSERT`뿐이다(신규 자식 생성 메커니즘은 → [entity-persistence](entity-persistence.md)).
 - 소프트삭제(`deletedAt`) 엔티티는 삭제 여부를 거르지 않는 base `JpaRepository` finder 직접 호출을 금지한다(`findById`·`existsById`·`findAll`·`findAllById`·`count`·`getReferenceById`).
   - 삭제분을 거르지 않으므로 빌드가 막는다. 활성-only 파생 쿼리는 이름에 활성 필터를 담는다(`...DeletedAtIsNull`). 삭제분을 일부러 포함하는 조회만 이름에 `IncludingDeleted`를 붙인다.
@@ -134,9 +134,8 @@
 - 리포지토리 조회는 아래 순서로 표현 가능한 최소 단계를 쓴다. 아래로 갈수록 표현력은 늘고 이름-스펙성·가독성은 준다.
   1. 파생 쿼리 메서드(`findBy…`) — 정적 단순 조건(등호·`And`/`Or`·정렬·활성 필터). 이름이 곧 스펙이라 우선한다.
   2. `@Query`(JPQL) — 정적이나 파생으로는 이름이 비대해지거나(대략 조건 3개 초과) 파생 파서가 못 푸는 것: 명시적 조인·`IN`·서브쿼리·DTO 프로젝션·벌크 `@Modifying`.
-  3. QueryDSL 프래그먼트 — 런타임 조건 조합(선택적 필터)·커서 페이지네이션·타입 안전 프로젝션·복잡 동적 조인. 컴파일 타임 타입 안전이 필요할 때.
   - 네이티브 SQL은 방언 종속이라 최후수단이며 리뷰 게이트다.
-  - QueryDSL 프래그먼트도 `repository` 패키지에 평탄하게 둔다(`custom/` 금지는 위와 동일).
+  - 런타임 조건 조합(선택적 필터)·커서 페이지네이션·타입 안전 프로젝션·복잡 동적 조인용 동적 조회 도구는 미배선이다. 전 리포지토리가 파생 쿼리·`@Query`로 끝나 사용처가 0건이라 QueryDSL 배선을 제거했고, 이 조회가 필요해지면 도구 재도입을 결정한다.
   - 메서드명 규칙은 → [coding-conventions](coding-conventions.md)의 네이밍이 소유한다.
 
 ### 경계 원칙

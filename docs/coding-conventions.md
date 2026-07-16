@@ -86,7 +86,7 @@
 - 범용 CRUD 동사(`update`·`set`·무의미한 `change`)는 의도를 숨긴다. 도메인 의도 동사를 쓴다.
 - 하드삭제(물리 DELETE)는 드물고 리뷰 게이트다. 명시 동사(`purge*`·`anonymize*`)로만 연다. 소프트삭제 `delete()`는 → [entity-persistence](entity-persistence.md)가 소유한다.
 - 엔티티 `create`/`from`/`of` 팩토리 네이밍은 위 객체 생성·변환 규칙이, 상태 전이 의도 메서드는 → [entity-persistence](entity-persistence.md)가 소유한다(표는 참조).
-- 리포지토리 조회의 파생/`@Query`/QueryDSL 선택은 → [architecture](architecture.md)의 리포지토리 접근 범위가 소유한다(표의 리포지토리 열은 이름만).
+- 리포지토리 조회의 파생/`@Query` 선택은 → [architecture](architecture.md)의 리포지토리 접근 범위가 소유한다(표의 리포지토리 열은 이름만).
 - 클래스는 아래 고정표 접미사만 쓴다.
 
   | 접미사 | 대상 |

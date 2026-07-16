@@ -22,8 +22,4 @@ dependencies {
         ),
     )
     "implementation"(libsCatalog.findLibrary("spring-boot-starter-data-jpa").get())
-    "implementation"(libsCatalog.findLibrary("querydsl-jpa").get())
-    "annotationProcessor"(
-        variantOf(libsCatalog.findLibrary("querydsl-apt").get()) { classifier("jpa") },
-    )
 }
