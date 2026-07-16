@@ -6,6 +6,7 @@ import com.commerce.coupon.exception.CouponExpiredException;
 import com.commerce.coupon.exception.CouponStatusException;
 import com.commerce.coupon.exception.IssuedCouponNotFoundException;
 import com.commerce.coupon.repository.IssuedCouponRepository;
+import java.time.Clock;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,9 +16,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class IssuedCouponModifier {
 
     private final IssuedCouponRepository issuedCouponRepository;
+    private final Clock clock;
 
-    public IssuedCouponModifier(IssuedCouponRepository issuedCouponRepository) {
+    public IssuedCouponModifier(IssuedCouponRepository issuedCouponRepository, Clock clock) {
         this.issuedCouponRepository = issuedCouponRepository;
+        this.clock = clock;
     }
 
     /**
@@ -29,7 +32,7 @@ public class IssuedCouponModifier {
      */
     @Transactional
     public void use(UUID issuedCouponId, UUID orderId) {
-        find(issuedCouponId).use(orderId);
+        find(issuedCouponId).use(orderId, clock.instant());
     }
 
     /** 사용을 복원한다. 사용 상태가 아니면 아무 일도 하지 않는다. */

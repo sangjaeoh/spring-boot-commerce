@@ -36,7 +36,7 @@ import com.commerce.stock.exception.StockNotFoundException;
 import com.commerce.stock.info.StockInfo;
 import com.commerce.stock.service.StockModifier;
 import com.commerce.stock.service.StockReader;
-import java.time.Instant;
+import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -65,6 +65,7 @@ public class CheckoutFacade {
     private final PaymentAppender paymentAppender;
     private final PaymentProcessor paymentProcessor;
     private final OrderModifier orderModifier;
+    private final Clock clock;
 
     public CheckoutFacade(
             MemberReader memberReader,
@@ -78,7 +79,8 @@ public class CheckoutFacade {
             IssuedCouponModifier issuedCouponModifier,
             PaymentAppender paymentAppender,
             PaymentProcessor paymentProcessor,
-            OrderModifier orderModifier) {
+            OrderModifier orderModifier,
+            Clock clock) {
         this.memberReader = memberReader;
         this.cartReader = cartReader;
         this.variantReader = variantReader;
@@ -91,6 +93,7 @@ public class CheckoutFacade {
         this.paymentAppender = paymentAppender;
         this.paymentProcessor = paymentProcessor;
         this.orderModifier = orderModifier;
+        this.clock = clock;
     }
 
     /**
@@ -206,7 +209,7 @@ public class CheckoutFacade {
 
     private Money resolveCouponDiscount(UUID issuedCouponId, UUID memberId, Money totalAmount) {
         IssuedCouponInfo issued = issuedCouponReader.getIssuedCoupon(issuedCouponId, memberId);
-        if (issued.status() != IssuedCouponStatus.ISSUED || issued.expiresAt().isBefore(Instant.now())) {
+        if (issued.status() != IssuedCouponStatus.ISSUED || issued.expiresAt().isBefore(clock.instant())) {
             throw new ApiException(ApiErrorCode.COUPON_NOT_APPLICABLE);
         }
         Money discount = issuedCouponReader.calculateDiscount(issuedCouponId, totalAmount);

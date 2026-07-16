@@ -5,8 +5,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.commerce.core.money.Money;
 import com.commerce.coupon.entity.Discount;
+import com.commerce.coupon.entity.IssuedCoupon;
 import com.commerce.coupon.entity.IssuedCouponStatus;
 import com.commerce.coupon.entity.ValidityPeriod;
+import com.commerce.coupon.exception.CouponExpiredException;
 import com.commerce.coupon.exception.DuplicateIssuanceException;
 import com.commerce.coupon.info.IssuedCouponInfo;
 import com.commerce.coupon.service.CouponAppender;
@@ -14,6 +16,7 @@ import com.commerce.coupon.service.IssuedCouponAppender;
 import com.commerce.coupon.service.IssuedCouponModifier;
 import com.commerce.coupon.service.IssuedCouponReader;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -139,6 +142,35 @@ class CouponPersistenceTest {
 
         assertThatThrownBy(() -> issuedCouponAppender.issue(couponId, memberId))
                 .isInstanceOf(DuplicateIssuanceException.class);
+    }
+
+    @Test
+    @DisplayName("발급 시 사용 기한이 고정 Clock 시각+사용 창으로 스냅샷된다")
+    void issueSnapshotsExpiresAtFromClock() {
+        UUID couponId = createRateCoupon();
+        em.flush();
+        UUID memberId = UUID.randomUUID();
+        UUID issuedId = issuedCouponAppender.issue(couponId, memberId);
+        em.flush();
+        em.clear();
+
+        assertThat(issuedCouponReader.getIssuedCoupon(issuedId, memberId).expiresAt())
+                .isEqualTo(PersistenceTestConfig.FIXED_NOW.plus(30, ChronoUnit.DAYS));
+    }
+
+    @Test
+    @DisplayName("고정 Clock 기준 사용 기한 정각 사용은 성공하고 직후는 거부된다")
+    void useExpiryBoundaryAgainstFixedClock() {
+        IssuedCoupon atBoundary =
+                em.persist(IssuedCoupon.create(UUID.randomUUID(), UUID.randomUUID(), PersistenceTestConfig.FIXED_NOW));
+        IssuedCoupon justExpired = em.persist(IssuedCoupon.create(
+                UUID.randomUUID(), UUID.randomUUID(), PersistenceTestConfig.FIXED_NOW.minusMillis(1)));
+        em.flush();
+
+        issuedCouponModifier.use(atBoundary.getId(), UUID.randomUUID());
+        assertThat(atBoundary.getStatus()).isEqualTo(IssuedCouponStatus.USED);
+        assertThatThrownBy(() -> issuedCouponModifier.use(justExpired.getId(), UUID.randomUUID()))
+                .isInstanceOf(CouponExpiredException.class);
     }
 
     @Test
