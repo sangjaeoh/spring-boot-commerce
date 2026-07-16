@@ -108,7 +108,8 @@ class OrderRefundFacadeTest extends FacadeIntegrationTest {
         UUID memberId = registerMember();
         UUID variantId = seedProduct(Money.of(10000L), 50);
         cartAppender.addItem(memberId, variantId, 4);
-        UUID couponId = couponAppender.create("정액 1000", Discount.fixed(Money.of(1000L)), Money.ZERO, validity(), 30);
+        UUID couponId =
+                couponAppender.create("정액 1000", Discount.fixed(Money.of(1000L)), Money.ZERO, validity(), 30, null);
         UUID issuedId = issuedCouponAppender.issue(couponId, memberId);
         UUID orderId = deliveredCheckout(memberId, issuedId);
 
@@ -193,7 +194,8 @@ class OrderRefundFacadeTest extends FacadeIntegrationTest {
         UUID memberId = registerMember();
         UUID variantId = seedProduct(Money.of(10000L), 50);
         cartAppender.addItem(memberId, variantId, 4);
-        UUID couponId = couponAppender.create("정액 1000", Discount.fixed(Money.of(1000L)), Money.ZERO, validity(), 30);
+        UUID couponId =
+                couponAppender.create("정액 1000", Discount.fixed(Money.of(1000L)), Money.ZERO, validity(), 30, null);
         UUID issuedId = issuedCouponAppender.issue(couponId, memberId);
         UUID orderId = deliveredCheckout(memberId, issuedId);
 

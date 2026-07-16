@@ -54,7 +54,8 @@ public class CouponController {
                 request.discount().toDiscount(),
                 Money.of(request.minOrderAmount()),
                 request.toValidityPeriod(),
-                request.usageValidDays());
+                request.usageValidDays(),
+                request.maxIssuance());
         return CouponCreationResponse.from(couponId);
     }
 

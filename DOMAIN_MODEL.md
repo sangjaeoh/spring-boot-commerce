@@ -324,6 +324,8 @@
 | minOrderAmount | Money | 필수 | 최소 주문 금액. 0 가능 |
 | validity | ValidityPeriod(VO) | 필수 | 발급 가능 기간(시작·종료). 아래 값 객체 참조 |
 | usageValidDays | int | 필수 | 발급분 사용 창(일). 발급 시 `expiresAt = 발급시각 + usageValidDays`. 1 이상 |
+| maxIssuance | Integer | 선택 | 총 발급 한도. 없으면 무제한. 있으면 1 이상 |
+| issuedCount | int | 필수 | 소진 카운트. 기본 0. 원자적 조건부 UPDATE로만 증가 |
 | status | CouponStatus | 필수 | ACTIVE(발급 가능) 또는 DISABLED(발급 중지) |
 | createdAt | Instant | 필수 | 생성 시각(Auditing 자동 기록) |
 | updatedAt | Instant | 필수 | 수정 시각(Auditing 자동 기록) |
@@ -356,10 +358,12 @@
 | id | UUID | 필수 | PK, UUIDv7 |
 | couponId | UUID | 필수 | 쿠폰 정책 참조 |
 | memberId | UUID | 필수 | 발급 대상 회원 참조 |
-| status | IssuedCouponStatus | 필수 | ISSUED 또는 USED |
+| status | IssuedCouponStatus | 필수 | ISSUED, USED 또는 REVOKED |
 | expiresAt | Instant | 필수 | 사용 기한(발급 시 확정 = 발급시각 + 정책 `usageValidDays`) |
 | usedAt | Instant | 선택 | 사용 시각 |
 | orderId | UUID | 선택 | 사용된 주문 참조 |
+| revokedAt | Instant | 선택 | 무효화 시각 |
+| revokeReason | String | 선택 | 무효화 사유(자유 문자열 한 필드) |
 | version | long | 필수 | 낙관락 버전(중복 사용 방지) |
 | createdAt | Instant | 필수 | 생성 시각(Auditing 자동 기록) |
 | updatedAt | Instant | 필수 | 수정 시각(Auditing 자동 기록) |
@@ -375,16 +379,23 @@
 |---|---|
 | ISSUED | 발급됨. 사용 가능 |
 | USED | 사용 완료 |
+| REVOKED | 관리자 무효화. 사용 불가·재전이 없는 종료 상태 |
 
 - 정책 전이: `ACTIVE ↔ DISABLED`. 의도 동사 `disable()`(ACTIVE→DISABLED)·`enable()`(DISABLED→ACTIVE)로만 전환한다. 발급 가능/중지는 쿠폰의 도메인 생명주기이며 호출자(관리자 등)의 유무와 무관하게 모델에 둔다.
-- 발급분 전이: `ISSUED → USED`(사용), `USED → ISSUED`(취소 복원). 만료는 상태가 아니라 `validUntil` 경과로 파생 판정한다(죽은 상태·죽은 배치 없음).
-- 발급분 불변식: `status == USED ⇔ usedAt ≠ null ∧ orderId ≠ null`.
+- 발급분 전이: `ISSUED → USED`(사용), `USED → ISSUED`(취소 복원), `ISSUED → REVOKED`(무효화). 만료는 상태가 아니라 `validUntil` 경과로 파생 판정한다(죽은 상태·죽은 배치 없음).
+- 발급분 불변식: `status == USED ⇔ usedAt ≠ null ∧ orderId ≠ null`, `status == REVOKED ⇔ revokedAt ≠ null ∧ revokeReason ≠ null`.
 
 ### 정책·불변식
 
 - 정책 생명주기(create·disable·enable): 쿠폰 정책은 `create`로 ACTIVE 생성하고, `disable`/`enable`로 발급 가능·중지를 전환한다.
-- 발급(issue): 쿠폰이 ACTIVE이고 발급 가능 기간 내(`validity.isValidAt(now)`)이며 대상 회원이 자격 활성(`status = ACTIVE`·미탈퇴)일 때만. 회원당 동일 쿠폰 1회 발급(`(couponId, memberId)` 유니크로 강제). 최초 상태 ISSUED. 발급 시 사용 기한 `expiresAt = 발급시각 + usageValidDays`를 확정(스냅샷). 정지·탈퇴 회원에게는 발급하지 않는다(담기·체크아웃 자격과 정책 일관).
-- 발급 후 정책 변경 무영향: `use`는 `Coupon.status`를 재검사하지 않는다. 이미 발급된 쿠폰은 정책이 나중에 DISABLED가 돼도 계속 사용할 수 있다(발급분 자격만 검증). DISABLED는 신규 발급만 막고, 발급된 쿠폰 회수는 범위 밖이다.
+- 발급(issue): 쿠폰이 ACTIVE이고 발급 가능 기간 내(`validity.isValidAt(now)`)이며 대상 회원이 자격 활성(`status = ACTIVE`·미탈퇴)일 때만. 회원당 동일 쿠폰 1회 발급(`(couponId, memberId)` 유니크로 강제). 발급 한도(`maxIssuance`)가 있으면 소진 시 거부한다. 최초 상태 ISSUED. 발급 시 사용 기한 `expiresAt = 발급시각 + usageValidDays`를 확정(스냅샷). 정지·탈퇴 회원에게는 발급하지 않는다(담기·체크아웃 자격과 정책 일관).
+- 발급 한도 동시성: 한도는 정책 행의 원자적 조건부 UPDATE(`issued_count = issued_count + 1 where issued_count < max_issuance`)로 강제한다. DB 행 락이 동시 발급을 직렬화해 경합에서도 한도 초과가 불가능하고, 0행 갱신은 결정적 소진 거부(409, 재시도 무의미)로 매핑된다.
+  - 재고 차감의 낙관락+409(클라이언트 재시도)는 기각했다 — 낙관락은 경합이 예외적일 때의 패턴인데 선착순 한도는 설계상 단일 정책 행에 버스트가 집중돼 재시도 폭주가 되고, 한도 소진은 일시적 충돌이 아니라 정상 종결 상태(마감)라 재시도 유도 신호가 어울리지 않으며, 정책 행 버전 충돌에 무제한 정책 발급·관리자 중지/재개까지 끌려들어간다.
+  - COUNT 쿼리 검사는 기각했다 — READ COMMITTED에서 검사와 삽입 사이 경합 창이 초과 발급을 허용한다.
+  - 카운트 선점(UPDATE)과 발급분 INSERT는 한 트랜잭션이다. 두 애그리거트 쓰기지만 "한 트랜잭션 하나의 애그리거트"의 좁은 예외로 둔다 — 한도 불변식은 선점과 발급 기록이 한 커밋으로 묶여야 보상 없이 성립하고(발급 실패 롤백이 선점을 자동 반환), 같은 도메인 모듈·스키마 내부라 MSA 분리와 충돌하지 않는다. 트랜잭션 분리(선점 후 별도 발급) 대안은 크래시 시 슬롯 누수·보상 경로가 생겨 기각했다.
+  - 무효화·발급 실패는 카운트를 되돌리지 않는다(커밋된 발급 총량 기준 한도 — 슬롯 반환 없음).
+- 발급 후 정책 변경 무영향: `use`는 `Coupon.status`를 재검사하지 않는다. 이미 발급된 쿠폰은 정책이 나중에 DISABLED가 돼도 계속 사용할 수 있다(발급분 자격만 검증). DISABLED는 신규 발급만 막고, 기발급분 사용 차단은 발급분 단위 무효화(revoke)가 담당한다.
+- 무효화(revoke): 관리자가 미사용(ISSUED) 발급분을 사유와 함께 `ISSUED → REVOKED`로 전이하고 `revokedAt`·`revokeReason`을 세팅한다. REVOKED는 `use`가 거부하고 재전이가 없다. 사용된(USED) 발급분은 무효화를 거부한다 — 소급 회수·주문 금액 재계산은 범위 밖이다. 무효화와 동시 사용의 경합은 발급분 낙관락이 직렬화한다.
 - 할인 계산: `calculateDiscount`는 `discount.applyTo(주문금액)`에 위임한다(정액/정률 규칙·상한·주문금액 clamp은 Discount 값 객체가 소유).
 - 적용 조건: (할인 전) 주문금액 ≥ minOrderAmount 이고 발급분이 ISSUED, 본인(memberId) 소유, 사용 기한 내(`now ≤ expiresAt`)이며, 산출 할인이 0보다 클 때만 적용한다(0 할인이면 1회 발급을 헛되이 소진하지 않도록 적용을 거부).
 - 소유: 본인(memberId) 소유가 아닌 발급분은 존재 누출 방지로 미존재로 취급한다.
@@ -396,13 +407,14 @@
 
 | 연산 | 입력 | 강제 불변식 | 거부 |
 |---|---|---|---|
-| create | name, discount, minOrderAmount, validity, usageValidDays | 값 객체 불변식(Discount·ValidityPeriod), usageValidDays ≥ 1, 최초 ACTIVE | 불변식 위반 |
+| create | name, discount, minOrderAmount, validity, usageValidDays, maxIssuance? | 값 객체 불변식(Discount·ValidityPeriod), usageValidDays ≥ 1, maxIssuance 있으면 ≥ 1, 최초 ACTIVE | 불변식 위반 |
 | disable | couponId | ACTIVE→DISABLED | 미존재; 잘못된 전이 |
 | enable | couponId | DISABLED→ACTIVE | 미존재; 잘못된 전이 |
-| issue | couponId, memberId | ACTIVE, 발급기간 내, 회원 자격 활성, `(couponId, memberId)` 유니크, 최초 ISSUED | 쿠폰 미존재; 발급 중지(DISABLED); 발급기간 밖; 회원 자격 비활성(정지·탈퇴); 중복 발급 |
+| issue | couponId, memberId | ACTIVE, 발급기간 내, 회원 자격 활성, `(couponId, memberId)` 유니크, 한도 미소진(원자 선점), 최초 ISSUED | 쿠폰 미존재; 발급 중지(DISABLED); 발급기간 밖; 회원 자격 비활성(정지·탈퇴); 중복 발급; 한도 소진 |
 | calculateDiscount | issuedCouponId, orderAmount | `discount.applyTo(orderAmount)`에 위임 | 미존재 |
 | use | issuedCouponId, orderId | ISSUED·본인·사용 기한(`expiresAt`)·산출 할인 > 0 일 때만 USED 전이 | 미존재(미소유 포함); 상태·자격 위반; 만료; 낙관락 충돌 |
 | restoreUse | issuedCouponId | 가드 USED→ISSUED(아니면 no-op), usedAt·orderId clear | — |
+| revoke | issuedCouponId, reason | 가드 ISSUED→REVOKED, revokedAt·revokeReason 세팅 | 미존재; 사용됨(USED)·이미 무효화(REVOKED); 낙관락 충돌 |
 | getIssuedCoupon | issuedCouponId | 본인 발급분 1행 | 미존재(미소유 포함) |
 
 반환 형상·거부의 예외 매핑·서비스 역할 배치·네이밍은 `docs/coding-conventions.md`가 소유.
@@ -689,7 +701,7 @@
 | stock | SELLABLE ↔ SOLD_OUT, {SELLABLE, SOLD_OUT} → DISCONTINUED. 소진은 수량 파생 |
 | cart | 상태 없음 |
 | coupon(정책) | ACTIVE ↔ DISABLED |
-| coupon(발급분) | ISSUED ↔ USED (취소 시 복원) |
+| coupon(발급분) | ISSUED ↔ USED (취소 시 복원), ISSUED → REVOKED (관리자 무효화, 종료 상태) |
 | order(결제) | PENDING → PAID → CANCELLED, PENDING → CANCELLED, PAID → REFUNDED(이행 DELIVERED에서만) |
 | order(이행) | NOT_STARTED → PREPARING → SHIPPED → DELIVERED, PREPARING ↔ ON_HOLD |
 | payment | REQUESTED → APPROVED → CANCELLED, REQUESTED → FAILED |
@@ -724,7 +736,7 @@
 - 상품변형(SKU): product 도메인 독립 루트(productId로 연결), 판매·재고 단위. 가격 소유(≥1, `changePrice`), `ProductVariantStatus{ACTIVE, DISABLED, RETIRED}`(최초 DISABLED, 재고 시딩 후 `enable`, RETIRED 완전 종료), 옵션은 평탄 optionSignature·optionLabel(생성 시 불변), `(product_id, option_signature)` 부분 유니크(`status <> RETIRED`)로 은퇴 조합 재등록 허용, add-only·삭제 없음(deletedAt·@Version 없음).
 - 재고: `StockStatus{SELLABLE, SOLD_OUT, DISCONTINUED}`(수동 품절·단종을 quantity=0과 분리), 변형당 1행(variant_id 유니크), 재입고 `increase`, 주문가능 = 상품 ON_SALE·미삭제 ∧ 변형 ACTIVE ∧ 재고 SELLABLE ∧ 수량(합성은 체크아웃), 즉시 차감(예약 모델 아님), 차감은 낙관락 가드·판매성은 체크아웃 게이트, 복원은 status 무관 가산·재시도 안전(멱등 아님, 전이 게이트로 1회 복원).
 - 장바구니: 회원당 1개(lazy get-or-create), 동일 변형 재담기 수량 합산(cart_id·variant_id 유니크), 담기·증량 게이트(회원 자격 활성 ∧ 변형 ACTIVE ∧ 상품 ON_SALE·미삭제)·감량/제거 무게이트, 선택 제거 `removeItems`·전체 `clear`, 총액 비저장(체크아웃 시 변형 현재가), 결제 완료 시 주문된 변형 라인만 제거(`OrderPaid` 소비).
-- 쿠폰: 할인은 `Discount` 값 객체(판별형 Fixed/Rate 단일 VO, 알고리즘·불변식 내재), `ValidityPeriod`는 발급 가능 기간, 발급분 사용 기한은 `IssuedCoupon.expiresAt`(발급시각 + `usageValidDays`)로 발급창과 분리, 정책 상태 ACTIVE↔DISABLED(`disable`/`enable`)로 발급 가능·중지, 발급은 ACTIVE·발급기간·회원당 1회, 사용은 주문 생성 이후 확정(정책 status 재검사 없음 — 발급분 자격만), 산출 할인 0이면 적용 거부, 만료는 `expiresAt` 판정(EXPIRED 상태 없음), 취소 시 복원.
+- 쿠폰: 할인은 `Discount` 값 객체(판별형 Fixed/Rate 단일 VO, 알고리즘·불변식 내재), `ValidityPeriod`는 발급 가능 기간, 발급분 사용 기한은 `IssuedCoupon.expiresAt`(발급시각 + `usageValidDays`)로 발급창과 분리, 정책 상태 ACTIVE↔DISABLED(`disable`/`enable`)로 발급 가능·중지, 발급은 ACTIVE·발급기간·회원당 1회·한도 미소진(선택 `maxIssuance`, 원자적 조건부 UPDATE 선점으로 경합 초과 배제), 사용은 주문 생성 이후 확정(정책 status 재검사 없음 — 발급분 자격만), 산출 할인 0이면 적용 거부, 만료는 `expiresAt` 판정(EXPIRED 상태 없음), 취소 시 복원, 미사용 발급분은 관리자 무효화(`revoke`, ISSUED→REVOKED 종료 상태·사유 한 필드·USED 거부).
 - 주문: 라인(variantId·productId·productName·optionLabel·unitPrice)·배송지 스냅샷, `orderNumber`, 결제 축 status와 별도 이행 축 `fulfillmentStatus{NOT_STARTED→PREPARING→SHIPPED→DELIVERED, PREPARING↔ON_HOLD}`(`ship`/`confirmDelivery`/`holdFulfillment`/`releaseFulfillment`, markPaid가 PREPARING 전이, 이행 전진은 status=PAID에서만 — 취소 주문 출고 불가), 보류 사유 `holdReason`, 출고 시 택배사·운송장 번호(`carrier`·`trackingNumber`) 기록, 출고 후 취소 금지, `paidAt`·`cancelledAt`·`cancellationReason` 시각·사유, 배송비 `shippingFee`(payAmount = total−discount+shippingFee), 불변식 `issuedCouponId ⟺ discountAmount>0`, totalAmount 자기 계산·discountAmount ≤ totalAmount 자기 강제, 할인·payAmount 서버 계산, 취소는 PENDING·PAID 모두(보상은 소스 상태 함수), 배송 완료 후 전체 반품 환불은 별도 상태 REFUNDED(`refund`, PAID ∧ DELIVERED 1회성, `refundedAt`·`refundReason`, 관리자 단일 액션 — CANCELLED 재사용은 이행 동결 불변식 모순으로 기각).
 - 결제: `@Version` 없음, 주문당 1행, `PaymentMethod{CARD, EASY_PAY, BANK_TRANSFER}`(동기 수단, `amount>0 ⇔ method≠null`), FAILED 사유 `failureReason`, 승인·취소 거래 ID 분리(`pgTransactionId`/`pgCancelTransactionId`), 업무 시각 `approvedAt`/`cancelledAt`, 0원은 PG 생략 자동 승인, 도메인 이벤트 없음. 응답 유실로 REQUESTED에 남은 결제는 유예 후 리컨실·웹훅 확정 경로가 PG 상태 조회(가맹점 참조 키)로 확정한다.
 - 정합: 핵심은 파사드 동기 조율 + 동기 보상, 주문 PENDING을 사가 앵커로 먼저 생성(order-first), 유일 이벤트는 `OrderPaid → 장바구니 비우기`.
@@ -742,8 +754,7 @@
 - 소셜 로그인·리프레시 토큰·비밀번호 재설정·이메일 인증(인증은 이메일+패스워드 로그인·JWT 액세스 토큰 발급까지 범위 내).
 - 세분화된 퍼미션·권한 매트릭스 — 역할은 BUYER/ADMIN 이분법이고 토큰은 주체(회원 ID)·역할 클레임을 싣는다. 역할 변경 오퍼레이션도 범위 밖(관리자는 시딩으로만 생성).
 - 실 PG 연동(fake PG 어댑터 교체)·아웃박스(내구성 메시징). 웹훅 확정·PENDING 리컨실은 fake PG 기준으로 범위에 들어왔다.
-- 쿠폰 선착순 발급 한도.
-- 발급된 쿠폰의 회수·관리자 무효화(정책 DISABLED는 신규 발급만 막고 기발급분은 계속 사용 가능).
+- 사용된(USED) 쿠폰의 소급 회수·주문 금액 재계산·재발급·양도(발급 한도와 미사용 발급분의 관리자 무효화 `revoke`는 범위 내). 무효화 사유는 자유 문자열 한 필드이고 사유 체계(enum·카탈로그)를 두지 않는다.
 - 상품변형 옵션의 구조 정규화: 옵션을 별도 엔티티·상품 단위 옵션 타입 스키마·글로벌 옵션 카탈로그·파셋 검색으로 두는 것(현재는 optionSignature·optionLabel 평탄 저장). 변형 간 옵션 타입 정합도 강제하지 않는다.
 - 상품 대표가·가격대 집계 읽기모델과 그 최적화(대표가는 ACTIVE 변형에서 파생하는 조회다).
 - 상품당 총재고 집계(변형 재고 합산 — admin/read-model).

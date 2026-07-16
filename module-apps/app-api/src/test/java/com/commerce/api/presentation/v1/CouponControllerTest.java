@@ -83,7 +83,13 @@ class CouponControllerTest extends WebIntegrationTest {
     @DisplayName("정액 쿠폰 생성이 201로 쿠폰 ID를 반환하고 발급 가능한 쿠폰을 만든다")
     void createFixedCouponReturnsCouponId() throws Exception {
         CouponCreationRequest request = new CouponCreationRequest(
-                "정액 쿠폰", new DiscountRequest(DiscountType.FIXED, 1000L, null, null), 0L, VALID_FROM, VALID_UNTIL, 30);
+                "정액 쿠폰",
+                new DiscountRequest(DiscountType.FIXED, 1000L, null, null),
+                0L,
+                VALID_FROM,
+                VALID_UNTIL,
+                30,
+                null);
 
         String body = mvc.perform(post("/api/v1/coupons")
                         .header(HttpHeaders.AUTHORIZATION, adminBearer())
@@ -108,7 +114,13 @@ class CouponControllerTest extends WebIntegrationTest {
     @DisplayName("정률·상한 쿠폰 생성이 201로 성공한다")
     void createRateCouponWithCapSucceeds() throws Exception {
         CouponCreationRequest request = new CouponCreationRequest(
-                "정률 쿠폰", new DiscountRequest(DiscountType.RATE, null, 10, 5000L), 0L, VALID_FROM, VALID_UNTIL, 30);
+                "정률 쿠폰",
+                new DiscountRequest(DiscountType.RATE, null, 10, 5000L),
+                0L,
+                VALID_FROM,
+                VALID_UNTIL,
+                30,
+                null);
 
         mvc.perform(post("/api/v1/coupons")
                         .header(HttpHeaders.AUTHORIZATION, adminBearer())
@@ -122,7 +134,13 @@ class CouponControllerTest extends WebIntegrationTest {
     @DisplayName("빈 쿠폰명은 400 problem+json으로 거부된다")
     void createRejectsBlankName() throws Exception {
         CouponCreationRequest request = new CouponCreationRequest(
-                "  ", new DiscountRequest(DiscountType.FIXED, 1000L, null, null), 0L, VALID_FROM, VALID_UNTIL, 30);
+                "  ",
+                new DiscountRequest(DiscountType.FIXED, 1000L, null, null),
+                0L,
+                VALID_FROM,
+                VALID_UNTIL,
+                30,
+                null);
 
         mvc.perform(post("/api/v1/coupons")
                         .header(HttpHeaders.AUTHORIZATION, adminBearer())
@@ -136,7 +154,13 @@ class CouponControllerTest extends WebIntegrationTest {
     @DisplayName("잘못된 할인 조합은 400 COUPON_INVALID_DISCOUNT로 거부된다")
     void createRejectsInvalidDiscountCombination() throws Exception {
         CouponCreationRequest request = new CouponCreationRequest(
-                "잘못된 쿠폰", new DiscountRequest(DiscountType.FIXED, 1000L, 10, null), 0L, VALID_FROM, VALID_UNTIL, 30);
+                "잘못된 쿠폰",
+                new DiscountRequest(DiscountType.FIXED, 1000L, 10, null),
+                0L,
+                VALID_FROM,
+                VALID_UNTIL,
+                30,
+                null);
 
         mvc.perform(post("/api/v1/coupons")
                         .header(HttpHeaders.AUTHORIZATION, adminBearer())
@@ -155,7 +179,8 @@ class CouponControllerTest extends WebIntegrationTest {
                 0L,
                 VALID_FROM,
                 VALID_UNTIL,
-                30);
+                30,
+                null);
 
         mvc.perform(post("/api/v1/coupons")
                         .header(HttpHeaders.AUTHORIZATION, adminBearer())
@@ -169,7 +194,13 @@ class CouponControllerTest extends WebIntegrationTest {
     @DisplayName("음수 정률 상한은 400 VALIDATION_FAILED로 거부된다")
     void createRejectsNegativeMaxCap() throws Exception {
         CouponCreationRequest request = new CouponCreationRequest(
-                "음수 상한 쿠폰", new DiscountRequest(DiscountType.RATE, null, 10, -1L), 0L, VALID_FROM, VALID_UNTIL, 30);
+                "음수 상한 쿠폰",
+                new DiscountRequest(DiscountType.RATE, null, 10, -1L),
+                0L,
+                VALID_FROM,
+                VALID_UNTIL,
+                30,
+                null);
 
         mvc.perform(post("/api/v1/coupons")
                         .header(HttpHeaders.AUTHORIZATION, adminBearer())
@@ -188,7 +219,8 @@ class CouponControllerTest extends WebIntegrationTest {
                 0L,
                 VALID_UNTIL,
                 VALID_FROM,
-                30);
+                30,
+                null);
 
         mvc.perform(post("/api/v1/coupons")
                         .header(HttpHeaders.AUTHORIZATION, adminBearer())
@@ -250,11 +282,69 @@ class CouponControllerTest extends WebIntegrationTest {
     }
 
     @Test
+    @DisplayName("발급 한도 소진 후 발급은 409 COUPON_ISSUANCE_LIMIT_EXHAUSTED로 거부된다")
+    void issueRejectsWhenLimitExhausted() throws Exception {
+        CouponCreationRequest request = new CouponCreationRequest(
+                "한도 쿠폰",
+                new DiscountRequest(DiscountType.FIXED, 1000L, null, null),
+                0L,
+                VALID_FROM,
+                VALID_UNTIL,
+                30,
+                1);
+        String body = mvc.perform(post("/api/v1/coupons")
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        UUID couponId = UUID.fromString(
+                objectMapper.readValue(body, CouponCreationResponse.class).couponId());
+
+        mvc.perform(post("/api/v1/coupons/{couponId}/issues", couponId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(registerMember())))
+                .andExpect(status().isCreated());
+
+        mvc.perform(post("/api/v1/coupons/{couponId}/issues", couponId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(registerMember())))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("COUPON_ISSUANCE_LIMIT_EXHAUSTED"));
+    }
+
+    @Test
+    @DisplayName("발급 한도가 1 미만이면 400 VALIDATION_FAILED로 거부된다")
+    void createRejectsMaxIssuanceBelowOne() throws Exception {
+        CouponCreationRequest request = new CouponCreationRequest(
+                "한도 오류 쿠폰",
+                new DiscountRequest(DiscountType.FIXED, 1000L, null, null),
+                0L,
+                VALID_FROM,
+                VALID_UNTIL,
+                30,
+                0);
+
+        mvc.perform(post("/api/v1/coupons")
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+    }
+
+    @Test
     @DisplayName("구매자 토큰의 쿠폰 정책 생성은 403 FORBIDDEN으로 거부된다")
     void createRejectsBuyerToken() throws Exception {
         UUID buyerId = registerMember();
         CouponCreationRequest request = new CouponCreationRequest(
-                "정액 쿠폰", new DiscountRequest(DiscountType.FIXED, 1000L, null, null), 0L, VALID_FROM, VALID_UNTIL, 30);
+                "정액 쿠폰",
+                new DiscountRequest(DiscountType.FIXED, 1000L, null, null),
+                0L,
+                VALID_FROM,
+                VALID_UNTIL,
+                30,
+                null);
 
         mvc.perform(post("/api/v1/coupons")
                         .header(HttpHeaders.AUTHORIZATION, bearer(buyerId))
@@ -341,7 +431,12 @@ class CouponControllerTest extends WebIntegrationTest {
 
     private UUID createCoupon() {
         return couponAppender.create(
-                "쿠폰", Discount.fixed(Money.of(1000L)), Money.ZERO, ValidityPeriod.of(VALID_FROM, VALID_UNTIL), 30);
+                "쿠폰",
+                Discount.fixed(Money.of(1000L)),
+                Money.ZERO,
+                ValidityPeriod.of(VALID_FROM, VALID_UNTIL),
+                30,
+                null);
     }
 
     private UUID seedProduct(int quantity) {

@@ -57,6 +57,40 @@ class IssuedCouponTest {
     }
 
     @Test
+    @DisplayName("무효화하면 REVOKED이고 시각·사유가 기록된다")
+    void revokeSetsRevocationInfo() {
+        IssuedCoupon coupon = issued(future());
+        coupon.revoke("오발급 회수");
+        assertThat(coupon.getStatus()).isEqualTo(IssuedCouponStatus.REVOKED);
+        assertThat(coupon.getRevokedAt()).isNotNull();
+        assertThat(coupon.getRevokeReason()).isEqualTo("오발급 회수");
+    }
+
+    @Test
+    @DisplayName("사용된 발급분은 무효화할 수 없다")
+    void cannotRevokeWhenUsed() {
+        IssuedCoupon coupon = issued(future());
+        coupon.use(UUID.randomUUID());
+        assertThatThrownBy(() -> coupon.revoke("오발급 회수")).isInstanceOf(CouponStatusException.class);
+    }
+
+    @Test
+    @DisplayName("이미 무효화된 발급분은 다시 무효화할 수 없다")
+    void cannotRevokeTwice() {
+        IssuedCoupon coupon = issued(future());
+        coupon.revoke("오발급 회수");
+        assertThatThrownBy(() -> coupon.revoke("오발급 회수")).isInstanceOf(CouponStatusException.class);
+    }
+
+    @Test
+    @DisplayName("무효화된 발급분은 사용할 수 없다")
+    void cannotUseWhenRevoked() {
+        IssuedCoupon coupon = issued(future());
+        coupon.revoke("오발급 회수");
+        assertThatThrownBy(() -> coupon.use(UUID.randomUUID())).isInstanceOf(CouponStatusException.class);
+    }
+
+    @Test
     @DisplayName("복원하면 ISSUED로 돌아가고 사용 정보가 지워진다")
     void restoreUseRevertsToIssued() {
         IssuedCoupon coupon = issued(future());

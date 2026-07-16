@@ -20,7 +20,8 @@ import org.jspecify.annotations.Nullable;
  * 회원에게 발급된 쿠폰 애그리거트 루트다. 동시 사용을 낙관락({@code @Version})으로 막는다.
  *
  * <p>사용 기한은 발급 시 확정한 스냅샷({@code expiresAt})이며 정책 변경이 소급하지 않는다.
- * 불변식 {@code status == USED ⇔ usedAt != null ∧ orderId != null}.
+ * 불변식 {@code status == USED ⇔ usedAt != null ∧ orderId != null},
+ * {@code status == REVOKED ⇔ revokedAt != null ∧ revokeReason != null}.
  */
 @Entity
 @Table(schema = "coupon", name = "issued_coupon")
@@ -49,6 +50,14 @@ public class IssuedCoupon extends BaseTimeEntity<UUID> {
     @Column(name = "order_id")
     @Nullable
     private UUID orderId;
+
+    @Column(name = "revoked_at")
+    @Nullable
+    private Instant revokedAt;
+
+    @Column(name = "revoke_reason")
+    @Nullable
+    private String revokeReason;
 
     @Version
     @Column(name = "version")
@@ -88,6 +97,20 @@ public class IssuedCoupon extends BaseTimeEntity<UUID> {
         this.orderId = orderId;
     }
 
+    /**
+     * 발급분을 무효화한다. 무효화된 발급분은 사용이 거부된다.
+     *
+     * @throws CouponStatusException 미사용({@code ISSUED}) 상태가 아니면
+     */
+    public void revoke(String reason) {
+        if (status != IssuedCouponStatus.ISSUED) {
+            throw new CouponStatusException(CouponErrorCode.ISSUED_COUPON_NOT_REVOCABLE);
+        }
+        this.status = IssuedCouponStatus.REVOKED;
+        this.revokedAt = Instant.now();
+        this.revokeReason = reason;
+    }
+
     /** 사용을 복원한다. 사용 상태가 아니면 아무 일도 하지 않는다. */
     public void restoreUse() {
         if (status != IssuedCouponStatus.USED) {
@@ -125,5 +148,13 @@ public class IssuedCoupon extends BaseTimeEntity<UUID> {
 
     public @Nullable UUID getOrderId() {
         return orderId;
+    }
+
+    public @Nullable Instant getRevokedAt() {
+        return revokedAt;
+    }
+
+    public @Nullable String getRevokeReason() {
+        return revokeReason;
     }
 }

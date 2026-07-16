@@ -3,6 +3,7 @@ package com.commerce.coupon.service;
 import com.commerce.coupon.entity.Coupon;
 import com.commerce.coupon.entity.IssuedCoupon;
 import com.commerce.coupon.exception.CouponErrorCode;
+import com.commerce.coupon.exception.CouponExhaustedException;
 import com.commerce.coupon.exception.CouponNotFoundException;
 import com.commerce.coupon.exception.CouponStatusException;
 import com.commerce.coupon.exception.DuplicateIssuanceException;
@@ -33,12 +34,16 @@ public class IssuedCouponAppender {
      * <ol>
      *   <li>쿠폰 발급 가능 검사(ACTIVE·발급 기간)
      *   <li>회원당 동일 쿠폰 중복 검사
+     *   <li>발급 한도가 있으면 원자적 조건부 UPDATE로 카운트 선점(0행이면 소진)
      *   <li>사용 기한 확정 후 발급분 저장
      * </ol>
+     *
+     * <p>선점과 발급분 저장이 한 트랜잭션이라 저장 실패 시 선점이 함께 롤백된다(슬롯 누수 없음).
      *
      * @throws CouponNotFoundException 쿠폰이 없으면
      * @throws CouponStatusException 발급 중지되었거나 발급 기간 밖이면
      * @throws DuplicateIssuanceException 회원에게 이미 발급된 쿠폰이면
+     * @throws CouponExhaustedException 발급 한도가 소진됐으면
      */
     @Transactional
     public UUID issue(UUID couponId, UUID memberId) {
@@ -49,6 +54,9 @@ public class IssuedCouponAppender {
         coupon.checkIssuable(now);
         if (issuedCouponRepository.existsByCouponIdAndMemberId(couponId, memberId)) {
             throw new DuplicateIssuanceException(CouponErrorCode.DUPLICATE_ISSUANCE);
+        }
+        if (coupon.hasIssuanceLimit() && couponRepository.claimIssuanceSlot(couponId) == 0) {
+            throw new CouponExhaustedException(CouponErrorCode.ISSUANCE_LIMIT_EXHAUSTED);
         }
         Instant expiresAt = now.plus(coupon.getUsageValidDays(), ChronoUnit.DAYS);
         try {

@@ -80,7 +80,7 @@ class CouponPersistenceTest {
     private UUID createRateCoupon() {
         return couponAppender.create(
                 "정률 10% (상한 2000)",
-                Discount.rate(10, Money.of(2000L)), Money.of(10000L), ValidityPeriod.of(FROM, UNTIL), 30);
+                Discount.rate(10, Money.of(2000L)), Money.of(10000L), ValidityPeriod.of(FROM, UNTIL), 30, null);
     }
 
     @Test
@@ -105,7 +105,7 @@ class CouponPersistenceTest {
     @DisplayName("정액 쿠폰도 왕복한다 — discount_amount 컬럼 매핑 검증")
     void fixedDiscountRoundTrip() {
         UUID couponId = couponAppender.create(
-                "정액 1000", Discount.fixed(Money.of(1000L)), Money.ZERO, ValidityPeriod.of(FROM, UNTIL), 30);
+                "정액 1000", Discount.fixed(Money.of(1000L)), Money.ZERO, ValidityPeriod.of(FROM, UNTIL), 30, null);
         em.flush();
         UUID issuedId = issuedCouponAppender.issue(couponId, UUID.randomUUID());
         em.flush();
