@@ -83,7 +83,7 @@
 - 범위: 소~중.
 
 ### 8. 쿠폰 use 도메인 계약 소유 검증
-- 상태: 대기
+- 상태: 완료
 - 문제(Medium): `IssuedCouponModifier.use`가 `findById`로 로드해 소유(memberId)·산출할인>0을 검증하지 않는다(`IssuedCouponModifier.java:33-36`, 엔티티는 상태·기한만 가드 `IssuedCoupon.java:87-97`). `DOMAIN_MODEL.md:415`는 use 거부에 "미존재(미소유 포함)"를 명시한다. 현 유일 호출 경로는 파사드 preview가 `findByIdAndMemberId`로 선방어하나, 미래 호출자(신규 파사드·배치)가 타인 쿠폰을 사용 처리할 수 있다.
 - 완료 기준: `use(issuedCouponId, memberId, orderId)`로 소유를 도메인에서 강제(`findByIdAndMemberId`). 타인 쿠폰 use가 미존재로 거부됨을 단위/IT로 검증.
 - 범위: 소.
