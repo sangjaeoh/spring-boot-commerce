@@ -66,7 +66,8 @@
 - 범위: 소~중.
 
 ### 6. 상품 등록 중단-재개 로직
-- 상태: 대기
+- 상태: 완료
+- 완료 메모(2026-07-16): 채택 의미론 — 동일 옵션 DISABLED 변형은 재개(재고 확인→create→enable, 가격·기존 재고 유지), ACTIVE는 중복 409 유지, RETIRED는 신규 생성 유지. 부수 효과로 관리자가 disable한 동일 옵션 변형에 addVariant를 부르면 재활성화된다(시딩 중단과 구분할 영속 증거가 없어 재개 우선 — DOMAIN_MODEL 등록 절에 문서화). 이 의미론이 부적절하면 재검토 항목으로 등재할 것. registerProduct 자체의 중단(상품 중복 생성)은 범위 밖 잔여.
 - 문제(High): `ProductRegistrationFacade.addVariant`가 무조건 변형 `create`부터 시작한다(`ProductRegistrationFacade.java:55-60`). 변형 create 성공 후 재고 create 전에 중단되면, 재시도가 비-RETIRED 중복 검사(`ProductVariantAppender.java:50-53`)에 걸려 409로 영구 차단되고, 재고 시딩용 관리자 API도 없어(`StockController`에 create 엔드포인트 부재) retire 후 재등록 외엔 복구 불가. `DOMAIN_MODEL.md:673` "중단 복구는 남은 단계를 재개한다(재생성이 아니라 재개)"를 위반한다.
 - 완료 기준: `addVariant`가 동일 시그니처의 비-RETIRED 변형이 이미 있으면 그 변형으로 남은 단계(재고 존재 확인 → create → enable)를 이어가는 재개 분기를 갖는다. 중단 지점별(변형만/재고 전/미활성) IT로 재개가 성공함을 검증.
 - 범위: 중.
