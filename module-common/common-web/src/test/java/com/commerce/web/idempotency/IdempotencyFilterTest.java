@@ -1,7 +1,5 @@
 package com.commerce.web.idempotency;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -70,17 +68,16 @@ class IdempotencyFilterTest {
     }
 
     @Test
-    @DisplayName("키 저장소 장애 시 요청은 하류로 통과하지 않는다(fail-closed) — 503 응답 형상 통일은 별도 항목 소유")
+    @DisplayName("키 저장소 장애 시 하류로 통과시키지 않고 problem+json 503으로 거부한다(fail-closed)")
     void storeOutageFailsClosed() throws Exception {
         doThrow(new IllegalStateException("키 저장소 장애 주입")).when(store).tryBegin(anyString());
 
-        Throwable thrown = catchThrowable(() -> mvc.perform(post("/test/echo").header(HEADER, "outage-1")));
-
-        // 장애가 통과(2xx)로 강등되지 않고 예외로 거부된다 — 하류 핸들러는 실행되지 않는다.
-        assertThat(thrown)
-                .satisfiesAnyOf(
-                        t -> assertThat(t).isInstanceOf(IllegalStateException.class),
-                        t -> assertThat(t).hasRootCauseInstanceOf(IllegalStateException.class));
+        // 장애가 통과(2xx)로 강등되지 않고 레이트리밋과 같은 503 problem+json으로 거부된다.
+        mvc.perform(post("/test/echo").header(HEADER, "outage-1"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.code").value("IDEMPOTENCY_UNAVAILABLE"))
+                .andExpect(jsonPath("$.status").value(503));
 
         // 장애가 걷히면 같은 키가 정상 통과한다 — 실패한 시도가 키를 잠그지 않았다.
         org.mockito.Mockito.reset(store);

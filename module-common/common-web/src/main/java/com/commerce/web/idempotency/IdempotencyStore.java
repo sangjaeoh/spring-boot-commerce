@@ -12,6 +12,8 @@ public interface IdempotencyStore {
      *
      * @return 이 호출이 키를 처음 선점했으면 {@code true}, 이미 진행 중이거나 최근 완료된 키(창 이내)면
      *     {@code false}
+     * @throws RuntimeException 저장소에 접근할 수 없으면 전파한다(fail-closed) — 호출자는 중복 차단 없이
+     *     요청을 통과시키지 않고 거부한다
      */
     boolean tryBegin(String key);
 
