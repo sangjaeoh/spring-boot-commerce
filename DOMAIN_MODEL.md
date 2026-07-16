@@ -18,7 +18,7 @@
 - 삭제: 논리삭제 기본. 삭제 지원 엔티티는 nullable `deletedAt`을 두고 활성 조회에서 제외한다.
 - 금액: `Money`(원 단위 정수, 0 이상). `Money`는 프레임워크 의존 없는 범용 값 타입이라 `common-core`가 소유하고(도메인 지식 아님), JPA 변환기(`MoneyConverter`)는 `common-jpa`에 단 하나 둔다. 통화는 KRW 단일로 가정한다.
 - 수량: 정수. 별도 명시가 없으면 1 이상.
-- 낙관락: 기본으로 두지 않는다. 실 경합이 있는 재고 차감·쿠폰 사용에만 `@Version`을 둔다.
+- 낙관락: 기본으로 두지 않는다. 실 경합이 있는 재고 차감·쿠폰 사용과, 복원을 게이트해 동시 중복이 이중 복원·이중 환불이 되는 주문 취소·환불/결제 취소 전이에만 `@Version`을 둔다.
 - 상태: enum(문자열 저장). 상태 변경은 의도 동사 메서드 + 허용 전이 가드로만 한다(setter 없음). 상태는 실세계 전이·정책으로 정당화되면 선제적으로 둔다(소비자가 아직 없어도 근거 있는 현실 상태는 모델에 둔다). 근거 없이 아무도 전이시키지 않는 "죽은 상태"만 피한다.
 - 표기: 아래 각 도메인 필드 표는 이 공통 필드도 함께 명시한다 — 모든 엔티티는 `id`·`createdAt`·`updatedAt`을 가지며, 해당 도메인에 한해 `deletedAt`·`version`을 갖는다.
 
@@ -452,6 +452,7 @@
 | refundReason | RefundReason | 선택 | 반품 환불 사유(`refund` 세팅, `CHANGE_OF_MIND`·`PRODUCT_DEFECT`·`WRONG_DELIVERY`·`CS_MANUAL`). REFUNDED에서만 존재 |
 | holdReason | HoldReason | 선택 | 이행 보류 사유. ON_HOLD에서만 존재(`holdFulfillment` 세팅, `releaseFulfillment` clear) |
 | lines | Set\<OrderLine\> | 필수 | 1개 이상 |
+| version | long | 필수 | 낙관락 버전(동시 취소·환불 전이 직렬화) |
 | createdAt | Instant | 필수 | 생성 시각(Auditing 자동 기록) |
 | updatedAt | Instant | 필수 | 수정 시각(Auditing 자동 기록) |
 
@@ -514,8 +515,8 @@
 - 금액 불변식: `Order.place`가 자기 라인에서 totalAmount = Σ(라인 unitPrice × quantity)를 계산한다. discountAmount는 서버가 쿠폰 정책으로 산출해 입력하되(클라이언트 전달값 불신), Order 루트가 `discountAmount ≤ totalAmount`와 `issuedCouponId != null ⟺ discountAmount > 0`(쿠폰 없는 유령 할인·쿠폰 있는 0원 할인 동시 배제)을 자기 강제한다(위반 시 도메인 예외). payAmount = totalAmount − discountAmount + shippingFee ≥ 0.
 - price ≥ 1·quantity ≥ 1이라 totalAmount ≥ 1이 항상 성립한다(무료·0원 주문 없음). payAmount = 0은 전액 할인 ∧ shippingFee = 0일 때만이고(배송비가 있으면 payAmount > 0), 그 경우 결제는 PG를 생략하고 자동 승인한다.
 - 결제 완료(markPaid): PENDING에서만 PAID로. 함께 fulfillmentStatus NOT_STARTED→PREPARING, `paidAt` 세팅. 전이 후 `OrderPaid`를 커밋 후 발행한다.
-- 취소(cancel): PENDING 또는 PAID에서 CANCELLED로. PAID 취소는 `fulfillmentStatus ∈ {PREPARING, ON_HOLD}`일 때만 허용하고 SHIPPED·DELIVERED면 거부한다(배송 완료 후 대체 경로는 반품 환불 `refund`). PAID면 이행이 이미 최소 PREPARING이라 NOT_STARTED는 나타나지 않는다. 전이 시 `cancelledAt`·`cancellationReason`(`PAYMENT_FAILED`·`STOCK_SHORTAGE`·`COUPON_CONFLICT`·`CUSTOMER_REQUEST`·`ADMIN_ACTION`·`CHECKOUT_ABANDONED`)을 세팅한다. 전이는 1회만 유효하고, 후속 보상은 전이가 실제 일어난 호출에서만 태운다(중복 취소 무해). 보상 내용은 소스 상태에 따른다 — PENDING이면 재고·쿠폰 복원, PAID이면 환불 선행 후 재고·쿠폰 복원(크로스 도메인 정책 참조).
-- 반품 환불(refund): PAID ∧ 이행 DELIVERED에서만 REFUNDED로. 관리자 단일 액션이다(반품 요청/승인 워크플로·회수 추적은 범위 밖 — 절차 상태를 늘리지 않는 최소안). SHIPPED는 취소도 환불도 안 되는 의도된 공백이다(배송 완료 확정 후 환불). 전이 시 `refundedAt`·`refundReason`을 세팅하고 이행 축은 DELIVERED로 남는다. 전이는 1회만 유효하고 취소·환불 상호 재전이가 없다(REFUNDED 주문 취소 불가, CANCELLED 주문 환불 불가). 후속 보상(환불·복원)은 크로스 도메인 정책이 소유한다.
+- 취소(cancel): PENDING 또는 PAID에서 CANCELLED로. PAID 취소는 `fulfillmentStatus ∈ {PREPARING, ON_HOLD}`일 때만 허용하고 SHIPPED·DELIVERED면 거부한다(배송 완료 후 대체 경로는 반품 환불 `refund`). PAID면 이행이 이미 최소 PREPARING이라 NOT_STARTED는 나타나지 않는다. 전이 시 `cancelledAt`·`cancellationReason`(`PAYMENT_FAILED`·`STOCK_SHORTAGE`·`COUPON_CONFLICT`·`CUSTOMER_REQUEST`·`ADMIN_ACTION`·`CHECKOUT_ABANDONED`)을 세팅한다. 전이는 1회만 유효하고, 후속 보상은 전이가 실제 일어난 호출에서만 태운다(중복 취소 무해). 동시 중복 취소가 둘 다 가드를 통과해도 낙관락(`@Version`)이 한쪽만 커밋시킨다(충돌 응답·재시도는 `docs/entity-persistence.md` 소유). 보상 내용은 소스 상태에 따른다 — PENDING이면 재고·쿠폰 복원, PAID이면 환불 선행 후 재고·쿠폰 복원(크로스 도메인 정책 참조).
+- 반품 환불(refund): PAID ∧ 이행 DELIVERED에서만 REFUNDED로. 관리자 단일 액션이다(반품 요청/승인 워크플로·회수 추적은 범위 밖 — 절차 상태를 늘리지 않는 최소안). SHIPPED는 취소도 환불도 안 되는 의도된 공백이다(배송 완료 확정 후 환불). 전이 시 `refundedAt`·`refundReason`을 세팅하고 이행 축은 DELIVERED로 남는다. 전이는 1회만 유효하고 취소·환불 상호 재전이가 없다(REFUNDED 주문 취소 불가, CANCELLED 주문 환불 불가). 동시 중복 환불도 취소와 같이 낙관락(`@Version`)이 한쪽만 커밋시킨다. 후속 보상(환불·복원)은 크로스 도메인 정책이 소유한다.
 - 이행(ship·confirmDelivery·holdFulfillment·releaseFulfillment): 모든 이행 전진은 `status == PAID`에서만 유효하다(취소·미결제 주문은 fulfillment 동결). `ship`은 PREPARING→SHIPPED(+`shippedAt`, 필수 입력 `carrier`·`trackingNumber` 기록), `confirmDelivery`는 SHIPPED→DELIVERED(+`deliveredAt`), `holdFulfillment`는 PREPARING→ON_HOLD(+`holdReason`: 사기 심사·배송지 확인·입고 지연), `releaseFulfillment`는 ON_HOLD→PREPARING(`holdReason` clear). 분할 배송·부분 이행은 범위 밖(단일 배송·단일 이행). 배송 완료 후 전체 반품 환불은 이행 축이 아니라 결제 축 `refund`(→REFUNDED)가 소유한다(이행 축은 DELIVERED로 남는다).
 - 생성 후 라인 구성은 불변(수정 불가). 변경이 필요하면 취소 후 재주문.
 
@@ -525,8 +526,8 @@
 |---|---|---|---|
 | place | memberId, 라인 스냅샷, shippingAddress, discountAmount, shippingFee, issuedCouponId? | 라인 ≥ 1, `orderNumber` 생성, totalAmount 자기 계산, discountAmount ≤ totalAmount, `issuedCouponId ⟺ discount>0`, payAmount = total−discount+shippingFee, 최초 PENDING·NOT_STARTED | 빈 주문(라인 0); 회원 탈퇴 또는 정지; 할인 초과 |
 | markPaid | orderId | PENDING→PAID, 이행 NOT_STARTED→PREPARING, `paidAt` 세팅, `OrderPaid` 발행 | 미존재; 잘못된 전이 |
-| cancel | orderId, reason | PENDING·PAID → CANCELLED 1회(PAID는 이행 PREPARING·ON_HOLD만), `cancelledAt`·`cancellationReason` 세팅, 보상은 소스 상태 함수 | 미존재; 잘못된 전이(REFUNDED 포함); 출고 이후(SHIPPED·DELIVERED) |
-| refund | orderId, reason | PAID ∧ 이행 DELIVERED → REFUNDED 1회, `refundedAt`·`refundReason` 세팅, 이행 축 DELIVERED 유지 | 미존재; 잘못된 전이(이미 REFUNDED); 배송 완료 전(PENDING·PREPARING·ON_HOLD·SHIPPED·CANCELLED) |
+| cancel | orderId, reason | PENDING·PAID → CANCELLED 1회(PAID는 이행 PREPARING·ON_HOLD만), `cancelledAt`·`cancellationReason` 세팅, 보상은 소스 상태 함수 | 미존재; 잘못된 전이(REFUNDED 포함); 출고 이후(SHIPPED·DELIVERED); 낙관락 충돌 |
+| refund | orderId, reason | PAID ∧ 이행 DELIVERED → REFUNDED 1회, `refundedAt`·`refundReason` 세팅, 이행 축 DELIVERED 유지 | 미존재; 잘못된 전이(이미 REFUNDED); 배송 완료 전(PENDING·PREPARING·ON_HOLD·SHIPPED·CANCELLED); 낙관락 충돌 |
 | ship | orderId, carrier, trackingNumber | `status == PAID` ∧ PREPARING→SHIPPED, `shippedAt`·`carrier`·`trackingNumber` 세팅 | 미존재; 결제 축 PAID 아님(취소·미결제); 잘못된 전이 |
 | confirmDelivery | orderId | `status == PAID` ∧ SHIPPED→DELIVERED, `deliveredAt` 세팅 | 미존재; 결제 축 PAID 아님; 잘못된 전이 |
 | holdFulfillment | orderId, reason | `status == PAID` ∧ PREPARING→ON_HOLD, `holdReason` 세팅 | 미존재; 결제 축 PAID 아님; 잘못된 전이 |
@@ -557,10 +558,11 @@
 | pgCancelTransactionId | String | 선택 | PG 취소(환불) 거래 ID. cancel이 PG 환불 호출 시 세팅 |
 | approvedAt | Instant | 선택 | 승인 시각(approve 성공 시 세팅) |
 | cancelledAt | Instant | 선택 | 취소·환불 시각(cancel 세팅) |
+| version | long | 필수 | 낙관락 버전(동시 취소 전이 직렬화) |
 | createdAt | Instant | 필수 | 생성 시각(Auditing 자동 기록) |
 | updatedAt | Instant | 필수 | 수정 시각(Auditing 자동 기록) |
 
-- 낙관락 없음. 주문당 결제 1행(orderId 유니크)이라 동시 경합이 없고, 재요청은 상태 가드로 막는다.
+- 낙관락(`@Version`)을 둔다. 주문당 결제 1행(orderId 유니크)이어도 취소(환불) 전이에는 사용자 취소·리컨실·웹훅 확정이 겹칠 수 있어, 동시 중복 전이가 둘 다 가드를 통과해도 한쪽만 커밋된다(이중 환불·이중 복원 차단의 결제측 축). 재요청은 상태 가드로 막는다.
 
 ### 상태 (PaymentStatus)
 
@@ -589,7 +591,7 @@
 |---|---|---|---|
 | request | orderId, amount, method? | orderId 유니크, amount = 주문 payAmount, `amount>0 ⇔ method≠null`, 최초 REQUESTED | 주문당 결제 중복 |
 | approve | paymentId | REQUESTED→APPROVED(+pgTransactionId·`approvedAt`) 또는 FAILED(+failureReason); `payAmount == 0`이면 PG 생략 자동 승인 | 미존재; 잘못된 전이 |
-| cancel | paymentId | APPROVED→CANCELLED(+`cancelledAt`); PG 환불 시 `pgCancelTransactionId` 세팅; `pgTransactionId == null`이면 PG 생략 | 미존재; 잘못된 전이 |
+| cancel | paymentId | APPROVED→CANCELLED(+`cancelledAt`); PG 환불 시 `pgCancelTransactionId` 세팅; `pgTransactionId == null`이면 PG 생략 | 미존재; 잘못된 전이; 낙관락 충돌 |
 | inquireGateway | paymentId | PG 거래 상태 조회(포트 위임). 결제 상태 무변경 | 미존재 |
 | confirmApproval | paymentId, pgTransactionId | REQUESTED→APPROVED(+`approvedAt`). PG 재청구 없음 | 미존재; 잘못된 전이 |
 | confirmFailure | paymentId, failureReason | REQUESTED→FAILED(+failureReason). PG 재청구 없음 | 미존재; 잘못된 전이 |
@@ -692,7 +694,7 @@
 
 - 결제 이후 핵심 상태(PAID/CANCELLED)는 파사드가 동기로 확정하므로 동기 경로엔 "결제됐는데 PENDING" 같은 창이 없다. 동기 경로가 기록하지 못한 잔여(응답 유실·중단)는 유예 + 스윕 주기 안에 수렴한다 — REQUESTED 결제는 결제 리컨실이 PG 상태 조회로, 결제 요청 이전 중단으로 payment 행 없이 남은 PENDING 주문은 PENDING 스윕이 보상 종결로, 결제는 기록됐는데 주문측 종결이 남은 잔여(승인 커밋 후 markPaid 전 중단, 거절 기록 후 보상 취소 실패)는 PENDING 스윕이 발견해 결제 리컨실 확정 경로가 닫는다.
 - in-process 이벤트(`OrderPaid`)는 커밋 후 발행하되 무손실 보장이 아니다. 리스너는 멱등하고, 유실 시 장바구니가 남는 것 외 영향이 없다.
-- 복원 정확성: 모든 재고·쿠폰 복원은 주문의 1회성 전이(`PENDING·PAID → CANCELLED` 또는 `PAID → REFUNDED`)가 게이트한다. `restore`는 가산·교환법칙이라 낙관락 충돌 시 재시도해도 안전하지만 멱등은 아니므로(커밋된 복원을 재전달하면 이중 가산), 이 전이 가드가 정확히-1회 복원을 보장한다.
+- 복원 정확성: 모든 재고·쿠폰 복원은 주문의 1회성 전이(`PENDING·PAID → CANCELLED` 또는 `PAID → REFUNDED`)가 게이트한다. `restore`는 가산·교환법칙이라 낙관락 충돌 시 재시도해도 안전하지만 멱등은 아니므로(커밋된 복원을 재전달하면 이중 가산), 이 전이 가드가 정확히-1회 복원을 보장한다. 전이 가드 자체는 load-check-write라 동시 중복 전이가 둘 다 가드를 통과할 수 있으므로, 주문·결제 낙관락(`@Version`)이 한쪽만 커밋시켜 가드의 1회성을 동시 경합에서도 유지한다(진 쪽은 복원 없이 충돌로 끝난다).
 - 크로스 트랜잭션 부분 실패(예: 보상 도중 프로세스 크래시)의 무손실 복구는 범위 밖이다. 낙관락 충돌 재시도 수렴(가산·재시도 안전)과 크래시 리플레이 멱등(제공 안 함)은 구분된다.
 
 ### 도메인 이벤트 명세 (OrderPaid)
@@ -738,7 +740,7 @@
 
 도메인 모델 확정 사항 중 빌드·기동이 강제하는 항목이다. 구현 계획이 이를 반영한다.
 
-- `@Version`: `stock`·`issued_coupon`에 두고 `payment`·`product_variant`에는 두지 않는다. version 컬럼 추가·`ddl-auto=validate` 정합은 `docs/entity-persistence.md`가 소유한다.
+- `@Version`: `stock`·`issued_coupon`·`orders`·`payment`에 두고 `product_variant`에는 두지 않는다. version 컬럼 추가·`ddl-auto=validate` 정합은 `docs/entity-persistence.md`가 소유한다.
 - 논리 FK 인덱스: 모든 `xxx_id` 컬럼(product_variant.product_id, stock.variant_id, cart.member_id, cart_item.cart_id·variant_id, orders.member_id·issued_coupon_id, order_line.order_id·variant_id·product_id, issued_coupon.coupon_id·member_id·order_id, payment.order_id) 인덱스를 Flyway로 생성한다(물리 FK 없음 — 애그리거트 내부 부모 FK cart_item.cart_id·order_line.order_id도 자동 생성되지 않아 포함).
 - 유니크 제약: member.email(부분 유니크 `WHERE deleted_at IS NULL`), product_variant(product_id, option_signature)(부분 유니크 `WHERE status <> 'RETIRED'` — 은퇴 조합 재등록 허용), stock.variant_id, cart.member_id, cart_item(cart_id, variant_id), issued_coupon(coupon_id, member_id), payment.order_id, orders.order_number를 Flyway로 강제한다. product_variant 부분 유니크 술어가 enum 문자열 `'RETIRED'`를 참조하므로 상태값을 바꿀 때 인덱스 술어도 함께 갱신한다.
 - 스키마 등록: 7개 도메인 스키마 각각을 `db/migration/{name}/`에 두고 `SchemaFlywayFactory`(common-jpa)에 등록한다.
@@ -754,8 +756,8 @@
 - 재고: `StockStatus{SELLABLE, SOLD_OUT, DISCONTINUED}`(수동 품절·단종을 quantity=0과 분리), 변형당 1행(variant_id 유니크), 재입고 `increase`, 주문가능 = 상품 ON_SALE·미삭제 ∧ 변형 ACTIVE ∧ 재고 SELLABLE ∧ 수량(합성은 체크아웃), 즉시 차감(예약 모델 아님), 차감은 낙관락 가드·판매성은 체크아웃 게이트, 복원은 status 무관 가산·재시도 안전(멱등 아님, 전이 게이트로 1회 복원).
 - 장바구니: 회원당 1개(lazy get-or-create), 동일 변형 재담기 수량 합산(cart_id·variant_id 유니크), 담기·증량 게이트(회원 자격 활성 ∧ 변형 ACTIVE ∧ 상품 ON_SALE·미삭제)·감량/제거 무게이트, 선택 제거 `removeItems`·전체 `clear`, 총액 비저장(체크아웃 시 변형 현재가), 결제 완료 시 주문된 변형 라인만 제거(`OrderPaid` 소비).
 - 쿠폰: 할인은 `Discount` 값 객체(판별형 Fixed/Rate 단일 VO, 알고리즘·불변식 내재), `ValidityPeriod`는 발급 가능 기간, 발급분 사용 기한은 `IssuedCoupon.expiresAt`(발급시각 + `usageValidDays`)로 발급창과 분리, 정책 상태 ACTIVE↔DISABLED(`disable`/`enable`)로 발급 가능·중지, 발급은 ACTIVE·발급기간·회원당 1회·한도 미소진(선택 `maxIssuance`, 원자적 조건부 UPDATE 선점으로 경합 초과 배제), 사용은 주문 생성 이후 확정(정책 status 재검사 없음 — 발급분 자격만), 산출 할인 0이면 적용 거부, 만료는 `expiresAt` 판정(EXPIRED 상태 없음), 취소 시 복원, 미사용 발급분은 관리자 무효화(`revoke`, ISSUED→REVOKED 종료 상태·사유 한 필드·USED 거부).
-- 주문: 라인(variantId·productId·productName·optionLabel·unitPrice)·배송지 스냅샷, `orderNumber`, 결제 축 status와 별도 이행 축 `fulfillmentStatus{NOT_STARTED→PREPARING→SHIPPED→DELIVERED, PREPARING↔ON_HOLD}`(`ship`/`confirmDelivery`/`holdFulfillment`/`releaseFulfillment`, markPaid가 PREPARING 전이, 이행 전진은 status=PAID에서만 — 취소 주문 출고 불가), 보류 사유 `holdReason`, 출고 시 택배사·운송장 번호(`carrier`·`trackingNumber`) 기록, 출고 후 취소 금지, `paidAt`·`cancelledAt`·`cancellationReason` 시각·사유, 배송비 `shippingFee`(payAmount = total−discount+shippingFee), 불변식 `issuedCouponId ⟺ discountAmount>0`, totalAmount 자기 계산·discountAmount ≤ totalAmount 자기 강제, 할인·payAmount 서버 계산, 취소는 PENDING·PAID 모두(보상은 소스 상태 함수), 배송 완료 후 전체 반품 환불은 별도 상태 REFUNDED(`refund`, PAID ∧ DELIVERED 1회성, `refundedAt`·`refundReason`, 관리자 단일 액션 — CANCELLED 재사용은 이행 동결 불변식 모순으로 기각).
-- 결제: `@Version` 없음, 주문당 1행, `PaymentMethod{CARD, EASY_PAY, BANK_TRANSFER}`(동기 수단, `amount>0 ⇔ method≠null`), FAILED 사유 `failureReason`, 승인·취소 거래 ID 분리(`pgTransactionId`/`pgCancelTransactionId`), 업무 시각 `approvedAt`/`cancelledAt`, 0원은 PG 생략 자동 승인, 도메인 이벤트 없음. 응답 유실로 REQUESTED에 남은 결제는 유예 후 리컨실·웹훅 확정 경로가 PG 상태 조회(가맹점 참조 키)로 확정한다.
+- 주문: 라인(variantId·productId·productName·optionLabel·unitPrice)·배송지 스냅샷, `orderNumber`, 결제 축 status와 별도 이행 축 `fulfillmentStatus{NOT_STARTED→PREPARING→SHIPPED→DELIVERED, PREPARING↔ON_HOLD}`(`ship`/`confirmDelivery`/`holdFulfillment`/`releaseFulfillment`, markPaid가 PREPARING 전이, 이행 전진은 status=PAID에서만 — 취소 주문 출고 불가), 보류 사유 `holdReason`, 출고 시 택배사·운송장 번호(`carrier`·`trackingNumber`) 기록, 출고 후 취소 금지, `paidAt`·`cancelledAt`·`cancellationReason` 시각·사유, 배송비 `shippingFee`(payAmount = total−discount+shippingFee), 불변식 `issuedCouponId ⟺ discountAmount>0`, totalAmount 자기 계산·discountAmount ≤ totalAmount 자기 강제, 할인·payAmount 서버 계산, 취소는 PENDING·PAID 모두(보상은 소스 상태 함수), 배송 완료 후 전체 반품 환불은 별도 상태 REFUNDED(`refund`, PAID ∧ DELIVERED 1회성, `refundedAt`·`refundReason`, 관리자 단일 액션 — CANCELLED 재사용은 이행 동결 불변식 모순으로 기각), 취소·환불 전이의 동시 중복은 낙관락(`@Version`)이 직렬화.
+- 결제: `@Version`(동시 취소 전이 직렬화 — 사용자 취소·리컨실·웹훅 확정이 겹칠 수 있다), 주문당 1행, `PaymentMethod{CARD, EASY_PAY, BANK_TRANSFER}`(동기 수단, `amount>0 ⇔ method≠null`), FAILED 사유 `failureReason`, 승인·취소 거래 ID 분리(`pgTransactionId`/`pgCancelTransactionId`), 업무 시각 `approvedAt`/`cancelledAt`, 0원은 PG 생략 자동 승인, 도메인 이벤트 없음. 응답 유실로 REQUESTED에 남은 결제는 유예 후 리컨실·웹훅 확정 경로가 PG 상태 조회(가맹점 참조 키)로 확정한다.
 - 정합: 핵심은 파사드 동기 조율 + 동기 보상, 주문 PENDING을 사가 앵커로 먼저 생성(order-first), 유일 이벤트는 `OrderPaid → 장바구니 비우기`.
 - 표기: 각 도메인에 오퍼레이션 카탈로그(연산·입력·강제 불변식·거부[도메인 표현])를 두고, 반환 형상·ErrorCode·HTTP status·동시성 메커니즘은 `docs/`가 소유(참조).
 - Money: `common-core` 순수 값 타입, 컨버터는 `common-jpa` 단일. 배송지 `Address`는 `@Embeddable`.

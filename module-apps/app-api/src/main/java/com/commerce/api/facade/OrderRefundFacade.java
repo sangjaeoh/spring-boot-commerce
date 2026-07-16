@@ -30,6 +30,9 @@ import org.springframework.stereotype.Component;
  * 주문 환불이 실패한 재시도는 이미 CANCELLED인 결제를 PG 재호출 없이 관용해(환불 최대 한 번) 환불·복원을
  * 완결한다. 환불 커밋과 복원 사이 중단의 복원 유실은 잔여 한계다(DOMAIN_MODEL.md 취소·환불 정책 참조).
  * 쿠폰 복원을 재고 복원 앞에 둔다.
+ *
+ * <p>동시 환불 2건이 겹쳐 둘 다 전이 가드를 통과해도 주문·결제 낙관락({@code @Version})이 한쪽만 커밋시켜
+ * 복원이 정확히 한 번이다. 진 쪽의 충돌은 409로 응답한다(클라이언트 재시도, 재시도는 관용 통과).
  */
 @Component
 public class OrderRefundFacade {

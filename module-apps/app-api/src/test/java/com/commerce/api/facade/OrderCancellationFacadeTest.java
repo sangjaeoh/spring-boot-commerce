@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -32,7 +33,9 @@ import com.commerce.order.info.OrderInfo;
 import com.commerce.order.service.OrderModifier;
 import com.commerce.order.service.OrderReader;
 import com.commerce.payment.entity.PaymentMethod;
+import com.commerce.payment.entity.PaymentStatus;
 import com.commerce.payment.port.PaymentGateway;
+import com.commerce.payment.service.PaymentReader;
 import com.commerce.product.service.ProductVariantReader;
 import com.commerce.stock.exception.StockErrorCode;
 import com.commerce.stock.exception.StockShortageException;
@@ -41,6 +44,14 @@ import com.commerce.stock.service.StockReader;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.BrokenBarrierException;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -48,7 +59,7 @@ import org.springframework.test.context.TestConstructor;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 /**
- * 결제 완료 주문의 취소·복원과 그 재시도 멱등을 통합 검증한다.
+ * 결제 완료 주문의 취소·복원과 그 재시도 멱등, 동시 중복 취소의 낙관락 직렬화를 통합 검증한다.
  *
  * <p>롤백 없는 통합 하네스를 상속해 각 도메인 서비스가 실제로 커밋하므로, 한 메서드 안의 파사드 재시도가 시도
  * 간 실 영속 상태를 본다. 다운스트림 실패는 spy에 doThrow로 1회 주입하고 재시도 직전 {@link Mockito#reset}으로
@@ -80,6 +91,7 @@ class OrderCancellationFacadeTest extends FacadeIntegrationTest {
     private final StockReader stockReader;
     private final IssuedCouponReader issuedCouponReader;
     private final ProductVariantReader variantReader;
+    private final PaymentReader paymentReader;
 
     OrderCancellationFacadeTest(
             OrderCancellationFacade orderCancellationFacade,
@@ -92,7 +104,8 @@ class OrderCancellationFacadeTest extends FacadeIntegrationTest {
             OrderReader orderReader,
             StockReader stockReader,
             IssuedCouponReader issuedCouponReader,
-            ProductVariantReader variantReader) {
+            ProductVariantReader variantReader,
+            PaymentReader paymentReader) {
         this.orderCancellationFacade = orderCancellationFacade;
         this.checkoutFacade = checkoutFacade;
         this.productRegistrationFacade = productRegistrationFacade;
@@ -104,6 +117,7 @@ class OrderCancellationFacadeTest extends FacadeIntegrationTest {
         this.stockReader = stockReader;
         this.issuedCouponReader = issuedCouponReader;
         this.variantReader = variantReader;
+        this.paymentReader = paymentReader;
     }
 
     @Test
@@ -167,6 +181,67 @@ class OrderCancellationFacadeTest extends FacadeIntegrationTest {
         assertThat(issuedCouponReader.getIssuedCoupon(issuedId, memberId).status())
                 .isEqualTo(IssuedCouponStatus.ISSUED);
         verify(paymentGateway, times(1)).cancel(any(), any());
+    }
+
+    @Test
+    @DisplayName("동시 취소 2건이 겹쳐도 전이는 한쪽만 커밋되고 재고·쿠폰 복원은 정확히 한 번이다")
+    void concurrentDuplicateCancelRestoresExactlyOnce() throws InterruptedException {
+        UUID memberId = registerMember();
+        UUID variantId = seedProduct(Money.of(10000L), 50);
+        cartAppender.addItem(memberId, variantId, 4);
+        UUID couponId =
+                couponAppender.create("정액 1000", Discount.fixed(Money.of(1000L)), Money.ZERO, validity(), 30, null);
+        UUID issuedId = issuedCouponAppender.issue(couponId, memberId);
+        UUID orderId = checkoutFacade.checkout(memberId, address(), Money.ZERO, issuedId, PaymentMethod.CARD);
+        assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(46);
+
+        // 두 스레드를 주문 취소 전이 직전에 정렬해, 둘 다 PAID를 읽고 가드를 통과한 뒤 쓰는 최악 인터리빙을
+        // 강제한다. 한쪽이 결제 취소 낙관락 경합에서 먼저 탈락하면 남은 쪽만 도달하므로 짧게 기다리고 단독
+        // 진행한다.
+        CyclicBarrier transitionGate = new CyclicBarrier(2);
+        doAnswer(invocation -> {
+                    try {
+                        transitionGate.await(2, TimeUnit.SECONDS);
+                    } catch (TimeoutException | BrokenBarrierException raceAlreadyDecided) {
+                        // 상대 스레드가 전이에 도달하지 못했다 — 단독 진행.
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                    return invocation.callRealMethod();
+                })
+                .when(orderModifier)
+                .cancel(eq(orderId), any());
+
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        CountDownLatch start = new CountDownLatch(1);
+        AtomicInteger succeeded = new AtomicInteger();
+        AtomicInteger failed = new AtomicInteger();
+        for (int i = 0; i < 2; i++) {
+            executor.execute(() -> {
+                try {
+                    start.await();
+                    orderCancellationFacade.cancel(orderId, memberId);
+                    succeeded.incrementAndGet();
+                } catch (RuntimeException e) {
+                    failed.incrementAndGet();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            });
+        }
+        start.countDown();
+        executor.shutdown();
+        assertThat(executor.awaitTermination(60, TimeUnit.SECONDS)).isTrue();
+
+        // 어느 인터리빙이든 취소는 완결되고 복원은 정확히 한 번이다 — 이중 복원이면 재고가 54로 증식한다.
+        // 진 쪽은 낙관락 충돌·상태 가드로 복원 없이 실패하거나, 완결 후 도착해 관용 통과한다.
+        assertThat(succeeded.get()).isBetween(1, 2);
+        assertThat(succeeded.get() + failed.get()).isEqualTo(2);
+        assertThat(orderReader.getOrder(orderId).status()).isEqualTo(OrderStatus.CANCELLED);
+        assertThat(paymentReader.getByOrderId(orderId).status()).isEqualTo(PaymentStatus.CANCELLED);
+        assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(50);
+        assertThat(issuedCouponReader.getIssuedCoupon(issuedId, memberId).status())
+                .isEqualTo(IssuedCouponStatus.ISSUED);
     }
 
     @Test

@@ -27,6 +27,9 @@ import org.springframework.stereotype.Component;
  * 관용 통과시켜 재호출이 재고를 가산 증식시키거나 다른 주문에 재사용된 쿠폰을 풀지 못한다. 환불 커밋 후 주문
  * 취소가 실패한 재시도는 이미 CANCELLED인 결제를 관용해 취소·복원을 완결한다. 취소 커밋과 복원 사이 중단의
  * 복원 유실은 잔여 한계다(DOMAIN_MODEL.md 취소·환불 정책 참조). 쿠폰 복원을 재고 복원 앞에 둔다.
+ *
+ * <p>동시 취소 2건이 겹쳐 둘 다 전이 가드를 통과해도 주문·결제 낙관락({@code @Version})이 한쪽만 커밋시켜
+ * 복원이 정확히 한 번이다. 진 쪽의 충돌은 409로 응답한다(클라이언트 재시도, 재시도는 관용 통과).
  */
 @Component
 public class OrderCancellationFacade {

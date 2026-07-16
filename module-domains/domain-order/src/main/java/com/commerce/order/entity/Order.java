@@ -18,6 +18,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.HashSet;
@@ -33,6 +34,9 @@ import org.jspecify.annotations.Nullable;
  *
  * <p>결제 축({@code status})과 이행 축({@code fulfillmentStatus})은 직교하며, 모든 이행 전진은
  * {@code status == PAID}에서만 유효하다. 최초 상태는 {@code PENDING}·{@code NOT_STARTED}다.
+ *
+ * <p>취소·환불 전이가 재고·쿠폰 복원을 게이트하므로 동시 중복 전이를 낙관락({@code @Version})으로
+ * 직렬화한다 — 겹친 취소 2건이 모두 가드를 통과해도 한쪽만 커밋되어 복원이 정확히 한 번이다.
  */
 @Entity
 @Table(schema = "ordering", name = "orders")
@@ -120,6 +124,10 @@ public class Order extends BaseTimeEntity<UUID> {
     @Column(name = "refund_reason")
     @Nullable
     private RefundReason refundReason;
+
+    @Version
+    @Column(name = "version")
+    private long version;
 
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<OrderLine> lines = new HashSet<>();
@@ -371,5 +379,9 @@ public class Order extends BaseTimeEntity<UUID> {
 
     public Set<OrderLine> getLines() {
         return Collections.unmodifiableSet(lines);
+    }
+
+    public long getVersion() {
+        return version;
     }
 }

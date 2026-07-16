@@ -13,13 +13,16 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
 /**
- * 결제 애그리거트 루트다. 주문당 1행이며 낙관락을 두지 않는다(경합 없음).
+ * 결제 애그리거트 루트다. 주문당 1행이지만 취소(환불) 전이에 사용자 취소·리컨실·웹훅 확정이 겹칠 수 있어
+ * 동시 중복 전이를 낙관락({@code @Version})으로 직렬화한다 — 겹친 취소 2건이 모두 가드를 통과해도 한쪽만
+ * 커밋된다.
  *
  * <p>불변식 {@code amount > 0 ⇔ method != null}. 전액 할인(amount == 0)은 PG를 생략하고 자동 승인한다.
  */
@@ -66,6 +69,10 @@ public class Payment extends BaseTimeEntity<UUID> {
     @Column(name = "cancelled_at")
     @Nullable
     private Instant cancelledAt;
+
+    @Version
+    @Column(name = "version")
+    private long version;
 
     protected Payment() {}
 
@@ -178,5 +185,9 @@ public class Payment extends BaseTimeEntity<UUID> {
 
     public @Nullable Instant getCancelledAt() {
         return cancelledAt;
+    }
+
+    public long getVersion() {
+        return version;
     }
 }

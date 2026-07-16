@@ -230,6 +230,19 @@ class PaymentPersistenceTest {
     }
 
     @Test
+    @DisplayName("승인·취소 전이가 반영되고 낙관락 버전이 증가한다")
+    void transitionsIncrementVersion() {
+        UUID paymentId = paymentAppender.request(UUID.randomUUID(), Money.of(10000L), PaymentMethod.CARD);
+        assertThat(reload(paymentId).getVersion()).isZero();
+
+        paymentProcessor.approve(paymentId);
+        assertThat(reload(paymentId).getVersion()).isEqualTo(1L);
+
+        paymentProcessor.cancel(paymentId);
+        assertThat(reload(paymentId).getVersion()).isEqualTo(2L);
+    }
+
+    @Test
     @DisplayName("주문당 결제는 하나뿐이라 중복 요청은 거부된다")
     void duplicatePaymentRejected() {
         UUID orderId = UUID.randomUUID();

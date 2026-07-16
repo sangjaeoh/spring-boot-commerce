@@ -5,7 +5,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.commerce.core.money.Money;
 import com.commerce.messaging.publish.MessagePublisher;
 import com.commerce.order.entity.Address;
+import com.commerce.order.entity.CancellationReason;
 import com.commerce.order.entity.FulfillmentStatus;
+import com.commerce.order.entity.Order;
 import com.commerce.order.entity.OrderLineSnapshot;
 import com.commerce.order.entity.OrderStatus;
 import com.commerce.order.info.OrderInfo;
@@ -15,6 +17,7 @@ import com.commerce.order.service.OrderReader;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -120,6 +123,24 @@ class OrderPersistenceTest {
         assertThat(order.fulfillmentStatus()).isEqualTo(FulfillmentStatus.DELIVERED);
         assertThat(order.carrier()).isEqualTo("CJ대한통운");
         assertThat(order.trackingNumber()).isEqualTo("688900123456");
+    }
+
+    @Test
+    @DisplayName("취소 전이가 반영되고 낙관락 버전이 증가한다")
+    void cancelPersistsAndIncrementsVersion() {
+        UUID orderId = place();
+        em.flush();
+        em.clear();
+        assertThat(Objects.requireNonNull(em.find(Order.class, orderId)).getVersion())
+                .isZero();
+
+        orderModifier.cancel(orderId, CancellationReason.CUSTOMER_REQUEST);
+        em.flush();
+        em.clear();
+
+        Order reloaded = Objects.requireNonNull(em.find(Order.class, orderId));
+        assertThat(reloaded.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        assertThat(reloaded.getVersion()).isEqualTo(1L);
     }
 
     @Test
