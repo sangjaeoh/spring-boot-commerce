@@ -1,12 +1,16 @@
 package com.commerce.product.service;
 
+import com.commerce.product.entity.NormalizedOptions;
+import com.commerce.product.entity.ProductOption;
 import com.commerce.product.entity.ProductVariant;
+import com.commerce.product.entity.ProductVariantStatus;
 import com.commerce.product.exception.ProductErrorCode;
 import com.commerce.product.exception.ProductVariantNotFoundException;
 import com.commerce.product.info.ProductVariantInfo;
 import com.commerce.product.repository.ProductVariantRepository;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,6 +44,15 @@ public class ProductVariantReader {
         return variantRepository.findAllById(variantIds).stream()
                 .map(ProductVariantInfo::from)
                 .toList();
+    }
+
+    /** 같은 옵션 조합의 비-RETIRED 변형을 조회한다. 중복 검사와 같은 시그니처 정규화를 쓴다. */
+    @Transactional(readOnly = true)
+    public Optional<ProductVariantInfo> findNonRetiredByOptions(UUID productId, List<ProductOption> options) {
+        String signature = NormalizedOptions.of(options).signature();
+        return variantRepository
+                .findByProductIdAndOptionSignatureAndStatusNot(productId, signature, ProductVariantStatus.RETIRED)
+                .map(ProductVariantInfo::from);
     }
 
     /** 상품의 변형 목록을 조회한다. 없으면 빈 목록이다. */

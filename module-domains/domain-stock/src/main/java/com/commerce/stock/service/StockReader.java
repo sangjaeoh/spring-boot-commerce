@@ -34,6 +34,12 @@ public class StockReader {
         return StockInfo.from(stock);
     }
 
+    /** 변형의 재고 행 존재 여부를 반환한다. */
+    @Transactional(readOnly = true)
+    public boolean existsByVariantId(UUID variantId) {
+        return stockRepository.existsByVariantId(variantId);
+    }
+
     /** 주어진 변형들의 재고 목록을 조회한다. 재고 행이 없는 변형은 결과에 없다. */
     @Transactional(readOnly = true)
     public List<StockInfo> getByVariantIds(Collection<UUID> variantIds) {

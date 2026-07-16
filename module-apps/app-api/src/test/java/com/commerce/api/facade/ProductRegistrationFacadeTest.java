@@ -1,14 +1,18 @@
 package com.commerce.api.facade;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.commerce.core.money.Money;
 import com.commerce.product.entity.ProductOption;
 import com.commerce.product.entity.ProductStatus;
 import com.commerce.product.entity.ProductVariantStatus;
+import com.commerce.product.exception.DuplicateVariantOptionException;
 import com.commerce.product.info.ProductVariantInfo;
 import com.commerce.product.service.ProductReader;
+import com.commerce.product.service.ProductVariantAppender;
 import com.commerce.product.service.ProductVariantReader;
+import com.commerce.stock.service.StockAppender;
 import com.commerce.stock.service.StockReader;
 import java.util.List;
 import java.util.UUID;
@@ -22,16 +26,22 @@ class ProductRegistrationFacadeTest extends FacadeIntegrationTest {
     private final ProductRegistrationFacade productRegistrationFacade;
     private final ProductReader productReader;
     private final ProductVariantReader variantReader;
+    private final ProductVariantAppender variantAppender;
+    private final StockAppender stockAppender;
     private final StockReader stockReader;
 
     ProductRegistrationFacadeTest(
             ProductRegistrationFacade productRegistrationFacade,
             ProductReader productReader,
             ProductVariantReader variantReader,
+            ProductVariantAppender variantAppender,
+            StockAppender stockAppender,
             StockReader stockReader) {
         this.productRegistrationFacade = productRegistrationFacade;
         this.productReader = productReader;
         this.variantReader = variantReader;
+        this.variantAppender = variantAppender;
+        this.stockAppender = stockAppender;
         this.stockReader = stockReader;
     }
 
@@ -67,5 +77,57 @@ class ProductRegistrationFacadeTest extends FacadeIntegrationTest {
         assertThat(added.price()).isEqualTo(Money.of(12000L));
         assertThat(added.optionLabel()).isEqualTo("파랑");
         assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(30);
+    }
+
+    @Test
+    @DisplayName("변형만 생성되고 중단된 시딩은 addVariant 재시도가 재고 생성·활성화를 재개한다")
+    void addVariantResumesWhenInterruptedBeforeStockSeeding() {
+        UUID productId = registerBaseProduct();
+        List<ProductOption> options = List.of(new ProductOption("색상", "파랑"));
+        // 변형 create 직후(재고 생성 전) 중단을 재현한다.
+        UUID interrupted = variantAppender.create(productId, Money.of(12000L), options);
+
+        UUID resumed = productRegistrationFacade.addVariant(productId, Money.of(12000L), options, 30);
+
+        assertThat(resumed).isEqualTo(interrupted);
+        assertThat(variantReader.getVariant(interrupted).status()).isEqualTo(ProductVariantStatus.ACTIVE);
+        assertThat(stockReader.getByVariantId(interrupted).quantity()).isEqualTo(30);
+        assertThat(variantReader.getByProductId(productId)).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("재고까지 생성되고 미활성으로 중단된 시딩은 재시도가 활성화만 재개하고 재고를 재시딩하지 않는다")
+    void addVariantResumesWhenInterruptedBeforeEnable() {
+        UUID productId = registerBaseProduct();
+        List<ProductOption> options = List.of(new ProductOption("색상", "파랑"));
+        // 재고 create까지 끝나고 enable 전 중단을 재현한다.
+        UUID interrupted = variantAppender.create(productId, Money.of(12000L), options);
+        stockAppender.create(interrupted, 30);
+
+        UUID resumed = productRegistrationFacade.addVariant(productId, Money.of(12000L), options, 99);
+
+        assertThat(resumed).isEqualTo(interrupted);
+        assertThat(variantReader.getVariant(interrupted).status()).isEqualTo(ProductVariantStatus.ACTIVE);
+        // 재개는 기존 재고를 재시딩하지 않는다 — 초기수량 99가 아니라 중단 시점의 30 유지.
+        assertThat(stockReader.getByVariantId(interrupted).quantity()).isEqualTo(30);
+    }
+
+    @Test
+    @DisplayName("완결된 동일 옵션 변형에 대한 addVariant는 여전히 중복으로 거부된다")
+    void addVariantStillRejectsCompletedDuplicate() {
+        UUID productId = registerBaseProduct();
+        List<ProductOption> options = List.of(new ProductOption("색상", "파랑"));
+        UUID completed = productRegistrationFacade.addVariant(productId, Money.of(12000L), options, 30);
+
+        assertThatThrownBy(() -> productRegistrationFacade.addVariant(productId, Money.of(15000L), options, 10))
+                .isInstanceOf(DuplicateVariantOptionException.class);
+
+        assertThat(variantReader.getVariant(completed).price()).isEqualTo(Money.of(12000L));
+        assertThat(stockReader.getByVariantId(completed).quantity()).isEqualTo(30);
+    }
+
+    private UUID registerBaseProduct() {
+        return productRegistrationFacade.registerProduct(
+                "티셔츠", null, Money.of(10000L), List.of(new ProductOption("색상", "빨강")), 50);
     }
 }

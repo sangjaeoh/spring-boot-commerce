@@ -684,7 +684,7 @@
 
 - 상품 `register`(HIDDEN) → 변형 `create(productId, price, 옵션?)`(DISABLED) → 재고 `create(variantId, 초기수량)` → 변형 `enable`(ACTIVE) → 상품 `show()`(ON_SALE). 첫 변형이 상품의 옵션을 싣는다(옵션 없는 상품만 "" 기본 변형이라 옵션 상품에 유령 기본 변형이 생기지 않는다).
 - 변형을 DISABLED로 먼저 두는 이유: 담기 게이트에 재고 검사가 없어 재고 없는 ACTIVE 변형이 카탈로그·담기에 노출되는 것을 막는다. `enable`은 재고 존재를 검증하지 않고 시딩 순서가 보장하며, 체크아웃의 부재→주문 불가 강등이 방어적 심층이다.
-- 파괴적 보상이 없다: 실패 시 HIDDEN 상품·DISABLED 변형·재고가 남아 재시도로 복구한다(삭제 보상 없음). 중단 복구는 기존 변형에서 남은 단계를 재개한다(재고 미생성이면 `create`, 미활성이면 `enable`) — DISABLED 변형은 비-RETIRED라 같은 옵션으로 변형 `create`를 다시 부르면 유니크에 막히므로 재생성이 아니라 재개다. Product·ProductVariant·Stock 세 루트에 걸쳐 원자적이지 않다.
+- 파괴적 보상이 없다: 실패 시 HIDDEN 상품·DISABLED 변형·재고가 남아 재시도로 복구한다(삭제 보상 없음). 중단 복구는 기존 변형에서 남은 단계를 재개한다(재고 미생성이면 `create`, 미활성이면 `enable`) — DISABLED 변형은 비-RETIRED라 같은 옵션으로 변형 `create`를 다시 부르면 유니크에 막히므로 재생성이 아니라 재개다. 재개는 기존 변형의 가격을 유지하고 재고가 이미 있으면 초기수량을 쓰지 않는다. 완결(ACTIVE) 동일 옵션 변형은 중복으로 거부한다. 관리자가 비활성화한 동일 옵션 변형에 `addVariant`를 부르면 같은 경로로 재활성화된다 — 시딩 중단과 구분할 증거가 없어 재개를 우선한다. Product·ProductVariant·Stock 세 루트에 걸쳐 원자적이지 않다.
 - 추가 변형(이미 ON_SALE 상품): 변형 `create`(DISABLED) → 재고 `create(variantId, 초기수량)` → `enable`. enable 전까지 주문 불가라 재고 없는 ACTIVE 변형 창이 없다.
 - 변형은 재고 파트너가 있고 나서만 ACTIVE가 되므로, 주문 가능 조건 판정(재고 조회 포함)이 재고 없는 ACTIVE 변형을 만나지 않는다.
 
