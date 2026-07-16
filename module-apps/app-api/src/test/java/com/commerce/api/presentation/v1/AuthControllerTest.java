@@ -3,6 +3,7 @@ package com.commerce.api.presentation.v1;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -22,12 +23,16 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestConstructor;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import tools.jackson.databind.ObjectMapper;
 
 @TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 class AuthControllerTest extends WebIntegrationTest {
 
     private static final String PASSWORD = "password-123!";
+
+    // RateLimitConfig의 로그인 창당 한도와 같은 값. 초과 시도가 429로 거부되는지 검증한다.
+    private static final int LOGIN_MAX_ATTEMPTS = 10;
 
     private final MockMvc mvc;
     private final ObjectMapper objectMapper;
@@ -133,5 +138,50 @@ class AuthControllerTest extends WebIntegrationTest {
                         .content(objectMapper.writeValueAsString(new LoginRequest("  ", "  "))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+    }
+
+    @Test
+    @DisplayName("한 창 안에서 로그인 시도가 한도를 넘으면 429 TOO_MANY_LOGIN_ATTEMPTS로 거부된다")
+    void loginRejectsAfterTooManyAttempts() throws Exception {
+        // 다른 로그인 테스트가 공유하는 기본 클라이언트 IP를 오염시키지 않도록 전용 IP로 한도를 채운다.
+        String clientIp = "203.0.113.9";
+        String body = objectMapper.writeValueAsString(
+                new LoginRequest("nobody-" + UUID.randomUUID() + "@example.com", PASSWORD));
+
+        for (int attempt = 0; attempt < LOGIN_MAX_ATTEMPTS; attempt++) {
+            mvc.perform(loginFrom(clientIp, body)).andExpect(status().isUnauthorized());
+        }
+
+        mvc.perform(loginFrom(clientIp, body))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                // 필터 단계에서 거부된 응답에도 시큐리티 헤더가 실린다.
+                .andExpect(header().string("X-Content-Type-Options", "nosniff"))
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.code").value("TOO_MANY_LOGIN_ATTEMPTS"));
+    }
+
+    private static MockHttpServletRequestBuilder loginFrom(String clientIp, String body) {
+        return post("/api/v1/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body)
+                .with(request -> {
+                    request.setRemoteAddr(clientIp);
+                    return request;
+                });
+    }
+
+    @Test
+    @DisplayName("로그인 응답에 nosniff·no-store 시큐리티 헤더가 실린다")
+    void loginResponseCarriesSecurityHeaders() throws Exception {
+        String email = "user-" + UUID.randomUUID() + "@example.com";
+        memberAppender.register(email, "테스터", PASSWORD);
+
+        mvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new LoginRequest(email, PASSWORD))))
+                .andExpect(status().isOk())
+                .andExpect(header().string("X-Content-Type-Options", "nosniff"))
+                .andExpect(header().string("Cache-Control", "no-store"));
     }
 }

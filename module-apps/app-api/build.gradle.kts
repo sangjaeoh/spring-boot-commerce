@@ -31,6 +31,8 @@ dependencies {
 
     testImplementation(libs.spring.boot.starter.test)
     testImplementation(libs.spring.boot.starter.webmvc.test)
+    // 웹 통합 테스트가 공유 Redis의 로그인 레이트리밋 카운터를 테스트 간 비운다(StringRedisTemplate).
+    testImplementation(libs.spring.boot.starter.data.redis)
     testImplementation(libs.archunit.junit5)
     testImplementation(libs.testcontainers.postgresql)
     testImplementation(libs.testcontainers.redis)
