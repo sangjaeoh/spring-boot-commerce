@@ -392,6 +392,64 @@ class MemberControllerTest extends WebIntegrationTest {
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
     }
 
+    @Test
+    @DisplayName("관리자의 이메일 검색은 200으로 정확 일치 활성 회원을 싣는다")
+    void searchByEmailReturnsMatchingMember() throws Exception {
+        String email = "search-" + UUID.randomUUID() + "@example.com";
+        UUID memberId = memberAppender.register(email, "테스터", "password-123!");
+
+        mvc.perform(get("/api/v1/members").param("email", email).header(HttpHeaders.AUTHORIZATION, adminBearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(memberId.toString()))
+                .andExpect(jsonPath("$.email").value(email))
+                .andExpect(jsonPath("$.status").value("ACTIVE"));
+    }
+
+    @Test
+    @DisplayName("일치하는 회원이 없는 이메일 검색은 404 MEMBER_NOT_FOUND로 거부된다")
+    void searchByEmailReturns404ForMissingMember() throws Exception {
+        mvc.perform(get("/api/v1/members")
+                        .param("email", "missing-" + UUID.randomUUID() + "@example.com")
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("MEMBER_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("탈퇴 회원의 이메일 검색은 404 MEMBER_NOT_FOUND로 미존재 취급된다")
+    void searchByEmailExcludesWithdrawnMember() throws Exception {
+        String email = "withdrawn-" + UUID.randomUUID() + "@example.com";
+        UUID memberId = memberAppender.register(email, "테스터", "password-123!");
+        mvc.perform(delete("/api/v1/members/me")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
+                        .param("reason", "NO_LONGER_USED"))
+                .andExpect(status().isNoContent());
+
+        mvc.perform(get("/api/v1/members").param("email", email).header(HttpHeaders.AUTHORIZATION, adminBearer()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("MEMBER_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("구매자 토큰의 이메일 검색은 403 FORBIDDEN으로 거부된다")
+    void searchByEmailRejectsBuyerToken() throws Exception {
+        UUID buyerId = registerMember();
+
+        mvc.perform(get("/api/v1/members")
+                        .param("email", "any-" + UUID.randomUUID() + "@example.com")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(buyerId)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    @DisplayName("미인증 이메일 검색은 401 UNAUTHENTICATED로 거부된다")
+    void searchByEmailRejectsUnauthenticated() throws Exception {
+        mvc.perform(get("/api/v1/members").param("email", "any-" + UUID.randomUUID() + "@example.com"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+    }
+
     private UUID registerMember() {
         return memberAppender.register("user-" + UUID.randomUUID() + "@example.com", "테스터", "password-123!");
     }

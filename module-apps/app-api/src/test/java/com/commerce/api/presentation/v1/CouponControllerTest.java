@@ -1,6 +1,7 @@
 package com.commerce.api.presentation.v1;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -423,6 +424,81 @@ class CouponControllerTest extends WebIntegrationTest {
                         .header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.issuedCouponId").exists());
+    }
+
+    @Test
+    @DisplayName("관리자 쿠폰 정책 목록은 200으로 정책을 최신순 페이지·할인·상태와 함께 싣는다")
+    void couponPolicyListReturnsPoliciesNewestFirst() throws Exception {
+        UUID couponId = createCoupon();
+
+        mvc.perform(get("/api/v1/coupons").header(HttpHeaders.AUTHORIZATION, adminBearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.coupons[0].id").value(couponId.toString()))
+                .andExpect(jsonPath("$.coupons[0].name").value("쿠폰"))
+                .andExpect(jsonPath("$.coupons[0].discountType").value("FIXED"))
+                .andExpect(jsonPath("$.coupons[0].discountAmount").value(1000))
+                .andExpect(jsonPath("$.coupons[0].status").value("ACTIVE"))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(20))
+                .andExpect(jsonPath("$.totalElements").isNumber())
+                .andExpect(jsonPath("$.totalPages").isNumber());
+    }
+
+    @Test
+    @DisplayName("구매자 토큰의 쿠폰 정책 목록 조회는 403 FORBIDDEN으로 거부된다")
+    void couponPolicyListRejectsBuyerToken() throws Exception {
+        mvc.perform(get("/api/v1/coupons").header(HttpHeaders.AUTHORIZATION, bearer(registerMember())))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    @DisplayName("미인증 쿠폰 정책 목록 조회는 401 UNAUTHENTICATED로 거부된다")
+    void couponPolicyListRejectsUnauthenticated() throws Exception {
+        mvc.perform(get("/api/v1/coupons"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+    }
+
+    @Test
+    @DisplayName("정책별 발급분 목록은 200으로 해당 정책의 발급분만 최신순 페이지로 싣는다")
+    void issuedCouponListByCouponReturnsOnlyThatPolicysIssuances() throws Exception {
+        UUID couponId = createCoupon();
+        UUID otherCouponId = createCoupon();
+        UUID issuedA = issuedCouponAppender.issue(couponId, registerMember());
+        UUID issuedB = issuedCouponAppender.issue(couponId, registerMember());
+        issuedCouponAppender.issue(otherCouponId, registerMember());
+
+        mvc.perform(get("/api/v1/coupons/{couponId}/issues", couponId).header(HttpHeaders.AUTHORIZATION, adminBearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.issuedCoupons.length()").value(2))
+                .andExpect(jsonPath("$.issuedCoupons[0].id").value(issuedB.toString()))
+                .andExpect(jsonPath("$.issuedCoupons[1].id").value(issuedA.toString()))
+                .andExpect(jsonPath("$.issuedCoupons[0].couponId").value(couponId.toString()))
+                .andExpect(jsonPath("$.totalElements").value(2))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(20));
+    }
+
+    @Test
+    @DisplayName("구매자 토큰의 정책별 발급분 목록 조회는 403 FORBIDDEN으로 거부된다")
+    void issuedCouponListByCouponRejectsBuyerToken() throws Exception {
+        UUID couponId = createCoupon();
+
+        mvc.perform(get("/api/v1/coupons/{couponId}/issues", couponId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(registerMember())))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    @DisplayName("미인증 정책별 발급분 목록 조회는 401 UNAUTHENTICATED로 거부된다")
+    void issuedCouponListByCouponRejectsUnauthenticated() throws Exception {
+        UUID couponId = createCoupon();
+
+        mvc.perform(get("/api/v1/coupons/{couponId}/issues", couponId))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
     }
 
     private UUID registerMember() {

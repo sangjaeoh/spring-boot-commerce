@@ -6,12 +6,14 @@ import com.commerce.api.facade.ProductRegistrationFacade;
 import com.commerce.api.presentation.v1.request.ProductEditRequest;
 import com.commerce.api.presentation.v1.request.ProductRegistrationRequest;
 import com.commerce.api.presentation.v1.request.VariantRegistrationRequest;
+import com.commerce.api.presentation.v1.response.ProductAdminPageResponse;
 import com.commerce.api.presentation.v1.response.ProductDetailResponse;
 import com.commerce.api.presentation.v1.response.ProductPageResponse;
 import com.commerce.api.presentation.v1.response.ProductRegistrationResponse;
 import com.commerce.api.presentation.v1.response.VariantRegistrationResponse;
 import com.commerce.core.money.Money;
 import com.commerce.product.service.ProductModifier;
+import com.commerce.product.service.ProductReader;
 import com.commerce.product.service.ProductRemover;
 import com.commerce.web.auth.AdminOnly;
 import jakarta.validation.Valid;
@@ -47,6 +49,7 @@ public class ProductController {
     private final ProductRegistrationFacade productRegistrationFacade;
     private final ProductCatalogFacade productCatalogFacade;
     private final ProductDetailFacade productDetailFacade;
+    private final ProductReader productReader;
     private final ProductModifier productModifier;
     private final ProductRemover productRemover;
 
@@ -54,11 +57,13 @@ public class ProductController {
             ProductRegistrationFacade productRegistrationFacade,
             ProductCatalogFacade productCatalogFacade,
             ProductDetailFacade productDetailFacade,
+            ProductReader productReader,
             ProductModifier productModifier,
             ProductRemover productRemover) {
         this.productRegistrationFacade = productRegistrationFacade;
         this.productCatalogFacade = productCatalogFacade;
         this.productDetailFacade = productDetailFacade;
+        this.productReader = productReader;
         this.productModifier = productModifier;
         this.productRemover = productRemover;
     }
@@ -93,6 +98,14 @@ public class ProductController {
     public ProductPageResponse getProducts(
             @RequestParam(defaultValue = "0") @Min(0) int page, @RequestParam(defaultValue = "20") @Min(1) int size) {
         return ProductPageResponse.from(productCatalogFacade.getCatalogPage(PageRequest.of(page, size)));
+    }
+
+    /** 미삭제 상품 목록을 숨김 포함 최신 등록순 페이지로 조회한다(관리 대상 발견). */
+    @AdminOnly
+    @GetMapping("/admin")
+    public ProductAdminPageResponse getProductsForAdmin(
+            @RequestParam(defaultValue = "0") @Min(0) int page, @RequestParam(defaultValue = "20") @Min(1) int size) {
+        return ProductAdminPageResponse.from(productReader.getPage(PageRequest.of(page, size)));
     }
 
     /** 상품 상세를 ACTIVE 변형·주문가능·품절·대표가와 함께 조회한다. */

@@ -12,6 +12,8 @@ import com.commerce.api.presentation.v1.response.OrderPageResponse;
 import com.commerce.api.presentation.v1.response.OrderResponse;
 import com.commerce.api.presentation.v1.response.PaymentResponse;
 import com.commerce.core.money.Money;
+import com.commerce.order.entity.FulfillmentStatus;
+import com.commerce.order.entity.OrderStatus;
 import com.commerce.order.service.OrderModifier;
 import com.commerce.order.service.OrderReader;
 import com.commerce.payment.service.PaymentReader;
@@ -140,6 +142,18 @@ public class OrderController {
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) int size) {
         return OrderPageResponse.from(orderReader.getOrdersByMember(authUser.memberId(), PageRequest.of(page, size)));
+    }
+
+    /** 결제·이행 축 상태로 주문 목록을 최신순 페이지로 조회한다(출고·환불 대상 발견). */
+    @AdminOnly
+    @GetMapping("/admin")
+    public OrderPageResponse getOrdersByStatus(
+            @RequestParam OrderStatus status,
+            @RequestParam FulfillmentStatus fulfillmentStatus,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "20") @Min(1) int size) {
+        return OrderPageResponse.from(
+                orderReader.getOrdersByStatus(status, fulfillmentStatus, PageRequest.of(page, size)));
     }
 
     /** 본인 주문의 결제 정보(승인·환불 거래)를 조회한다. */

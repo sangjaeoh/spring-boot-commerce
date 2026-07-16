@@ -68,6 +68,23 @@ public class OrderReader {
         // 컬렉션 페치(lines)와 LIMIT을 한 쿼리에 섞으면 Hibernate가 전체를 로드해 메모리에서 자르므로,
         // ID 페이지를 먼저 뜨고 그 ID들만 IN으로 라인을 페치한다.
         Page<UUID> idPage = orderRepository.findIdPageByMemberId(memberId, pageable);
+        return toOrderPage(idPage, pageable);
+    }
+
+    /**
+     * 결제·이행 축 상태로 주문 목록을 최신순 페이지로 조회한다. 없으면 빈 페이지다. 같은 생성 시각은 id로
+     * 결정적 순서를 둔다.
+     *
+     * <p>관리자 운영 표면(출고·환불 대상 발견)이 소비한다. 소유 회원을 거르지 않으므로 관리자 가드 뒤에서만 부른다.
+     */
+    @Transactional(readOnly = true)
+    public Page<OrderInfo> getOrdersByStatus(
+            OrderStatus status, FulfillmentStatus fulfillmentStatus, Pageable pageable) {
+        Page<UUID> idPage = orderRepository.findIdPageByStatusAndFulfillmentStatus(status, fulfillmentStatus, pageable);
+        return toOrderPage(idPage, pageable);
+    }
+
+    private Page<OrderInfo> toOrderPage(Page<UUID> idPage, Pageable pageable) {
         List<OrderInfo> orders = orderRepository.findByIdInOrderByCreatedAtDescIdDesc(idPage.getContent()).stream()
                 .map(OrderInfo::from)
                 .toList();

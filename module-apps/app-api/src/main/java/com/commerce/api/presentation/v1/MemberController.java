@@ -77,6 +77,13 @@ public class MemberController {
         return MemberResponse.from(memberReader.getMember(memberId));
     }
 
+    /** 이메일 정확 일치로 활성 회원을 조회한다(대상 회원 ID 발견). 없으면 404다. */
+    @AdminOnly
+    @GetMapping(params = "email")
+    public MemberResponse searchByEmail(@RequestParam String email) {
+        return MemberResponse.from(memberReader.getMemberByEmail(email));
+    }
+
     /** 회원을 정지하고 사유를 기록한다. */
     @AdminOnly
     @PostMapping("/{memberId}/suspend")
