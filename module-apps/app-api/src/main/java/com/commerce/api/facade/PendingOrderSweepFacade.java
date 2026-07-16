@@ -17,6 +17,7 @@ import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -49,6 +50,9 @@ import org.springframework.stereotype.Component;
 public class PendingOrderSweepFacade {
 
     private static final Logger log = LoggerFactory.getLogger(PendingOrderSweepFacade.class);
+
+    /** 라인 재고 복원의 낙관락 충돌 재시도 상한(첫 시도 포함) — 일시 경합만 흡수한다. */
+    private static final int RESTORE_MAX_ATTEMPTS = 3;
 
     private final OrderReader orderReader;
     private final PaymentReader paymentReader;
@@ -129,7 +133,25 @@ public class PendingOrderSweepFacade {
             return;
         }
         for (OrderLineInfo line : order.lines()) {
-            stockModifier.restore(line.variantId(), line.quantity());
+            restoreLineWithRetry(line.variantId(), line.quantity());
+        }
+    }
+
+    /**
+     * 라인 재고를 복원한다. 동시 체크아웃과의 낙관락 충돌은 일시 경합이라 라인 단위로 짧게 재시도한다 —
+     * {@code restore}는 가산·교환법칙이고 충돌한 시도는 자기 트랜잭션째 롤백되므로 재시도가 이중 가산하지
+     * 않는다. 재시도 소진 시 전파해 주문 단위 격리(경고 로그 후 다음 주문)로 넘긴다.
+     */
+    private void restoreLineWithRetry(UUID variantId, int quantity) {
+        for (int attempt = 1; ; attempt++) {
+            try {
+                stockModifier.restore(variantId, quantity);
+                return;
+            } catch (ObjectOptimisticLockingFailureException e) {
+                if (attempt >= RESTORE_MAX_ATTEMPTS) {
+                    throw e;
+                }
+            }
         }
     }
 
