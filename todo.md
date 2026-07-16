@@ -30,7 +30,7 @@
 ## 반드시 (출시 차단)
 
 ### 1. 취소·환불 복원 exactly-once 게이트 [결정]
-- 상태: 대기
+- 상태: 완료
 - 결정(2026-07-16): 복원 게이트 원칙 확정(위 선행 결정). `restoreUse(orderId)` 일치 + 관용 통과 시 복원 무재실행 + 보상 순서 통일.
 - 문제(Critical): 완결된 취소·환불을 `Idempotency-Key` 헤더 없이 재호출하면 복원이 무게이트로 재실행된다. `OrderCancellationFacade.java:80-83`이 이미 CANCELLED인 주문을 관용 통과시킨 뒤 `:61-77`이 전이 발생 여부와 무관하게 전 라인 재고 `restore`(가산, `Stock.java:74-77`) + 쿠폰 `restoreUse`를 재실행 → 재고가 호출 횟수만큼 증식. 더 심각하게, `IssuedCoupon.restoreUse()`(`IssuedCoupon.java:114`)가 orderId를 검증하지 않아, 주문 A 취소 완결 후 그 쿠폰을 주문 B에 재사용(USED)한 상태에서 주문 A 취소를 재호출하면 **B가 쓰는 쿠폰이 ISSUED로 풀린다**(쿠폰 재장전, 할인 반복 수취). `OrderRefundFacade.java:76-84`도 동일 패턴(관리자 한정이라 악용면만 좁음). `REQUIREMENTS.md:145` "정확히 한 번만 복원" 위반이며 `DOMAIN_MODEL.md:517`("전이가 실제 일어난 호출에서만 보상")과 :628이 문서 내부에서 상충한다.
 - 완료 기준: `restoreUse(issuedCouponId, orderId)`로 시그니처를 바꿔 `status == USED && orderId 일치`일 때만 복원(전 호출부 5곳 `CheckoutFacade`·`OrderCancellationFacade`·`OrderRefundFacade`·`PendingOrderSweepFacade`·`PaymentConfirmationFacade` 정합). 관용 통과 경로는 복원을 재실행하지 않도록, 취소 전이가 이 호출에서 실제 일어났는지로 복원을 게이트. 체크아웃 보상을 취소-선행 순서로 통일. IT: 취소 완결 후 재호출이 재고·쿠폰을 추가로 건드리지 않음 + 크로스-주문 쿠폰 재장전 차단.
