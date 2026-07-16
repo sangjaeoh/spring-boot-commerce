@@ -23,10 +23,10 @@ import org.springframework.stereotype.Component;
  * <p>이중 가드다. 결제 취소(환불)를 먼저 하고, 성공 시 주문 취소의 1회성 전이가 재고·쿠폰 복원을
  * 게이트한다. 환불이 복원의 선행조건이라 환불 실패 시 주문은 PAID로 남고 복원하지 않는다.
  *
- * <p>환불 커밋 후 다운스트림(주문 취소·복원)이 실패해 재시도되면, 이미 CANCELLED된 주문·결제를 관용해
- * 복원을 완결한다. 멱등 쿠폰 복원을 비멱등 가산 재고 복원 앞에 두어 재고를 종단 단계로 만든다. 단일 라인
- * 주문의 예외-재시도는 정확히 한 번 복원한다. 재고 복원 멱등은 크로스 도메인 정책으로 이 파사드가 소유한다
- * (DOMAIN_MODEL.md 재고 복원 정책 참조).
+ * <p>복원은 주문 취소 전이가 이 호출에서 실제 일어났을 때만 탄다. 이미 CANCELLED인 주문은 복원 재실행 없이
+ * 관용 통과시켜 재호출이 재고를 가산 증식시키거나 다른 주문에 재사용된 쿠폰을 풀지 못한다. 환불 커밋 후 주문
+ * 취소가 실패한 재시도는 이미 CANCELLED인 결제를 관용해 취소·복원을 완결한다. 취소 커밋과 복원 사이 중단의
+ * 복원 유실은 잔여 한계다(DOMAIN_MODEL.md 취소·환불 정책 참조). 쿠폰 복원을 재고 복원 앞에 둔다.
  */
 @Component
 public class OrderCancellationFacade {
@@ -54,23 +54,25 @@ public class OrderCancellationFacade {
     }
 
     /**
-     * 회원 본인의 주문을 취소하고 환불·재고·쿠폰을 복원한다. 타인 주문은 미존재로 취급한다.
+     * 회원 본인의 주문을 취소하고 환불·재고·쿠폰을 복원한다. 타인 주문은 미존재로 취급하고, 이미 취소된
+     * 주문은 복원 없이 통과한다.
      *
      * @throws ApiException 취소할 수 없는 주문 상태면
      */
     public void cancel(UUID orderId, UUID memberId) {
         OrderInfo order = orderReader.getOrder(orderId, memberId);
+        if (order.status() == OrderStatus.CANCELLED) {
+            return;
+        }
         requireCancellable(order);
 
         PaymentInfo payment = paymentReader.getByOrderId(orderId);
         paymentProcessor.cancel(payment.id());
-        if (order.status() == OrderStatus.PAID) {
-            orderModifier.cancel(orderId, CancellationReason.CUSTOMER_REQUEST);
-        }
+        orderModifier.cancel(orderId, CancellationReason.CUSTOMER_REQUEST);
 
         UUID issuedCouponId = order.issuedCouponId();
         if (issuedCouponId != null) {
-            issuedCouponModifier.restoreUse(issuedCouponId);
+            issuedCouponModifier.restoreUse(issuedCouponId, orderId);
         }
         for (OrderLineInfo line : order.lines()) {
             stockModifier.restore(line.variantId(), line.quantity());
@@ -78,9 +80,6 @@ public class OrderCancellationFacade {
     }
 
     private void requireCancellable(OrderInfo order) {
-        if (order.status() == OrderStatus.CANCELLED) {
-            return;
-        }
         boolean cancellable = order.status() == OrderStatus.PAID
                 && (order.fulfillmentStatus() == FulfillmentStatus.PREPARING
                         || order.fulfillmentStatus() == FulfillmentStatus.ON_HOLD);

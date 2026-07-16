@@ -35,10 +35,10 @@ public class IssuedCouponModifier {
         find(issuedCouponId).use(orderId, clock.instant());
     }
 
-    /** 사용을 복원한다. 사용 상태가 아니면 아무 일도 하지 않는다. */
+    /** 해당 주문에 대한 사용을 복원한다. 사용 상태가 아니거나 사용 주문이 다르면 아무 일도 하지 않는다. */
     @Transactional
-    public void restoreUse(UUID issuedCouponId) {
-        find(issuedCouponId).restoreUse();
+    public void restoreUse(UUID issuedCouponId, UUID orderId) {
+        find(issuedCouponId).restoreUse(orderId);
     }
 
     /**

@@ -401,7 +401,7 @@
 - 소유: 본인(memberId) 소유가 아닌 발급분은 존재 누출 방지로 미존재로 취급한다.
 - 사용(use): 주문 생성 이후 `use(issuedCouponId, orderId)`로 USED 전이하고 usedAt·orderId 세팅. 동시 두 주문이 같은 쿠폰을 사용하면 낙관락으로 한쪽만 성공하고 다른 쪽은 충돌로 보상된다(직렬화 메커니즘은 `docs/entity-persistence.md` 소유).
 - 만료: 발급분 사용 기한(`expiresAt`) 경과분은 사용 시점 검증에서 거부한다(별도 만료 상태·배치 없음). 정책 `validUntil`은 발급 가능 기간의 종료이지 사용 만료가 아니며, 정책 변경이 기발급분 사용 기한을 소급 바꾸지 않는다(`expiresAt` 스냅샷).
-- 취소 복원(restoreUse): 주문 취소·결제 실패로 주문이 무효가 되면 USED → ISSUED로 복원하고 usedAt·orderId를 clear한다. 가드 전이라 USED가 아니면 no-op이다(중복 보상 무해).
+- 취소 복원(restoreUse): 주문 취소·결제 실패로 주문이 무효가 되면 `restoreUse(issuedCouponId, orderId)`로 USED → ISSUED로 복원하고 usedAt·orderId를 clear한다. 가드 전이라 USED가 아니거나 사용 주문(orderId)이 일치하지 않으면 no-op이다(중복 보상 무해, 다른 주문에 재사용된 발급분을 풀지 않는다).
 
 ### 오퍼레이션
 
@@ -413,7 +413,7 @@
 | issue | couponId, memberId | ACTIVE, 발급기간 내, 회원 자격 활성, `(couponId, memberId)` 유니크, 한도 미소진(원자 선점), 최초 ISSUED | 쿠폰 미존재; 발급 중지(DISABLED); 발급기간 밖; 회원 자격 비활성(정지·탈퇴); 중복 발급; 한도 소진 |
 | calculateDiscount | issuedCouponId, orderAmount | `discount.applyTo(orderAmount)`에 위임 | 미존재 |
 | use | issuedCouponId, orderId | ISSUED·본인·사용 기한(`expiresAt`)·산출 할인 > 0 일 때만 USED 전이 | 미존재(미소유 포함); 상태·자격 위반; 만료; 낙관락 충돌 |
-| restoreUse | issuedCouponId | 가드 USED→ISSUED(아니면 no-op), usedAt·orderId clear | — |
+| restoreUse | issuedCouponId, orderId | 가드 USED ∧ 사용 주문 일치 → ISSUED(아니면 no-op), usedAt·orderId clear | — |
 | revoke | issuedCouponId, reason | 가드 ISSUED→REVOKED, revokedAt·revokeReason 세팅 | 미존재; 사용됨(USED)·이미 무효화(REVOKED); 낙관락 충돌 |
 | getIssuedCoupon | issuedCouponId | 본인 발급분 1행 | 미존재(미소유 포함) |
 
@@ -606,11 +606,11 @@
 
 1. 검증(읽기): 회원 자격 활성(`status = ACTIVE`·미탈퇴); 장바구니가 비어 있지 않을 것; 각 라인의 변형 ACTIVE ∧ 변형의 상품 ON_SALE·미삭제 ∧ 재고 `status = SELLABLE`이고 수량이 주문 수량 이상; 쿠폰이 있으면 본인·ISSUED·사용 기한(`expiresAt`)·(할인 전)최소주문금액·산출 할인 > 0 충족. 상품 ON_SALE·변형 ACTIVE(카탈로그 가시성의 그룹·SKU 두 수준)과 재고 SELLABLE(재고 가용성)은 서로 다른 게이트다. 변형·상품·재고 조회의 부재·삭제·미시딩은 예외가 아니라 주문 불가로 강등한다. 할인액·payAmount 계산. 어느 라인이든 주문 불가·재고 부족이면 전체 체크아웃을 거부한다(부분 주문 없음). 문제 라인은 자동 제거하지 않으며 사용자가 장바구니에서 직접 뺀다.
 2. 주문 생성(PENDING): 파사드가 각 라인을 `variantId`→변형(단가·optionLabel·productId)→상품(상품명)으로 해소해 스냅샷을 만들고(단가는 변형 현재가로 서버가 채운다 — 클라이언트 값 불신), 배송지 스냅샷·서버 계산 할인과 함께 `place`에 넘긴다. `place`(order 도메인)는 변형을 로드하지 않는다(1TX 1애그리거트). Order가 totalAmount 자기 계산·discount ≤ total 가드. orderId 확정. 이 PENDING 주문이 이후 부작용의 사가 앵커다.
-3. 재고 차감: 라인별 `deduct(variantId, qty)`. 어느 라인이든 실패하면 앞서 차감한 라인을 복원 + 주문 취소(→CANCELLED) 후 중단.
-4. 쿠폰 확정(있으면): `use(issuedCouponId, orderId)` → ISSUED→USED. 실패(동시 사용 등) 시 재고 복원 + 주문 취소 후 중단.
+3. 재고 차감: 라인별 `deduct(variantId, qty)`. 어느 라인이든 실패하면 주문 취소(→CANCELLED) 후 앞서 차감한 라인을 복원하고 중단.
+4. 쿠폰 확정(있으면): `use(issuedCouponId, orderId)` → ISSUED→USED. 실패(동시 사용 등) 시 주문 취소 후 재고 복원하고 중단.
 5. 결제: `payAmount == 0`이면 PG 생략·자동 APPROVED. 아니면 `PaymentGateway.approve`.
    - APPROVED → 결제 APPROVED 기록, `Order.markPaid`(PENDING→PAID).
-   - FAILED/예외 → 동기 보상: 재고 복원 + 쿠폰 복원(USED→ISSUED) + 주문 취소(→CANCELLED). 결제 FAILED 기록.
+   - FAILED/예외 → 동기 보상: 주문 취소(→CANCELLED) → 쿠폰 복원(USED→ISSUED) → 재고 복원. 결제 FAILED 기록. 보상은 스윕·리컨실과 같은 취소-선행 순서다 — 취소의 1회성 전이가 복원을 게이트해, 취소가 실패하면 복원 없이 PENDING이 남고 후속 스윕·리컨실의 취소 전이가 복원을 정확히 한 번 태운다.
 6. 주문 PAID 커밋 후 → `OrderPaid` 발행 → 장바구니 `removeItems`(주문된 변형 라인) 리스너(멱등).
 
 - 주문 앵커: 주문 PENDING을 재고 차감 전에 만들어, 차감·쿠폰 사용 등 모든 부작용이 조회 가능한 orderId에 걸린다. 차감 후 크래시가 나도 유실이 관측·복구 가능하다(주문 없는 차감이 아니다).
@@ -623,16 +623,16 @@
 
 - 이중 가드: 결제 취소(`Payment.cancel`, 가드 APPROVED→CANCELLED 1회)로 환불을 먼저 하고, 성공 시 주문 취소(`Order.cancel`, 가드 PAID→CANCELLED 1회)가 재고 복원(라인 `variantId`로) + 쿠폰 복원(USED→ISSUED)을 게이트한다. `pgTransactionId == null`(PG 미호출 승인) 결제는 환불 호출을 생략한다.
 - 환불이 복원의 선행조건이다: 환불 실패 시 주문은 PAID로 남고 복원하지 않는다(클라이언트 재시도). 이는 보상 코레오그래피이며 무손실 보장은 범위 밖이다.
-- 재고 복원 멱등(재고 도메인 `restore`가 참조하는 크로스 도메인 정책)은 이 취소 파사드가 소유한다. 파사드는 예외-재시도를 관용한다: 이미 CANCELLED된 결제·주문을 통과시켜(결제 취소는 서비스에서 no-op 반환, 주문 취소는 PAID일 때만 호출) 복원을 완결하되, PG 환불 재호출은 없다(환불 최대 1회).
-- 복원 순서는 멱등 단계(쿠폰 복원, USED 아니면 no-op)를 비멱등 가산 단계(재고 복원) 앞에 둔다. 단일 라인 주문의 예외-재시도는 재고를 정확히 한 번 복원한다(재고가 종단 단계라 완료된 복원이 후속 실패로 재복원되지 않는다).
-- 환원 불가능한 잔여: 다중 라인 주문의 재고 복원 루프 중간 실패는 재시도가 이미 복원된 라인을 가산 재복원한다. 성공 완결 후 요청 재전송으로 인한 중복 취소 호출은 재고를 이중 복원한다 — 재호출의 멱등은 HTTP 경계 책임이며, 멱등 필터가 같은 `Idempotency-Key`의 TTL 창 내 재요청을 409로 거부해 이 창을 좁히지만(키 저장소는 Redis — 재시작·다중 인스턴스에서도 유지) 헤더 opt-in의 best-effort 방어라 창 밖·다른 키·헤더 없는 재호출은 막지 못한다. durable한 라인별 복원 진행 비트가 없어(주문 PAID/CANCELLED가 유일 신호) 라인별 exactly-once는 불변식 안에서 도달 불가다.
+- 재고 복원 정책(재고 도메인 `restore`가 참조하는 크로스 도메인 정책)은 이 취소 파사드가 소유한다: 복원은 주문 취소의 1회성 전이가 이 호출에서 실제 일어났을 때만 탄다. 이미 CANCELLED인 주문은 진입 시 관용 통과해 결제 취소·복원을 재실행하지 않고(완결 후 재호출이 재고를 증식시키지 않음), 환불 커밋 후 주문 취소가 실패한 재시도는 이미 CANCELLED인 결제를 no-op 통과해(PG 환불 재호출 없음, 환불 최대 1회) 취소 전이와 복원을 완결한다.
+- 복원 순서는 쿠폰 복원을 재고 복원(가산) 앞에 둔다. 쿠폰 복원은 `restoreUse(issuedCouponId, orderId)`가 사용-주문 일치를 검증해, 취소 완결 후 다른 주문에 재사용된 발급분을 풀지 않는다(크로스-주문 재장전 차단).
+- 환원 불가능한 잔여: 취소 전이 커밋과 복원 완료 사이의 중단·복원 루프 중간 실패는 남은 라인의 복원을 유실한다 — 재호출은 이미 CANCELLED인 주문을 관용 통과하므로 복원을 완결하지 않는다. durable한 라인별 복원 진행 비트가 없어(주문 PAID/CANCELLED가 유일 신호) 라인별 exactly-once는 불변식 안에서 도달 불가라, 이중 복원(재고 증식·오버셀)보다 복원 유실(팬텀 품절, 운영 대사로 회복)을 잔여로 택했다. 멱등 필터가 같은 `Idempotency-Key`의 TTL 창 내 재요청을 409로 거부하는 것(키 저장소는 Redis — 재시작·다중 인스턴스에서도 유지)은 재전송 자체를 좁히는 보조 방어다.
 
 ### 반품 환불 (배송 완료 후)
 
 관리자가 DELIVERED 주문을 전체 반품 환불하는 흐름(파사드, 동기, 관리자 단일 액션):
 
 - 취소 파사드와 같은 이중 가드다: 결제 취소(`Payment.cancel`, 가드 APPROVED→CANCELLED 1회)로 환불을 먼저 하고, 성공 시 주문 환불(`Order.refund`, 가드 PAID ∧ DELIVERED → REFUNDED 1회)이 재고 복원 + 쿠폰 복원을 게이트한다. 환불 실패 시 주문은 PAID로 남고 복원하지 않는다.
-- 이중 환불은 두 1회성 전이가 구조적으로 거부한다 — 이미 CANCELLED인 결제는 결제 취소가 PG 재호출 없이 통과시키고(환불 최대 1회, PG 멱등 키 이중 방어), 이미 REFUNDED인 주문은 관용 통과시켜 재시도가 복원을 완결한다(취소 파사드와 같은 재시도 관용·복원 순서·잔여 한계).
+- 이중 환불은 두 1회성 전이가 구조적으로 거부한다 — 이미 REFUNDED인 주문은 진입 시 관용 통과해 복원을 재실행하지 않고, 결제 취소 커밋 후 주문 환불이 실패한 재시도는 이미 CANCELLED인 결제를 PG 재호출 없이 통과해(환불 최대 1회, PG 멱등 키 이중 방어) 환불 전이와 복원을 완결한다(취소 파사드와 같은 전이 게이트·복원 순서·잔여 한계).
 - 재고 복원: 취소와 같은 `restore`를 쓰되 근거가 다르다 — 취소는 미출고 차감분의 원복이고, 반품은 회수 상품의 재판매 가정이다(회수·검수 절차가 범위 밖이라 파사드가 즉시 복원). 재판매 불가 상품의 재고 차감은 운영 수동 조정으로 남긴다.
 - 쿠폰 복원: 취소와 같은 `restoreUse`(USED→ISSUED)를 쓴다. 전액 환불이 거래 전체를 원상회복하므로 쿠폰만 소진되면 고객 손실이라 복원한다. 배송 후라 사용 기한(`expiresAt`)이 경과했을 수 있는 점이 취소와 다르다 — 복원은 상태 복원일 뿐이고 만료는 사용 시점 검증이 거부하므로 경과분 복원은 명목이다(기한 연장·재발급 없음).
 - 부분 반품·교환·반품 요청/승인 워크플로·회수 배송 추적은 범위 밖이다(전체 주문·전액·단일 액션만).

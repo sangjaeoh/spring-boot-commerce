@@ -45,8 +45,10 @@ import org.springframework.stereotype.Component;
  * 장바구니 전체를 주문·결제로 전환하는 체크아웃 흐름을 조율한다.
  *
  * <p>트랜잭션을 열지 않고 도메인 서비스를 순차 호출한다(각 서비스가 자기 트랜잭션 소유). 주문 PENDING을
- * 사가 앵커로 먼저 만들고, 재고 차감·쿠폰 확정·결제 중 실패하면 그 콜스택에서 동기 보상(복원 + 주문
- * 취소)한다. 결제 성공 후 {@code markPaid}가 {@code OrderPaid}를 발행해 커밋 후 장바구니가 비워진다.
+ * 사가 앵커로 먼저 만들고, 재고 차감·쿠폰 확정·결제 중 실패하면 그 콜스택에서 동기 보상한다. 보상은 스윕·
+ * 리컨실과 같은 순서로 주문 취소의 1회성 전이를 복원 앞에 둔다 — 취소가 실패하면 복원하지 않아 주문이
+ * PENDING으로 남고, 후속 스윕·리컨실의 취소 전이가 복원을 정확히 한 번 태운다. 결제 성공 후
+ * {@code markPaid}가 {@code OrderPaid}를 발행해 커밋 후 장바구니가 비워진다.
  */
 @Component
 public class CheckoutFacade {
@@ -225,8 +227,8 @@ public class CheckoutFacade {
                 deducted.add(line);
             }
         } catch (RuntimeException e) {
-            restoreStock(deducted);
             orderModifier.cancel(orderId, CancellationReason.STOCK_SHORTAGE);
+            restoreStock(deducted);
             throw e;
         }
     }
@@ -235,8 +237,8 @@ public class CheckoutFacade {
         try {
             issuedCouponModifier.use(issuedCouponId, orderId);
         } catch (RuntimeException e) {
-            restoreStock(snapshots);
             orderModifier.cancel(orderId, CancellationReason.COUPON_CONFLICT);
+            restoreStock(snapshots);
             throw e;
         }
     }
@@ -262,11 +264,11 @@ public class CheckoutFacade {
     }
 
     private void compensate(UUID orderId, List<OrderLineSnapshot> snapshots, @Nullable UUID issuedCouponId) {
-        restoreStock(snapshots);
-        if (issuedCouponId != null) {
-            issuedCouponModifier.restoreUse(issuedCouponId);
-        }
         orderModifier.cancel(orderId, CancellationReason.PAYMENT_FAILED);
+        if (issuedCouponId != null) {
+            issuedCouponModifier.restoreUse(issuedCouponId, orderId);
+        }
+        restoreStock(snapshots);
     }
 
     private void restoreStock(List<OrderLineSnapshot> lines) {

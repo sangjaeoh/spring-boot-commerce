@@ -99,7 +99,7 @@ public class PendingOrderSweepFacade {
         orderModifier.cancel(order.id(), CancellationReason.CHECKOUT_ABANDONED);
         UUID issuedCouponId = order.issuedCouponId();
         if (issuedCouponId != null) {
-            issuedCouponModifier.restoreUse(issuedCouponId);
+            issuedCouponModifier.restoreUse(issuedCouponId, order.id());
         }
         for (OrderLineInfo line : order.lines()) {
             stockModifier.restore(line.variantId(), line.quantity());

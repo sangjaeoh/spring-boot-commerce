@@ -110,9 +110,9 @@ public class IssuedCoupon extends BaseTimeEntity<UUID> {
         this.revokeReason = reason;
     }
 
-    /** 사용을 복원한다. 사용 상태가 아니면 아무 일도 하지 않는다. */
-    public void restoreUse() {
-        if (status != IssuedCouponStatus.USED) {
+    /** 해당 주문에 대한 사용을 복원한다. 사용 상태가 아니거나 사용 주문이 다르면 아무 일도 하지 않는다. */
+    public void restoreUse(UUID orderId) {
+        if (status != IssuedCouponStatus.USED || !orderId.equals(this.orderId)) {
             return;
         }
         this.status = IssuedCouponStatus.ISSUED;

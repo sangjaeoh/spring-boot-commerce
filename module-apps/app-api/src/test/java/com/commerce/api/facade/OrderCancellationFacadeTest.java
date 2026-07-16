@@ -18,6 +18,7 @@ import com.commerce.coupon.entity.IssuedCouponStatus;
 import com.commerce.coupon.entity.ValidityPeriod;
 import com.commerce.coupon.exception.CouponErrorCode;
 import com.commerce.coupon.exception.CouponStatusException;
+import com.commerce.coupon.info.IssuedCouponInfo;
 import com.commerce.coupon.service.CouponAppender;
 import com.commerce.coupon.service.IssuedCouponAppender;
 import com.commerce.coupon.service.IssuedCouponModifier;
@@ -169,8 +170,53 @@ class OrderCancellationFacadeTest extends FacadeIntegrationTest {
     }
 
     @Test
-    @DisplayName("재고 복원 실패 후 재시도가 CANCELLED 주문을 관용해 재고를 정확히 한 번 복원한다")
-    void retryCompletesRestoreWhenStockRestoreFails() {
+    @DisplayName("취소 완결 후 재호출은 재고·쿠폰을 추가로 건드리지 않는다")
+    void duplicateCancelDoesNotTouchStockOrCouponAgain() {
+        UUID memberId = registerMember();
+        UUID variantId = seedProduct(Money.of(10000L), 50);
+        cartAppender.addItem(memberId, variantId, 4);
+        UUID couponId =
+                couponAppender.create("정액 1000", Discount.fixed(Money.of(1000L)), Money.ZERO, validity(), 30, null);
+        UUID issuedId = issuedCouponAppender.issue(couponId, memberId);
+        UUID orderId = checkoutFacade.checkout(memberId, address(), Money.ZERO, issuedId, PaymentMethod.CARD);
+        orderCancellationFacade.cancel(orderId, memberId);
+        assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(50);
+
+        orderCancellationFacade.cancel(orderId, memberId);
+
+        assertThat(orderReader.getOrder(orderId).status()).isEqualTo(OrderStatus.CANCELLED);
+        assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(50);
+        assertThat(issuedCouponReader.getIssuedCoupon(issuedId, memberId).status())
+                .isEqualTo(IssuedCouponStatus.ISSUED);
+        verify(paymentGateway, times(1)).cancel(any(), any());
+    }
+
+    @Test
+    @DisplayName("취소 완결 후 쿠폰이 다른 주문에 재사용됐으면 재호출이 그 쿠폰을 풀지 않는다")
+    void duplicateCancelDoesNotReloadCouponUsedByAnotherOrder() {
+        UUID memberId = registerMember();
+        UUID variantId = seedProduct(Money.of(10000L), 50);
+        cartAppender.addItem(memberId, variantId, 4);
+        UUID couponId =
+                couponAppender.create("정액 1000", Discount.fixed(Money.of(1000L)), Money.ZERO, validity(), 30, null);
+        UUID issuedId = issuedCouponAppender.issue(couponId, memberId);
+        UUID cancelledOrderId = checkoutFacade.checkout(memberId, address(), Money.ZERO, issuedId, PaymentMethod.CARD);
+        orderCancellationFacade.cancel(cancelledOrderId, memberId);
+        cartAppender.addItem(memberId, variantId, 2);
+        UUID reuseOrderId = checkoutFacade.checkout(memberId, address(), Money.ZERO, issuedId, PaymentMethod.CARD);
+
+        orderCancellationFacade.cancel(cancelledOrderId, memberId);
+
+        IssuedCouponInfo coupon = issuedCouponReader.getIssuedCoupon(issuedId, memberId);
+        assertThat(coupon.status()).isEqualTo(IssuedCouponStatus.USED);
+        assertThat(coupon.orderId()).isEqualTo(reuseOrderId);
+        assertThat(orderReader.getOrder(reuseOrderId).status()).isEqualTo(OrderStatus.PAID);
+        assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(48);
+    }
+
+    @Test
+    @DisplayName("재고 복원 실패 후 재호출은 이미 취소된 주문을 복원 재실행 없이 통과시킨다")
+    void retryDoesNotRerunRestoreWhenStockRestoreFails() {
         UUID memberId = registerMember();
         UUID variantId = seedProduct(Money.of(10000L), 50);
         cartAppender.addItem(memberId, variantId, 4);
@@ -190,16 +236,17 @@ class OrderCancellationFacadeTest extends FacadeIntegrationTest {
 
         orderCancellationFacade.cancel(orderId, memberId);
 
+        // 취소 커밋과 복원 사이 중단의 복원 유실은 수용된 잔여 한계다 — 재호출이 가산 복원을 재실행하지 않는다.
         assertThat(orderReader.getOrder(orderId).status()).isEqualTo(OrderStatus.CANCELLED);
-        assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(50);
+        assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(46);
         assertThat(issuedCouponReader.getIssuedCoupon(issuedId, memberId).status())
                 .isEqualTo(IssuedCouponStatus.ISSUED);
         verify(paymentGateway, times(1)).cancel(any(), any());
     }
 
     @Test
-    @DisplayName("쿠폰 복원 실패 후 재시도가 재고를 이중 복원하지 않고 정확히 한 번 복원한다")
-    void retryCompletesWhenCouponRestoreFails() {
+    @DisplayName("쿠폰 복원 실패 후 재호출은 이미 취소된 주문을 복원 재실행 없이 통과시킨다")
+    void retryDoesNotRerunRestoreWhenCouponRestoreFails() {
         UUID memberId = registerMember();
         UUID variantId = seedProduct(Money.of(10000L), 50);
         cartAppender.addItem(memberId, variantId, 4);
@@ -210,7 +257,7 @@ class OrderCancellationFacadeTest extends FacadeIntegrationTest {
 
         doThrow(new CouponStatusException(CouponErrorCode.ISSUED_COUPON_NOT_USABLE))
                 .when(issuedCouponModifier)
-                .restoreUse(eq(issuedId));
+                .restoreUse(eq(issuedId), any(UUID.class));
         assertThatThrownBy(() -> orderCancellationFacade.cancel(orderId, memberId))
                 .isInstanceOf(CouponStatusException.class);
         assertThat(orderReader.getOrder(orderId).status()).isEqualTo(OrderStatus.CANCELLED);
@@ -219,10 +266,11 @@ class OrderCancellationFacadeTest extends FacadeIntegrationTest {
 
         orderCancellationFacade.cancel(orderId, memberId);
 
+        // 취소 커밋과 복원 사이 중단의 복원 유실은 수용된 잔여 한계다 — 재호출이 복원을 재실행하지 않는다.
         assertThat(orderReader.getOrder(orderId).status()).isEqualTo(OrderStatus.CANCELLED);
-        assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(50);
+        assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(46);
         assertThat(issuedCouponReader.getIssuedCoupon(issuedId, memberId).status())
-                .isEqualTo(IssuedCouponStatus.ISSUED);
+                .isEqualTo(IssuedCouponStatus.USED);
         verify(paymentGateway, times(1)).cancel(any(), any());
     }
 

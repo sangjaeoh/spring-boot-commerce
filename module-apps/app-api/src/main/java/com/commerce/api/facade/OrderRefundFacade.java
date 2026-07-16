@@ -25,9 +25,11 @@ import org.springframework.stereotype.Component;
  * 재고 복원은 반품 상품의 회수·재판매를 가정하고, 쿠폰 복원은 사용 기한 경과분이면 명목 복원이다(사용
  * 시점 검증이 거부).
  *
- * <p>환불 커밋 후 다운스트림(주문 환불·복원)이 실패해 재시도되면, 이미 REFUNDED·CANCELLED된 주문·결제를
- * 관용해 복원을 완결한다. 멱등 쿠폰 복원을 비멱등 가산 재고 복원 앞에 두어 재고를 종단 단계로 만든다.
- * 결제 취소가 CANCELLED 결제를 PG 재호출 없이 통과시켜 환불은 최대 한 번만 일어난다.
+ * <p>복원은 주문 환불 전이가 이 호출에서 실제 일어났을 때만 탄다. 이미 REFUNDED인 주문은 복원 재실행 없이
+ * 관용 통과시켜 재호출이 재고를 가산 증식시키거나 다른 주문에 재사용된 쿠폰을 풀지 못한다. 결제 취소 커밋 후
+ * 주문 환불이 실패한 재시도는 이미 CANCELLED인 결제를 PG 재호출 없이 관용해(환불 최대 한 번) 환불·복원을
+ * 완결한다. 환불 커밋과 복원 사이 중단의 복원 유실은 잔여 한계다(DOMAIN_MODEL.md 취소·환불 정책 참조).
+ * 쿠폰 복원을 재고 복원 앞에 둔다.
  */
 @Component
 public class OrderRefundFacade {
@@ -55,23 +57,24 @@ public class OrderRefundFacade {
     }
 
     /**
-     * 배송 완료 주문을 전체 반품 환불하고 재고·쿠폰을 복원한다.
+     * 배송 완료 주문을 전체 반품 환불하고 재고·쿠폰을 복원한다. 이미 환불된 주문은 복원 없이 통과한다.
      *
      * @throws ApiException 환불할 수 없는 주문 상태면
      */
     public void refund(UUID orderId, RefundReason reason) {
         OrderInfo order = orderReader.getOrder(orderId);
+        if (order.status() == OrderStatus.REFUNDED) {
+            return;
+        }
         requireRefundable(order);
 
         PaymentInfo payment = paymentReader.getByOrderId(orderId);
         paymentProcessor.cancel(payment.id());
-        if (order.status() == OrderStatus.PAID) {
-            orderModifier.refund(orderId, reason);
-        }
+        orderModifier.refund(orderId, reason);
 
         UUID issuedCouponId = order.issuedCouponId();
         if (issuedCouponId != null) {
-            issuedCouponModifier.restoreUse(issuedCouponId);
+            issuedCouponModifier.restoreUse(issuedCouponId, orderId);
         }
         for (OrderLineInfo line : order.lines()) {
             stockModifier.restore(line.variantId(), line.quantity());
@@ -79,9 +82,6 @@ public class OrderRefundFacade {
     }
 
     private void requireRefundable(OrderInfo order) {
-        if (order.status() == OrderStatus.REFUNDED) {
-            return;
-        }
         boolean refundable =
                 order.status() == OrderStatus.PAID && order.fulfillmentStatus() == FulfillmentStatus.DELIVERED;
         if (!refundable) {

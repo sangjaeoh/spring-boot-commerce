@@ -99,11 +99,12 @@ class IssuedCouponTest {
     }
 
     @Test
-    @DisplayName("복원하면 ISSUED로 돌아가고 사용 정보가 지워진다")
+    @DisplayName("사용 주문으로 복원하면 ISSUED로 돌아가고 사용 정보가 지워진다")
     void restoreUseRevertsToIssued() {
         IssuedCoupon coupon = issued();
-        coupon.use(UUID.randomUUID(), NOW);
-        coupon.restoreUse();
+        UUID orderId = UUID.randomUUID();
+        coupon.use(orderId, NOW);
+        coupon.restoreUse(orderId);
         assertThat(coupon.getStatus()).isEqualTo(IssuedCouponStatus.ISSUED);
         assertThat(coupon.getUsedAt()).isNull();
         assertThat(coupon.getOrderId()).isNull();
@@ -113,7 +114,19 @@ class IssuedCouponTest {
     @DisplayName("사용 상태가 아니면 복원은 아무 일도 하지 않는다")
     void restoreUseNoOpWhenIssued() {
         IssuedCoupon coupon = issued();
-        coupon.restoreUse();
+        coupon.restoreUse(UUID.randomUUID());
         assertThat(coupon.getStatus()).isEqualTo(IssuedCouponStatus.ISSUED);
+    }
+
+    @Test
+    @DisplayName("다른 주문에 사용된 발급분의 복원은 아무 일도 하지 않는다")
+    void restoreUseNoOpWhenUsedByAnotherOrder() {
+        IssuedCoupon coupon = issued();
+        UUID orderId = UUID.randomUUID();
+        coupon.use(orderId, NOW);
+        coupon.restoreUse(UUID.randomUUID());
+        assertThat(coupon.getStatus()).isEqualTo(IssuedCouponStatus.USED);
+        assertThat(coupon.getUsedAt()).isEqualTo(NOW);
+        assertThat(coupon.getOrderId()).isEqualTo(orderId);
     }
 }

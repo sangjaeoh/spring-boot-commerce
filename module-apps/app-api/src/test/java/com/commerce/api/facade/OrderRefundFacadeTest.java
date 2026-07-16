@@ -170,12 +170,15 @@ class OrderRefundFacadeTest extends FacadeIntegrationTest {
     }
 
     @Test
-    @DisplayName("환불 완료 후 재호출해도 PG 환불은 한 번만 일어난다(이중 환불 거부)")
+    @DisplayName("환불 완결 후 재호출해도 PG 환불은 한 번만 일어나고 재고·쿠폰을 추가로 건드리지 않는다")
     void duplicateRefundDoesNotRefundTwice() {
         UUID memberId = registerMember();
         UUID variantId = seedProduct(Money.of(10000L), 50);
         cartAppender.addItem(memberId, variantId, 1);
-        UUID orderId = deliveredCheckout(memberId, null);
+        UUID couponId =
+                couponAppender.create("정액 1000", Discount.fixed(Money.of(1000L)), Money.ZERO, validity(), 30, null);
+        UUID issuedId = issuedCouponAppender.issue(couponId, memberId);
+        UUID orderId = deliveredCheckout(memberId, issuedId);
 
         orderRefundFacade.refund(orderId, RefundReason.PRODUCT_DEFECT);
         String firstCancelTransactionId = paymentReader.getByOrderId(orderId).pgCancelTransactionId();
@@ -185,6 +188,9 @@ class OrderRefundFacadeTest extends FacadeIntegrationTest {
         assertThat(payment.status()).isEqualTo(PaymentStatus.CANCELLED);
         assertThat(payment.pgCancelTransactionId()).isEqualTo(firstCancelTransactionId);
         assertThat(orderReader.getOrder(orderId).status()).isEqualTo(OrderStatus.REFUNDED);
+        assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(50);
+        assertThat(issuedCouponReader.getIssuedCoupon(issuedId, memberId).status())
+                .isEqualTo(IssuedCouponStatus.ISSUED);
         verify(paymentGateway, times(1)).cancel(any(), any());
     }
 
