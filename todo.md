@@ -195,7 +195,8 @@
 - 범위: 소~중(전면 일관화 확정으로 엔티티 시그니처 파급을 포함해 상향).
 
 ### 22. QueryDSL 죽은 의존 정리 [결정]
-- 상태: 대기
+- 상태: 완료
+- 완료 메모(2026-07-17): common-jpa의 배선(QBaseTimeEntity 생성용)과, 유일 annotationProcessor 제거로 고아가 된 java-base의 생성 코드 정적분석 예외 2줄도 함께 제거했다. architecture.md 조회 순서는 "동적 조회 도구 미배선 — 필요 시 재도입 결정"으로 정합(사다리 계단을 조용히 삭제하지 않음).
 - 결정(2026-07-16): 제거 확정(위 선행 결정) — 유지+계획 문서화 기각.
 - 문제(Low): 컨벤션 플러그인이 전 도메인에 querydsl-jpa+APT를 배선해 Q클래스가 생성되나 `src/main` 전체에서 `JPAQueryFactory`/querydsl 사용처 0건이다(전 리포지토리가 파생 쿼리+`@Query`로 끝남). 빌드 시간·의존만 지불 중.
 - 완료 기준: 컨벤션 플러그인(`convention.domain-module.gradle.kts`)·버전 카탈로그에서 QueryDSL 배선을 제거하고 전 모듈 빌드 정합 확인.
