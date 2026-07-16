@@ -42,6 +42,7 @@
 - 결정(2026-07-16): 리컨실 관할 확장 확정(위 선행 결정).
 - 문제(High): `PaymentProcessor.approve`가 APPROVED를 자기 트랜잭션으로 먼저 커밋하고(`PaymentProcessor.java:62-63`) `markPaid`는 별도 트랜잭션·try 밖이다(`CheckoutFacade.java:119-120`). 둘 사이 크래시 또는 `markPaid` 예외 시 payment=APPROVED, order=PENDING이 남는데 결제 리컨실은 REQUESTED만 스윕하고 PENDING 스윕은 payment 행이 있으면 위임한다(`PendingOrderSweepFacade.java:91-94`) — 위임받을 쪽이 이 결제를 영영 안 본다. 돈은 빠졌는데 주문 영구 PENDING, 로그·알람 없음. 리컨실 고아 환불 분기도 승인 기록 커밋 후 환불을 호출해(`PaymentConfirmationFacade.java:135-138`) 환불 실패 시 APPROVED로 굳어 스윕 대상에서 이탈한다(자기복구 상실). `REQUIREMENTS.md:149`·`DOMAIN_MODEL.md:687`("잔여는 스윕 주기 안에 수렴") 위반.
 - 완료 기준: 결제 리컨실이 "APPROVED × 주문 PENDING → `markPaid` 완결", "APPROVED × 취소·환불 주문 → 고아 청구 환불"을 처리한다. 고아 환불은 승인 기록과 환불을 자기복구 가능한 순서(환불 먼저 또는 한 커밋)로 재배치. 크래시 주입 IT로 두 사각지대가 다음 스윕에 수렴함을 검증.
+- 진행 메모(#1 독립 리뷰 발견, 2026-07-16): FAILED 결제 × PENDING 주문(체크아웃 거절 기록 후 보상 취소 실패 잔여)도 동일 무관할 — 스윕은 payment 행 존재로 제외, 리컨실은 REQUESTED만 선별. 관할 확장 시 "FAILED × PENDING → 취소 전이 후 복원(보상 종결)"을 함께 다룰지 판단하고, 채택 여부와 무관하게 DOMAIN_MODEL.md 체크아웃 정책의 잔여 서술(현재 무관할 유실로 명시)을 결과에 맞게 갱신한다.
 - 범위: 중.
 
 ### 3. 주문·결제 생명주기 낙관락 [결정]

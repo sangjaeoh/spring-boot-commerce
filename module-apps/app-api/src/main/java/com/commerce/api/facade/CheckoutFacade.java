@@ -47,8 +47,9 @@ import org.springframework.stereotype.Component;
  * <p>트랜잭션을 열지 않고 도메인 서비스를 순차 호출한다(각 서비스가 자기 트랜잭션 소유). 주문 PENDING을
  * 사가 앵커로 먼저 만들고, 재고 차감·쿠폰 확정·결제 중 실패하면 그 콜스택에서 동기 보상한다. 보상은 스윕·
  * 리컨실과 같은 순서로 주문 취소의 1회성 전이를 복원 앞에 둔다 — 취소가 실패하면 복원하지 않아 주문이
- * PENDING으로 남고, 후속 스윕·리컨실의 취소 전이가 복원을 정확히 한 번 태운다. 결제 성공 후
- * {@code markPaid}가 {@code OrderPaid}를 발행해 커밋 후 장바구니가 비워진다.
+ * PENDING으로 남고, 잔여는 payment 행 상태에 따라 PENDING 스윕(행 없음)·결제 리컨실(REQUESTED)이
+ * 인계한다(거절 FAILED 기록 후 취소 실패 잔여는 무관할 유실 — DOMAIN_MODEL.md 체크아웃 정책 참조).
+ * 결제 성공 후 {@code markPaid}가 {@code OrderPaid}를 발행해 커밋 후 장바구니가 비워진다.
  */
 @Component
 public class CheckoutFacade {
