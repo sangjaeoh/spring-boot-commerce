@@ -15,6 +15,8 @@ spring:
     # graceful 종료가 진행 중 요청을 마칠 최대 대기. 동기 결제 최대 처리 시간을 넘도록 두되 배포
     # 오케스트레이터의 종료 유예 안에 들도록 30s로 둔다. @Scheduled 리컨실·PENDING 스윕은 확정이
     # 멱등이라(REQUIREMENTS 비기능·제약) 종료 중 중단돼도 다음 주기가 수렴시키므로 별도 대기를 두지 않는다.
+    # 단 비정상 종료(SIGKILL 등)로 스윕 분산 락이 남으면 전 노드의 해당 스윕 재개가 lockAtMostFor(10분)
+    # 만료까지 늦어진다(REQUIREMENTS 제약·전제).
     timeout-per-shutdown-phase: 30s
   datasource:
     hikari:

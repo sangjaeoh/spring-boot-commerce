@@ -11,6 +11,7 @@ import com.commerce.stock.service.StockModifier;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -63,8 +64,13 @@ public class PendingOrderSweepFacade {
         this.staleAfter = staleAfter;
     }
 
-    /** 유예가 지난 PENDING 주문을 주기적으로 스윕한다. */
+    /** 유예가 지난 PENDING 주문을 주기적으로 스윕한다. 노드 간 동시 스윕은 분산 락이 하나로 줄인다. */
     @Scheduled(fixedDelayString = "${order.reconciliation.fixed-delay}")
+    // lockAtMostFor는 스윕 소요 상한이다 — PG 조회 없이 DB 보상 트랜잭션만이라 결제 리컨실보다 빠르지만
+    // 같은 10분 상한을 둔다. 크래시로 남은 락은 10분 뒤 회수되고, 상한 초과로 실행이 겹쳐도 보상이 주문
+    // 취소의 1회성 전이 뒤라 무해하다. 락 획득 실패는 정상 건너뜀이고 다음 주기가 재시도한다.
+    // 락의 목적·기각 대안은 REQUIREMENTS.md 제약·전제가 소유한다.
+    @SchedulerLock(name = "pending-order-sweep", lockAtMostFor = "PT10M")
     public void reconcileStalePending() {
         reconcile(Instant.now().minus(staleAfter));
     }
