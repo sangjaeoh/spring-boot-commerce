@@ -12,6 +12,7 @@ import com.commerce.payment.service.PaymentReader;
 import com.commerce.stock.service.StockModifier;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
@@ -63,6 +64,7 @@ public class PendingOrderSweepFacade {
     private final IssuedCouponModifier issuedCouponModifier;
     private final PaymentConfirmationFacade paymentConfirmationFacade;
     private final Duration staleAfter;
+    private final Clock clock;
     private final Counter processedOrders;
     private final Counter failedOrders;
     private final Counter skippedStockRestores;
@@ -76,6 +78,7 @@ public class PendingOrderSweepFacade {
             PaymentConfirmationFacade paymentConfirmationFacade,
             @Value("${order.reconciliation.stale-after}") Duration staleAfter,
             @Value("${payment.reconciliation.stale-after}") Duration paymentStaleAfter,
+            Clock clock,
             MeterRegistry meterRegistry) {
         // 관할 분리의 전제: order 유예가 payment 유예 이상이어야 REQUESTED 행 있는 PENDING이 결제 리컨실에
         // 먼저 잡힌다. 역전되면 이 스윕이 먼저 손대 "이중 개입 차단"이 조용히 깨지므로 기동 시점에 거부한다.
@@ -90,6 +93,7 @@ public class PendingOrderSweepFacade {
         this.issuedCouponModifier = issuedCouponModifier;
         this.paymentConfirmationFacade = paymentConfirmationFacade;
         this.staleAfter = staleAfter;
+        this.clock = clock;
         // 조용한 잔존·보상 실패를 수치로 관측한다 — 처리·실패 건수와 증거 없는 복원 생략(운영 대사 대상).
         this.processedOrders = meterRegistry.counter("sweep.pending_orders.processed");
         this.failedOrders = meterRegistry.counter("sweep.pending_orders.failed");
@@ -104,7 +108,7 @@ public class PendingOrderSweepFacade {
     // 락의 목적·기각 대안은 REQUIREMENTS.md 제약·전제가 소유한다.
     @SchedulerLock(name = "pending-order-sweep", lockAtMostFor = "PT10M")
     public void reconcileStalePending() {
-        reconcile(Instant.now().minus(staleAfter));
+        reconcile(clock.instant().minus(staleAfter));
     }
 
     /** 기준 시각 이전에 생성된 PENDING 주문을 전부 스윕한다. 반복 실행에 멱등하다. */

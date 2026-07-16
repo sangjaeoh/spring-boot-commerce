@@ -9,6 +9,7 @@ import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
@@ -31,8 +32,9 @@ public final class JwtTokenCodec {
 
     private final byte[] secret;
     private final Duration accessTokenTtl;
+    private final Clock clock;
 
-    public JwtTokenCodec(String secret, Duration accessTokenTtl) {
+    public JwtTokenCodec(String secret, Duration accessTokenTtl, Clock clock) {
         byte[] secretBytes = secret.getBytes(StandardCharsets.UTF_8);
         if (secretBytes.length < MIN_SECRET_BYTES) {
             throw new IllegalArgumentException("JWT 서명 키는 " + MIN_SECRET_BYTES + "바이트 이상이어야 한다");
@@ -42,11 +44,12 @@ public final class JwtTokenCodec {
         }
         this.secret = secretBytes;
         this.accessTokenTtl = accessTokenTtl;
+        this.clock = clock;
     }
 
     /** 주체를 {@code sub}로, 역할을 {@code role}로 싣고 TTL 만큼 유효한 서명 토큰을 발급한다. */
     public String issue(UUID subject, AuthRole role) {
-        Instant now = Instant.now();
+        Instant now = clock.instant();
         JWTClaimsSet claims = new JWTClaimsSet.Builder()
                 .subject(subject.toString())
                 .claim(ROLE_CLAIM, role.name())
@@ -74,7 +77,7 @@ public final class JwtTokenCodec {
             String subject = claims.getSubject();
             String role = claims.getStringClaim(ROLE_CLAIM);
             if (expiration == null
-                    || expiration.toInstant().isBefore(Instant.now())
+                    || expiration.toInstant().isBefore(clock.instant())
                     || subject == null
                     || role == null) {
                 return Optional.empty();

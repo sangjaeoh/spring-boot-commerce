@@ -9,8 +9,10 @@ import com.nimbusds.jose.crypto.MACSigner;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Date;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -20,7 +22,7 @@ class JwtTokenCodecTest {
 
     private static final String SECRET = "test-secret-key-of-at-least-32-bytes!!";
 
-    private final JwtTokenCodec codec = new JwtTokenCodec(SECRET, Duration.ofHours(1));
+    private final JwtTokenCodec codec = new JwtTokenCodec(SECRET, Duration.ofHours(1), Clock.systemUTC());
 
     @Test
     @DisplayName("발급한 토큰을 검증하면 주체·역할이 왕복한다")
@@ -36,11 +38,27 @@ class JwtTokenCodecTest {
     @Test
     @DisplayName("다른 키로 서명된 토큰은 검증에 실패한다")
     void verifyRejectsTokenSignedWithDifferentKey() {
-        JwtTokenCodec other = new JwtTokenCodec("another-secret-key-of-32-bytes-min!!!!", Duration.ofHours(1));
+        JwtTokenCodec other =
+                new JwtTokenCodec("another-secret-key-of-32-bytes-min!!!!", Duration.ofHours(1), Clock.systemUTC());
 
         String token = other.issue(UUID.randomUUID(), AuthRole.BUYER);
 
         assertThat(codec.verify(token)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("주입 시계의 고정 시각으로 만료가 결정론적으로 판정된다")
+    void verifyUsesInjectedClockForExpiry() {
+        Instant issuedAt = Instant.parse("2025-06-15T00:00:00Z");
+        Duration ttl = Duration.ofHours(1);
+        JwtTokenCodec issuing = new JwtTokenCodec(SECRET, ttl, Clock.fixed(issuedAt, ZoneOffset.UTC));
+        JwtTokenCodec afterExpiry =
+                new JwtTokenCodec(SECRET, ttl, Clock.fixed(issuedAt.plus(ttl).plusSeconds(1), ZoneOffset.UTC));
+
+        String token = issuing.issue(UUID.randomUUID(), AuthRole.BUYER);
+
+        assertThat(issuing.verify(token)).isPresent();
+        assertThat(afterExpiry.verify(token)).isEmpty();
     }
 
     @Test
@@ -108,13 +126,14 @@ class JwtTokenCodecTest {
     @Test
     @DisplayName("32바이트 미만 키는 생성 시점에 거부된다")
     void rejectsShortSecret() {
-        assertThatThrownBy(() -> new JwtTokenCodec("too-short", Duration.ofHours(1)))
+        assertThatThrownBy(() -> new JwtTokenCodec("too-short", Duration.ofHours(1), Clock.systemUTC()))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     @DisplayName("0 이하 TTL은 생성 시점에 거부된다")
     void rejectsNonPositiveTtl() {
-        assertThatThrownBy(() -> new JwtTokenCodec(SECRET, Duration.ZERO)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new JwtTokenCodec(SECRET, Duration.ZERO, Clock.systemUTC()))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 }

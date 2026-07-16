@@ -1,6 +1,7 @@
 package com.commerce.api.config;
 
 import com.commerce.auth.token.JwtTokenCodec;
+import java.time.Clock;
 import java.time.Duration;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -12,7 +13,9 @@ public class AuthConfig {
 
     @Bean
     JwtTokenCodec jwtTokenCodec(
-            @Value("${auth.jwt.secret}") String secret, @Value("${auth.jwt.access-token-ttl}") Duration ttl) {
-        return new JwtTokenCodec(secret, ttl);
+            @Value("${auth.jwt.secret}") String secret,
+            @Value("${auth.jwt.access-token-ttl}") Duration ttl,
+            Clock clock) {
+        return new JwtTokenCodec(secret, ttl, clock);
     }
 }

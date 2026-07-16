@@ -10,6 +10,7 @@ import com.commerce.order.service.OrderReader;
 import com.commerce.payment.service.PaymentReader;
 import com.commerce.stock.service.StockModifier;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Clock;
 import java.time.Duration;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -46,6 +47,7 @@ class PendingOrderSweepStaleAfterGuardTest {
                 mock(PaymentConfirmationFacade.class),
                 orderStaleAfter,
                 paymentStaleAfter,
+                Clock.systemUTC(),
                 new SimpleMeterRegistry());
     }
 }

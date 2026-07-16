@@ -174,13 +174,13 @@ public class Order extends BaseTimeEntity<UUID> {
     }
 
     /** 결제를 완료한다. 이행을 준비 중으로 전진시킨다. */
-    public void markPaid() {
+    public void markPaid(Instant now) {
         if (status != OrderStatus.PENDING) {
             throw new OrderStatusException(OrderErrorCode.INVALID_ORDER_STATE_TRANSITION);
         }
         this.status = OrderStatus.PAID;
         this.fulfillmentStatus = FulfillmentStatus.PREPARING;
-        this.paidAt = Instant.now();
+        this.paidAt = now;
     }
 
     /**
@@ -188,11 +188,11 @@ public class Order extends BaseTimeEntity<UUID> {
      *
      * @throws OrderStatusException 결제 진행 중({@code PENDING})이 아니면
      */
-    public void markStockDeducted() {
+    public void markStockDeducted(Instant now) {
         if (status != OrderStatus.PENDING) {
             throw new OrderStatusException(OrderErrorCode.INVALID_ORDER_STATE_TRANSITION);
         }
-        this.stockDeductedAt = Instant.now();
+        this.stockDeductedAt = now;
     }
 
     /**
@@ -200,7 +200,7 @@ public class Order extends BaseTimeEntity<UUID> {
      *
      * @throws OrderStatusException 이미 취소·환불됐거나 출고 이후면
      */
-    public void cancel(CancellationReason reason) {
+    public void cancel(CancellationReason reason, Instant now) {
         if (status == OrderStatus.CANCELLED || status == OrderStatus.REFUNDED) {
             throw new OrderStatusException(OrderErrorCode.INVALID_ORDER_STATE_TRANSITION);
         }
@@ -208,7 +208,7 @@ public class Order extends BaseTimeEntity<UUID> {
             throw new OrderStatusException(OrderErrorCode.CANCEL_NOT_ALLOWED);
         }
         this.status = OrderStatus.CANCELLED;
-        this.cancelledAt = Instant.now();
+        this.cancelledAt = now;
         this.cancellationReason = reason;
     }
 
@@ -217,7 +217,7 @@ public class Order extends BaseTimeEntity<UUID> {
      *
      * @throws OrderStatusException 결제 완료·배송 완료 주문이 아니거나 이미 환불됐으면
      */
-    public void refund(RefundReason reason) {
+    public void refund(RefundReason reason, Instant now) {
         if (status == OrderStatus.REFUNDED) {
             throw new OrderStatusException(OrderErrorCode.INVALID_ORDER_STATE_TRANSITION);
         }
@@ -225,26 +225,26 @@ public class Order extends BaseTimeEntity<UUID> {
             throw new OrderStatusException(OrderErrorCode.REFUND_NOT_ALLOWED);
         }
         this.status = OrderStatus.REFUNDED;
-        this.refundedAt = Instant.now();
+        this.refundedAt = now;
         this.refundReason = reason;
     }
 
     /** 출고한다. 택배사·운송장 번호를 기록한다. */
-    public void ship(String carrier, String trackingNumber) {
+    public void ship(String carrier, String trackingNumber, Instant now) {
         requirePaid();
         requireFulfillment(FulfillmentStatus.PREPARING);
         this.fulfillmentStatus = FulfillmentStatus.SHIPPED;
-        this.shippedAt = Instant.now();
+        this.shippedAt = now;
         this.carrier = carrier;
         this.trackingNumber = trackingNumber;
     }
 
     /** 배송 완료 처리한다. */
-    public void confirmDelivery() {
+    public void confirmDelivery(Instant now) {
         requirePaid();
         requireFulfillment(FulfillmentStatus.SHIPPED);
         this.fulfillmentStatus = FulfillmentStatus.DELIVERED;
-        this.deliveredAt = Instant.now();
+        this.deliveredAt = now;
     }
 
     /** 이행을 보류한다. */

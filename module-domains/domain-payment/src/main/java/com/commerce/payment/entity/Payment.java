@@ -95,18 +95,18 @@ public class Payment extends BaseTimeEntity<UUID> {
     }
 
     /** PG 승인 성공을 반영한다. */
-    public void approve(String pgTransactionId) {
+    public void approve(String pgTransactionId, Instant now) {
         requireRequested();
         this.status = PaymentStatus.APPROVED;
         this.pgTransactionId = pgTransactionId;
-        this.approvedAt = Instant.now();
+        this.approvedAt = now;
     }
 
     /** PG를 생략하고 자동 승인한다(전액 할인). */
-    public void approveWithoutGateway() {
+    public void approveWithoutGateway(Instant now) {
         requireRequested();
         this.status = PaymentStatus.APPROVED;
-        this.approvedAt = Instant.now();
+        this.approvedAt = now;
     }
 
     /** PG 승인 실패를 반영한다. */
@@ -121,13 +121,13 @@ public class Payment extends BaseTimeEntity<UUID> {
      *
      * @throws PaymentStatusException 승인 상태가 아니면
      */
-    public void cancel(@Nullable String pgCancelTransactionId) {
+    public void cancel(@Nullable String pgCancelTransactionId, Instant now) {
         if (status != PaymentStatus.APPROVED) {
             throw new PaymentStatusException(PaymentErrorCode.INVALID_PAYMENT_STATE_TRANSITION);
         }
         this.status = PaymentStatus.CANCELLED;
         this.pgCancelTransactionId = pgCancelTransactionId;
-        this.cancelledAt = Instant.now();
+        this.cancelledAt = now;
     }
 
     /** PG 승인이 필요한지(금액 > 0) 여부다. */

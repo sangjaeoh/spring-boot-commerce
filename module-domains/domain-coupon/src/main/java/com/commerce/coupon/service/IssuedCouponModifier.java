@@ -50,7 +50,7 @@ public class IssuedCouponModifier {
      */
     @Transactional
     public void revoke(UUID issuedCouponId, String reason) {
-        find(issuedCouponId).revoke(reason);
+        find(issuedCouponId).revoke(reason, clock.instant());
     }
 
     private IssuedCoupon find(UUID issuedCouponId) {

@@ -5,6 +5,7 @@ import com.commerce.member.entity.WithdrawalReason;
 import com.commerce.member.exception.MemberErrorCode;
 import com.commerce.member.exception.MemberNotFoundException;
 import com.commerce.member.repository.MemberRepository;
+import java.time.Clock;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,9 +15,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class MemberRemover {
 
     private final MemberRepository memberRepository;
+    private final Clock clock;
 
-    public MemberRemover(MemberRepository memberRepository) {
+    public MemberRemover(MemberRepository memberRepository, Clock clock) {
         this.memberRepository = memberRepository;
+        this.clock = clock;
     }
 
     /**
@@ -29,6 +32,6 @@ public class MemberRemover {
         Member member = memberRepository
                 .findByIdAndDeletedAtIsNull(memberId)
                 .orElseThrow(() -> new MemberNotFoundException(MemberErrorCode.MEMBER_NOT_FOUND));
-        member.delete(reason);
+        member.delete(reason, clock.instant());
     }
 }

@@ -4,10 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.commerce.member.exception.MemberStatusException;
+import java.time.Instant;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class MemberTest {
+
+    private static final Instant NOW = Instant.parse("2025-06-15T00:00:00Z");
 
     private Member activeMember() {
         return Member.create(Email.of("user@example.com"), "홍길동", "{hashed}password", MemberRole.BUYER);
@@ -78,7 +81,7 @@ class MemberTest {
     @DisplayName("탈퇴하면 삭제시각과 사유가 기록된다")
     void deleteSetsDeletedAtAndReason() {
         Member member = activeMember();
-        member.delete(WithdrawalReason.NO_LONGER_USED);
+        member.delete(WithdrawalReason.NO_LONGER_USED, NOW);
         assertThat(member.getDeletedAt()).isNotNull();
         assertThat(member.getWithdrawalReason()).isEqualTo(WithdrawalReason.NO_LONGER_USED);
     }

@@ -16,6 +16,7 @@ import com.commerce.payment.service.PaymentReader;
 import com.commerce.stock.service.StockModifier;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
@@ -68,6 +69,7 @@ public class PaymentConfirmationFacade {
     private final StockModifier stockModifier;
     private final IssuedCouponModifier issuedCouponModifier;
     private final Duration staleAfter;
+    private final Clock clock;
     private final Counter processedPayments;
     private final Counter failedPayments;
     private final Counter skippedStockRestores;
@@ -80,6 +82,7 @@ public class PaymentConfirmationFacade {
             StockModifier stockModifier,
             IssuedCouponModifier issuedCouponModifier,
             @Value("${payment.reconciliation.stale-after}") Duration staleAfter,
+            Clock clock,
             MeterRegistry meterRegistry) {
         this.paymentReader = paymentReader;
         this.paymentProcessor = paymentProcessor;
@@ -88,6 +91,7 @@ public class PaymentConfirmationFacade {
         this.stockModifier = stockModifier;
         this.issuedCouponModifier = issuedCouponModifier;
         this.staleAfter = staleAfter;
+        this.clock = clock;
         // 조용한 잔존·보상 실패를 수치로 관측한다 — 확정 처리·실패 건수와 증거 없는 복원 생략(운영 대사 대상).
         this.processedPayments = meterRegistry.counter("reconcile.payments.processed");
         this.failedPayments = meterRegistry.counter("reconcile.payments.failed");
@@ -102,7 +106,7 @@ public class PaymentConfirmationFacade {
     // 락의 목적·기각 대안은 REQUIREMENTS.md 제약·전제가 소유한다.
     @SchedulerLock(name = LOCK_NAME, lockAtMostFor = "PT10M")
     public void reconcileStaleRequested() {
-        reconcile(Instant.now().minus(staleAfter));
+        reconcile(clock.instant().minus(staleAfter));
     }
 
     /** 기준 시각 이전에 생성된 REQUESTED 결제를 전부 PG 상태 조회로 확정한다. 반복 실행에 멱등하다. */
@@ -128,7 +132,7 @@ public class PaymentConfirmationFacade {
      */
     public void confirm(UUID paymentId) {
         PaymentInfo payment = paymentReader.getPayment(paymentId);
-        if (payment.createdAt().isAfter(Instant.now().minus(staleAfter))) {
+        if (payment.createdAt().isAfter(clock.instant().minus(staleAfter))) {
             return;
         }
         confirm(payment);

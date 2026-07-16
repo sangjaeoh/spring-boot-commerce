@@ -4,6 +4,7 @@ import com.commerce.product.entity.Product;
 import com.commerce.product.exception.ProductErrorCode;
 import com.commerce.product.exception.ProductNotFoundException;
 import com.commerce.product.repository.ProductRepository;
+import java.time.Clock;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,9 +14,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class ProductRemover {
 
     private final ProductRepository productRepository;
+    private final Clock clock;
 
-    public ProductRemover(ProductRepository productRepository) {
+    public ProductRemover(ProductRepository productRepository, Clock clock) {
         this.productRepository = productRepository;
+        this.clock = clock;
     }
 
     /**
@@ -28,6 +31,6 @@ public class ProductRemover {
         Product product = productRepository
                 .findByIdAndDeletedAtIsNull(productId)
                 .orElseThrow(() -> new ProductNotFoundException(ProductErrorCode.PRODUCT_NOT_FOUND));
-        product.delete();
+        product.delete(clock.instant());
     }
 }

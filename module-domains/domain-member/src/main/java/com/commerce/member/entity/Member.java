@@ -99,8 +99,8 @@ public class Member extends BaseTimeEntity<UUID> {
     }
 
     /** 탈퇴 사유와 함께 논리삭제한다. */
-    public void delete(WithdrawalReason reason) {
-        this.deletedAt = Instant.now();
+    public void delete(WithdrawalReason reason, Instant now) {
+        this.deletedAt = now;
         this.withdrawalReason = reason;
     }
 

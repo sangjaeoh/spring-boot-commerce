@@ -82,8 +82,8 @@ public class Product extends BaseTimeEntity<UUID> {
     }
 
     /** 상품을 논리삭제한다. */
-    public void delete() {
-        this.deletedAt = Instant.now();
+    public void delete(Instant now) {
+        this.deletedAt = now;
     }
 
     @Override

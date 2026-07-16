@@ -68,7 +68,7 @@ class IssuedCouponTest {
     @DisplayName("무효화하면 REVOKED이고 시각·사유가 기록된다")
     void revokeSetsRevocationInfo() {
         IssuedCoupon coupon = issued();
-        coupon.revoke("오발급 회수");
+        coupon.revoke("오발급 회수", NOW);
         assertThat(coupon.getStatus()).isEqualTo(IssuedCouponStatus.REVOKED);
         assertThat(coupon.getRevokedAt()).isNotNull();
         assertThat(coupon.getRevokeReason()).isEqualTo("오발급 회수");
@@ -79,22 +79,22 @@ class IssuedCouponTest {
     void cannotRevokeWhenUsed() {
         IssuedCoupon coupon = issued();
         coupon.use(UUID.randomUUID(), NOW);
-        assertThatThrownBy(() -> coupon.revoke("오발급 회수")).isInstanceOf(CouponStatusException.class);
+        assertThatThrownBy(() -> coupon.revoke("오발급 회수", NOW)).isInstanceOf(CouponStatusException.class);
     }
 
     @Test
     @DisplayName("이미 무효화된 발급분은 다시 무효화할 수 없다")
     void cannotRevokeTwice() {
         IssuedCoupon coupon = issued();
-        coupon.revoke("오발급 회수");
-        assertThatThrownBy(() -> coupon.revoke("오발급 회수")).isInstanceOf(CouponStatusException.class);
+        coupon.revoke("오발급 회수", NOW);
+        assertThatThrownBy(() -> coupon.revoke("오발급 회수", NOW)).isInstanceOf(CouponStatusException.class);
     }
 
     @Test
     @DisplayName("무효화된 발급분은 사용할 수 없다")
     void cannotUseWhenRevoked() {
         IssuedCoupon coupon = issued();
-        coupon.revoke("오발급 회수");
+        coupon.revoke("오발급 회수", NOW);
         assertThatThrownBy(() -> coupon.use(UUID.randomUUID(), NOW)).isInstanceOf(CouponStatusException.class);
     }
 

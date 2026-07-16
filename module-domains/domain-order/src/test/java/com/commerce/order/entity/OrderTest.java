@@ -7,6 +7,7 @@ import com.commerce.core.money.Money;
 import com.commerce.order.exception.FulfillmentStatusException;
 import com.commerce.order.exception.InvalidOrderException;
 import com.commerce.order.exception.OrderStatusException;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -14,6 +15,7 @@ import org.junit.jupiter.api.Test;
 
 class OrderTest {
 
+    private static final Instant NOW = Instant.parse("2025-06-15T00:00:00Z");
     private static final String CARRIER = "CJ대한통운";
     private static final String TRACKING_NUMBER = "688900123456";
 
@@ -31,7 +33,7 @@ class OrderTest {
 
     private Order paidOrder() {
         Order order = place(Money.ZERO, Money.of(3000L), null);
-        order.markPaid();
+        order.markPaid(NOW);
         return order;
     }
 
@@ -87,7 +89,7 @@ class OrderTest {
     @Test
     @DisplayName("PENDING이 아니면 결제 완료할 수 없다")
     void markPaidRejectsNonPending() {
-        assertThatThrownBy(paidOrder()::markPaid).isInstanceOf(OrderStatusException.class);
+        assertThatThrownBy(() -> paidOrder().markPaid(NOW)).isInstanceOf(OrderStatusException.class);
     }
 
     @Test
@@ -95,24 +97,24 @@ class OrderTest {
     void markStockDeductedRecordsEvidence() {
         Order order = place(Money.ZERO, Money.ZERO, null);
         assertThat(order.getStockDeductedAt()).isNull();
-        order.markStockDeducted();
+        order.markStockDeducted(NOW);
         assertThat(order.getStockDeductedAt()).isNotNull();
     }
 
     @Test
     @DisplayName("PENDING이 아니면 재고 차감 완료를 기록할 수 없다")
     void markStockDeductedRejectsNonPending() {
-        assertThatThrownBy(paidOrder()::markStockDeducted).isInstanceOf(OrderStatusException.class);
+        assertThatThrownBy(() -> paidOrder().markStockDeducted(NOW)).isInstanceOf(OrderStatusException.class);
         Order cancelled = place(Money.ZERO, Money.ZERO, null);
-        cancelled.cancel(CancellationReason.CUSTOMER_REQUEST);
-        assertThatThrownBy(cancelled::markStockDeducted).isInstanceOf(OrderStatusException.class);
+        cancelled.cancel(CancellationReason.CUSTOMER_REQUEST, NOW);
+        assertThatThrownBy(() -> cancelled.markStockDeducted(NOW)).isInstanceOf(OrderStatusException.class);
     }
 
     @Test
     @DisplayName("PENDING 주문을 취소한다")
     void cancelPendingOrder() {
         Order order = place(Money.ZERO, Money.ZERO, null);
-        order.cancel(CancellationReason.CUSTOMER_REQUEST);
+        order.cancel(CancellationReason.CUSTOMER_REQUEST, NOW);
         assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
     }
 
@@ -120,8 +122,8 @@ class OrderTest {
     @DisplayName("출고 이후 주문은 취소할 수 없다")
     void cancelRejectedAfterShipped() {
         Order order = paidOrder();
-        order.ship(CARRIER, TRACKING_NUMBER);
-        assertThatThrownBy(() -> order.cancel(CancellationReason.CUSTOMER_REQUEST))
+        order.ship(CARRIER, TRACKING_NUMBER, NOW);
+        assertThatThrownBy(() -> order.cancel(CancellationReason.CUSTOMER_REQUEST, NOW))
                 .isInstanceOf(OrderStatusException.class);
     }
 
@@ -138,19 +140,19 @@ class OrderTest {
     @DisplayName("결제 완료 주문은 준비·보류 상태에서 취소할 수 있다")
     void cancelPaidBeforeShip() {
         Order preparing = paidOrder();
-        preparing.cancel(CancellationReason.CUSTOMER_REQUEST);
+        preparing.cancel(CancellationReason.CUSTOMER_REQUEST, NOW);
         assertThat(preparing.getStatus()).isEqualTo(OrderStatus.CANCELLED);
 
         Order onHold = paidOrder();
         onHold.holdFulfillment(HoldReason.STOCK_DELAY);
-        onHold.cancel(CancellationReason.STOCK_SHORTAGE);
+        onHold.cancel(CancellationReason.STOCK_SHORTAGE, NOW);
         assertThat(onHold.getStatus()).isEqualTo(OrderStatus.CANCELLED);
     }
 
     private Order deliveredOrder() {
         Order order = paidOrder();
-        order.ship(CARRIER, TRACKING_NUMBER);
-        order.confirmDelivery();
+        order.ship(CARRIER, TRACKING_NUMBER, NOW);
+        order.confirmDelivery(NOW);
         return order;
     }
 
@@ -158,7 +160,7 @@ class OrderTest {
     @DisplayName("배송 완료 주문을 환불하면 REFUNDED가 되고 이행 축은 DELIVERED로 남는다")
     void refundDeliveredOrder() {
         Order order = deliveredOrder();
-        order.refund(RefundReason.PRODUCT_DEFECT);
+        order.refund(RefundReason.PRODUCT_DEFECT, NOW);
         assertThat(order.getStatus()).isEqualTo(OrderStatus.REFUNDED);
         assertThat(order.getFulfillmentStatus()).isEqualTo(FulfillmentStatus.DELIVERED);
         assertThat(order.getRefundedAt()).isNotNull();
@@ -168,29 +170,32 @@ class OrderTest {
     @Test
     @DisplayName("배송 완료 전(준비·출고) 주문은 환불할 수 없다")
     void refundRejectedBeforeDelivery() {
-        assertThatThrownBy(() -> paidOrder().refund(RefundReason.CHANGE_OF_MIND))
+        assertThatThrownBy(() -> paidOrder().refund(RefundReason.CHANGE_OF_MIND, NOW))
                 .isInstanceOf(OrderStatusException.class);
 
         Order shipped = paidOrder();
-        shipped.ship(CARRIER, TRACKING_NUMBER);
-        assertThatThrownBy(() -> shipped.refund(RefundReason.CHANGE_OF_MIND)).isInstanceOf(OrderStatusException.class);
+        shipped.ship(CARRIER, TRACKING_NUMBER, NOW);
+        assertThatThrownBy(() -> shipped.refund(RefundReason.CHANGE_OF_MIND, NOW))
+                .isInstanceOf(OrderStatusException.class);
     }
 
     @Test
     @DisplayName("취소된 주문은 환불할 수 없다")
     void refundRejectedForCancelledOrder() {
         Order order = paidOrder();
-        order.cancel(CancellationReason.CUSTOMER_REQUEST);
-        assertThatThrownBy(() -> order.refund(RefundReason.CHANGE_OF_MIND)).isInstanceOf(OrderStatusException.class);
+        order.cancel(CancellationReason.CUSTOMER_REQUEST, NOW);
+        assertThatThrownBy(() -> order.refund(RefundReason.CHANGE_OF_MIND, NOW))
+                .isInstanceOf(OrderStatusException.class);
     }
 
     @Test
     @DisplayName("환불은 1회만 유효하고 환불된 주문은 취소도 할 수 없다")
     void refundIsOneShotAndBlocksCancel() {
         Order order = deliveredOrder();
-        order.refund(RefundReason.PRODUCT_DEFECT);
-        assertThatThrownBy(() -> order.refund(RefundReason.PRODUCT_DEFECT)).isInstanceOf(OrderStatusException.class);
-        assertThatThrownBy(() -> order.cancel(CancellationReason.ADMIN_ACTION))
+        order.refund(RefundReason.PRODUCT_DEFECT, NOW);
+        assertThatThrownBy(() -> order.refund(RefundReason.PRODUCT_DEFECT, NOW))
+                .isInstanceOf(OrderStatusException.class);
+        assertThatThrownBy(() -> order.cancel(CancellationReason.ADMIN_ACTION, NOW))
                 .isInstanceOf(OrderStatusException.class);
     }
 
@@ -198,16 +203,17 @@ class OrderTest {
     @DisplayName("이행 전진은 결제 완료에서만 유효하다")
     void fulfillmentRequiresPaid() {
         Order pending = place(Money.ZERO, Money.ZERO, null);
-        assertThatThrownBy(() -> pending.ship(CARRIER, TRACKING_NUMBER)).isInstanceOf(FulfillmentStatusException.class);
+        assertThatThrownBy(() -> pending.ship(CARRIER, TRACKING_NUMBER, NOW))
+                .isInstanceOf(FulfillmentStatusException.class);
     }
 
     @Test
     @DisplayName("준비→출고→배송 완료로 이행한다")
     void fulfillmentFlow() {
         Order order = paidOrder();
-        order.ship(CARRIER, TRACKING_NUMBER);
+        order.ship(CARRIER, TRACKING_NUMBER, NOW);
         assertThat(order.getFulfillmentStatus()).isEqualTo(FulfillmentStatus.SHIPPED);
-        order.confirmDelivery();
+        order.confirmDelivery(NOW);
         assertThat(order.getFulfillmentStatus()).isEqualTo(FulfillmentStatus.DELIVERED);
     }
 
@@ -218,7 +224,7 @@ class OrderTest {
         assertThat(order.getCarrier()).isNull();
         assertThat(order.getTrackingNumber()).isNull();
 
-        order.ship(CARRIER, TRACKING_NUMBER);
+        order.ship(CARRIER, TRACKING_NUMBER, NOW);
 
         assertThat(order.getCarrier()).isEqualTo(CARRIER);
         assertThat(order.getTrackingNumber()).isEqualTo(TRACKING_NUMBER);
@@ -230,7 +236,8 @@ class OrderTest {
         Order order = paidOrder();
         order.holdFulfillment(HoldReason.FRAUD_REVIEW);
         assertThat(order.getFulfillmentStatus()).isEqualTo(FulfillmentStatus.ON_HOLD);
-        assertThatThrownBy(() -> order.ship(CARRIER, TRACKING_NUMBER)).isInstanceOf(FulfillmentStatusException.class);
+        assertThatThrownBy(() -> order.ship(CARRIER, TRACKING_NUMBER, NOW))
+                .isInstanceOf(FulfillmentStatusException.class);
         order.releaseFulfillment();
         assertThat(order.getFulfillmentStatus()).isEqualTo(FulfillmentStatus.PREPARING);
     }

@@ -4,10 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.commerce.product.exception.ProductStatusException;
+import java.time.Instant;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class ProductTest {
+
+    private static final Instant NOW = Instant.parse("2025-06-15T00:00:00Z");
 
     @Test
     @DisplayName("생성 시 HIDDEN이고 삭제시각이 없다")
@@ -53,7 +56,7 @@ class ProductTest {
     @DisplayName("삭제하면 삭제시각이 기록된다")
     void deleteSetsDeletedAt() {
         Product product = Product.create("티셔츠", null);
-        product.delete();
+        product.delete(NOW);
         assertThat(product.getDeletedAt()).isNotNull();
     }
 }

@@ -5,11 +5,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.commerce.core.money.Money;
 import com.commerce.payment.exception.PaymentStatusException;
+import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class PaymentTest {
+
+    private static final Instant NOW = Instant.parse("2025-06-15T00:00:00Z");
 
     private Payment requested() {
         return Payment.request(UUID.randomUUID(), Money.of(10000L), PaymentMethod.CARD);
@@ -46,7 +49,7 @@ class PaymentTest {
     @DisplayName("승인하면 APPROVED이고 거래 ID가 기록된다")
     void approveSetsTransactionId() {
         Payment payment = requested();
-        payment.approve("PG-123");
+        payment.approve("PG-123", NOW);
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.APPROVED);
         assertThat(payment.getPgTransactionId()).isEqualTo("PG-123");
     }
@@ -55,7 +58,7 @@ class PaymentTest {
     @DisplayName("PG 생략 자동 승인은 거래 ID 없이 APPROVED다")
     void approveWithoutGateway() {
         Payment payment = Payment.request(UUID.randomUUID(), Money.ZERO, null);
-        payment.approveWithoutGateway();
+        payment.approveWithoutGateway(NOW);
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.APPROVED);
         assertThat(payment.getPgTransactionId()).isNull();
     }
@@ -73,16 +76,16 @@ class PaymentTest {
     @DisplayName("요청 상태가 아니면 다시 승인할 수 없다")
     void cannotApproveWhenNotRequested() {
         Payment payment = requested();
-        payment.approve("PG-123");
-        assertThatThrownBy(() -> payment.approve("PG-456")).isInstanceOf(PaymentStatusException.class);
+        payment.approve("PG-123", NOW);
+        assertThatThrownBy(() -> payment.approve("PG-456", NOW)).isInstanceOf(PaymentStatusException.class);
     }
 
     @Test
     @DisplayName("승인 결제를 취소한다")
     void cancelApprovedPayment() {
         Payment payment = requested();
-        payment.approve("PG-123");
-        payment.cancel("CANCEL-123");
+        payment.approve("PG-123", NOW);
+        payment.cancel("CANCEL-123", NOW);
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.CANCELLED);
         assertThat(payment.getPgCancelTransactionId()).isEqualTo("CANCEL-123");
     }
@@ -90,6 +93,6 @@ class PaymentTest {
     @Test
     @DisplayName("승인 상태가 아니면 취소할 수 없다")
     void cannotCancelWhenNotApproved() {
-        assertThatThrownBy(() -> requested().cancel("CANCEL-123")).isInstanceOf(PaymentStatusException.class);
+        assertThatThrownBy(() -> requested().cancel("CANCEL-123", NOW)).isInstanceOf(PaymentStatusException.class);
     }
 }

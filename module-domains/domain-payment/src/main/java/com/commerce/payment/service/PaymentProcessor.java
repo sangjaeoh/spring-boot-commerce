@@ -11,6 +11,7 @@ import com.commerce.payment.port.GatewayTransactionStatus;
 import com.commerce.payment.port.PaymentApproval;
 import com.commerce.payment.port.PaymentGateway;
 import com.commerce.payment.repository.PaymentRepository;
+import java.time.Clock;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -33,14 +34,17 @@ public class PaymentProcessor {
     private final PaymentRepository paymentRepository;
     private final PaymentGateway paymentGateway;
     private final TransactionTemplate transactionTemplate;
+    private final Clock clock;
 
     public PaymentProcessor(
             PaymentRepository paymentRepository,
             PaymentGateway paymentGateway,
-            PlatformTransactionManager transactionManager) {
+            PlatformTransactionManager transactionManager,
+            Clock clock) {
         this.paymentRepository = paymentRepository;
         this.paymentGateway = paymentGateway;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
+        this.clock = clock;
     }
 
     /**
@@ -141,14 +145,14 @@ public class PaymentProcessor {
 
     private PaymentInfo recordAutoApproval(UUID paymentId) {
         Payment payment = find(paymentId);
-        payment.approveWithoutGateway();
+        payment.approveWithoutGateway(clock.instant());
         return PaymentInfo.from(payment);
     }
 
     private PaymentInfo recordApproval(UUID paymentId, PaymentApproval approval) {
         Payment payment = find(paymentId);
         if (approval.approved()) {
-            payment.approve(Objects.requireNonNull(approval.pgTransactionId()));
+            payment.approve(Objects.requireNonNull(approval.pgTransactionId()), clock.instant());
         } else {
             payment.fail(Objects.requireNonNull(approval.failureReason()));
         }
@@ -157,14 +161,14 @@ public class PaymentProcessor {
 
     private PaymentInfo recordCancellation(UUID paymentId, @Nullable String pgCancelTransactionId) {
         Payment payment = find(paymentId);
-        payment.cancel(pgCancelTransactionId);
+        payment.cancel(pgCancelTransactionId, clock.instant());
         return PaymentInfo.from(payment);
     }
 
     private PaymentInfo recordRefundedApproval(UUID paymentId, String pgTransactionId, String pgCancelTransactionId) {
         Payment payment = find(paymentId);
-        payment.approve(pgTransactionId);
-        payment.cancel(pgCancelTransactionId);
+        payment.approve(pgTransactionId, clock.instant());
+        payment.cancel(pgCancelTransactionId, clock.instant());
         return PaymentInfo.from(payment);
     }
 

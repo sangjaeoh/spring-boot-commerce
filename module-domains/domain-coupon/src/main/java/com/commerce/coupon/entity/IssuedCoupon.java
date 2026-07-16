@@ -101,12 +101,12 @@ public class IssuedCoupon extends BaseTimeEntity<UUID> {
      *
      * @throws CouponStatusException 미사용({@code ISSUED}) 상태가 아니면
      */
-    public void revoke(String reason) {
+    public void revoke(String reason, Instant now) {
         if (status != IssuedCouponStatus.ISSUED) {
             throw new CouponStatusException(CouponErrorCode.ISSUED_COUPON_NOT_REVOCABLE);
         }
         this.status = IssuedCouponStatus.REVOKED;
-        this.revokedAt = Instant.now();
+        this.revokedAt = now;
         this.revokeReason = reason;
     }
 

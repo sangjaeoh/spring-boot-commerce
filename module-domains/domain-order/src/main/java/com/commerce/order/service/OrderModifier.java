@@ -10,6 +10,7 @@ import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderNotFoundException;
 import com.commerce.order.exception.OrderStatusException;
 import com.commerce.order.repository.OrderRepository;
+import java.time.Clock;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,10 +21,12 @@ public class OrderModifier {
 
     private final OrderRepository orderRepository;
     private final MessagePublisher messagePublisher;
+    private final Clock clock;
 
-    public OrderModifier(OrderRepository orderRepository, MessagePublisher messagePublisher) {
+    public OrderModifier(OrderRepository orderRepository, MessagePublisher messagePublisher, Clock clock) {
         this.orderRepository = orderRepository;
         this.messagePublisher = messagePublisher;
+        this.clock = clock;
     }
 
     /**
@@ -34,7 +37,7 @@ public class OrderModifier {
     @Transactional
     public void markPaid(UUID orderId) {
         Order order = find(orderId);
-        order.markPaid();
+        order.markPaid(clock.instant());
         messagePublisher.publish(new OrderPaid(order.getId(), order.getMemberId(), order.getOrderedVariantIds()));
     }
 
@@ -45,7 +48,7 @@ public class OrderModifier {
      */
     @Transactional
     public void markStockDeducted(UUID orderId) {
-        find(orderId).markStockDeducted();
+        find(orderId).markStockDeducted(clock.instant());
     }
 
     /**
@@ -55,7 +58,7 @@ public class OrderModifier {
      */
     @Transactional
     public void cancel(UUID orderId, CancellationReason reason) {
-        find(orderId).cancel(reason);
+        find(orderId).cancel(reason, clock.instant());
     }
 
     /**
@@ -65,19 +68,19 @@ public class OrderModifier {
      */
     @Transactional
     public void refund(UUID orderId, RefundReason reason) {
-        find(orderId).refund(reason);
+        find(orderId).refund(reason, clock.instant());
     }
 
     /** 출고한다. 택배사·운송장 번호를 기록한다. */
     @Transactional
     public void ship(UUID orderId, String carrier, String trackingNumber) {
-        find(orderId).ship(carrier, trackingNumber);
+        find(orderId).ship(carrier, trackingNumber, clock.instant());
     }
 
     /** 배송 완료 처리한다. */
     @Transactional
     public void confirmDelivery(UUID orderId) {
-        find(orderId).confirmDelivery();
+        find(orderId).confirmDelivery(clock.instant());
     }
 
     /** 이행을 보류한다. */
