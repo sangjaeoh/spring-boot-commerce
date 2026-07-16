@@ -203,7 +203,8 @@
 - 범위: 소.
 
 ### 23. 컨테이너·마이그레이션 운영 하드닝 번들
-- 상태: 대기
+- 상태: 완료
+- 완료 메모(2026-07-17): (a) app-migration ECS 로깅은 #12 선완료 확인(이미지 로그 실측). (b) 헬스체크는 JRE 이미지에 curl/wget이 없어 bash `/dev/tcp` HTTP GET으로 readiness 확인 — Redis 정지 시 503 전환·복구를 라이브 검증. (c) readiness 그룹 db·redis 포함, liveness는 프로세스 생존만 — 정책은 REQUIREMENTS.md 제약·전제. (d) 툴체인이 카탈로그 java를 실소비, CI·Dockerfile은 정본 참조 주석. 잔여 — DB/Redis 일시 장애 시 컨테이너가 unhealthy로 표시되나 compose restart 정책은 종료 기반이라 자동 재기동은 아님(오케스트레이터 도입 시 readiness probe로 그대로 매핑).
 - 문제(Low): (a) app-migration에 구조화 로깅 설정이 없어 마이그레이션 로그가 plain text(app-api는 ECS). (b) Docker 헬스체크가 `/dev/tcp` 리슨만 확인해 DB/Redis 불능 상태를 healthy로 판정(`docker-compose.yml:84-91`, `/actuator/health` 미사용). (c) readiness 그룹에 DB/Redis 미포함(오케스트레이터 도입 시). (d) `libs.versions.toml`의 `java = "25"`가 미소비이고 실제 버전이 컨벤션 플러그인·CI·Dockerfile에 리터럴로 산재(정본 드리프트 표면).
 - 완료 기준: app-migration ECS 로깅 추가, 헬스체크를 HTTP GET 기반으로(또는 프로브 명시), readiness DB/Redis 정책 명문화, Java 버전 정본화(주석 참조라도). 이미지 빌드·기동 검증.
 - 범위: 소.
