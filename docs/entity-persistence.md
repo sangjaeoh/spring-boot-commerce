@@ -104,7 +104,9 @@ public abstract class BaseTimeEntity<ID extends Serializable> implements Persist
 
 - 낙관락을 기본으로 두지 않는다(last-write-wins). 경합 민감 상태전이(잔액 차감·좌석 예약)만 `@Version`으로 승격한다.
   - `@Version` 필드에는 `version`(`BIGINT`, default 0) 컬럼을 Flyway로 추가한다 — `ddl-auto=validate`라 컬럼이 없으면 기동이 스키마 불일치로 실패한다.
-  - 충돌 시 `ObjectOptimisticLockingFailureException`은 409로 응답한다(서버 자동 재시도 없음, 클라이언트 재시도). 재시도 폭주가 실측되면 비관락으로 승격한다.
+  - 충돌 시 `ObjectOptimisticLockingFailureException`은 409로 응답한다(서버 자동 재시도 없음, 클라이언트 재시도).
+    - 서버 재시도를 두지 않는 이유: 409 재시도 규약이 멱등 필터(`Idempotency-Key`)와 정합하고, 재시도 중 사가 보상(재고·쿠폰 복원·주문 취소)의 재진입 복잡도를 피한다. 도입한다면 범위를 차감 지점 하나로 한정한다.
+    - 재시도 폭주가 실측되면 비관락으로 승격한다.
 
 ### 소프트삭제
 
