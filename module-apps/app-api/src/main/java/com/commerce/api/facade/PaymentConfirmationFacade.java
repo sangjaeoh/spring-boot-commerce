@@ -42,8 +42,9 @@ import org.springframework.stereotype.Component;
  * <p>결제 상태 기록을 주문측 효과(결제완료·보상) 뒤 마지막에 둔다. 중간에 중단돼도 결제가 REQUESTED로 남아
  * 다음 스윕이 같은 분기를 재실행하고, 주문측 효과는 상태 가드로 재실행을 건너뛴다. 고아 청구 환불도 PG
  * 환불을 선행하고 승인·취소 기록을 한 커밋으로 남겨 같은 자기복구를 유지한다. 보상의 재고·쿠폰 복원은
- * 주문 취소의 1회성 전이 뒤에만 태워 반복 실행이 이중 복원하지 않는다(취소 커밋과 복원 사이 중단의 복원
- * 유실은 취소 파사드와 같은 잔여 한계다 — DOMAIN_MODEL.md 취소·환불 정책 참조).
+ * 주문 취소의 1회성 전이 뒤에만 태워 반복 실행이 이중 복원하지 않고, 재고 복원은 체크아웃의 차감 완료
+ * 마커가 추가로 게이트한다 — 증거 없으면 복원을 생략해 과복원(재고 증식)을 차단한다(취소 커밋과 복원 사이
+ * 중단의 복원 유실은 취소 파사드와 같은 잔여 한계다 — DOMAIN_MODEL.md 취소·환불 정책 참조).
  */
 @Component
 public class PaymentConfirmationFacade {
@@ -204,6 +205,16 @@ public class PaymentConfirmationFacade {
         UUID issuedCouponId = order.issuedCouponId();
         if (issuedCouponId != null) {
             issuedCouponModifier.restoreUse(issuedCouponId, order.id());
+        }
+        // 재고 복원은 차감 완료 마커가 게이트한다. payment 행은 체크아웃이 마커 커밋 뒤에만 만들므로 여기
+        // 도달한 주문은 증거가 있는 게 정상이지만, 그 보장은 체크아웃 단계 순서라는 비국소 불변식이라 복원
+        // 지점마다 같은 게이트로 지역 강제한다 — 증거 없으면 복원을 생략한다(과복원 대신 팬텀 품절, 운영 대사).
+        if (order.stockDeductedAt() == null) {
+            log.warn(
+                    "차감 완료 증거 없는 PENDING 보상이라 재고 복원을 생략한다(운영 대사 대상): orderId={} orderNumber={}",
+                    order.id(),
+                    order.orderNumber());
+            return;
         }
         for (OrderLineInfo line : order.lines()) {
             stockModifier.restore(line.variantId(), line.quantity());

@@ -98,6 +98,10 @@ public class Order extends BaseTimeEntity<UUID> {
     @Nullable
     private Instant deliveredAt;
 
+    @Column(name = "stock_deducted_at")
+    @Nullable
+    private Instant stockDeductedAt;
+
     @Column(name = "paid_at")
     @Nullable
     private Instant paidAt;
@@ -177,6 +181,18 @@ public class Order extends BaseTimeEntity<UUID> {
         this.status = OrderStatus.PAID;
         this.fulfillmentStatus = FulfillmentStatus.PREPARING;
         this.paidAt = Instant.now();
+    }
+
+    /**
+     * 전 라인 재고 차감 완료를 기록한다. 이 증거가 스윕·리컨실 보상의 재고 복원을 게이트한다.
+     *
+     * @throws OrderStatusException 결제 진행 중({@code PENDING})이 아니면
+     */
+    public void markStockDeducted() {
+        if (status != OrderStatus.PENDING) {
+            throw new OrderStatusException(OrderErrorCode.INVALID_ORDER_STATE_TRANSITION);
+        }
+        this.stockDeductedAt = Instant.now();
     }
 
     /**
@@ -335,6 +351,10 @@ public class Order extends BaseTimeEntity<UUID> {
 
     public Address getShippingAddress() {
         return shippingAddress;
+    }
+
+    public @Nullable Instant getStockDeductedAt() {
+        return stockDeductedAt;
     }
 
     public @Nullable Instant getPaidAt() {

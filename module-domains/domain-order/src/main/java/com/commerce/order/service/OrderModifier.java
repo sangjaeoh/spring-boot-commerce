@@ -39,6 +39,16 @@ public class OrderModifier {
     }
 
     /**
+     * 전 라인 재고 차감 완료 증거를 기록한다.
+     *
+     * @throws OrderStatusException 결제 진행 중({@code PENDING})이 아니면
+     */
+    @Transactional
+    public void markStockDeducted(UUID orderId) {
+        find(orderId).markStockDeducted();
+    }
+
+    /**
      * 주문을 취소한다.
      *
      * @throws OrderStatusException 이미 취소됐거나 출고 이후면

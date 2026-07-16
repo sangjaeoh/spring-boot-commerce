@@ -45,7 +45,9 @@ import org.springframework.stereotype.Component;
  * 장바구니 전체를 주문·결제로 전환하는 체크아웃 흐름을 조율한다.
  *
  * <p>트랜잭션을 열지 않고 도메인 서비스를 순차 호출한다(각 서비스가 자기 트랜잭션 소유). 주문 PENDING을
- * 사가 앵커로 먼저 만들고, 재고 차감·쿠폰 확정·결제 중 실패하면 그 콜스택에서 동기 보상한다. 보상은 스윕·
+ * 사가 앵커로 먼저 만들고, 재고 차감·쿠폰 확정·결제 중 실패하면 그 콜스택에서 동기 보상한다. 전 라인 재고
+ * 차감이 완료되면 주문에 차감 완료 마커를 남긴다 — 스윕·리컨실 보상은 이 증거 없이 재고를 복원하지 않으므로
+ * 차감 전·차감 중 중단 잔여가 재고를 증식시키지 않는다. 보상은 스윕·
  * 리컨실과 같은 순서로 주문 취소의 1회성 전이를 복원 앞에 둔다 — 취소가 실패하면 복원하지 않아 주문이
  * PENDING으로 남고, 잔여는 payment 행 상태에 따라 PENDING 스윕(행 없음은 직접 보상, 종결 기록된
  * APPROVED·FAILED는 결제 리컨실에 위임)·결제 리컨실(REQUESTED)이 인계한다(DOMAIN_MODEL.md 체크아웃 정책
@@ -227,6 +229,10 @@ public class CheckoutFacade {
                 stockModifier.deduct(line.variantId(), line.quantity());
                 deducted.add(line);
             }
+            // 차감 완료 증거는 전 라인 차감 뒤에만 기록한다 — 마커가 있으면 차감이 완료됐음이 보장돼,
+            // 스윕·리컨실 보상이 이 증거 없이는 재고를 복원하지 않는다(차감 안 된 라인의 과복원 차단).
+            // 마커 기록 실패는 아래 catch가 동기 보상한다(이 시점엔 전 라인이 차감돼 전량 복원이 정확하다).
+            orderModifier.markStockDeducted(orderId);
         } catch (RuntimeException e) {
             orderModifier.cancel(orderId, CancellationReason.STOCK_SHORTAGE);
             restoreStock(deducted);

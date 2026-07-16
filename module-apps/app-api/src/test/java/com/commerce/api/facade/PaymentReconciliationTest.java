@@ -19,6 +19,7 @@ import com.commerce.order.entity.OrderLineSnapshot;
 import com.commerce.order.entity.OrderStatus;
 import com.commerce.order.info.OrderInfo;
 import com.commerce.order.service.OrderAppender;
+import com.commerce.order.service.OrderModifier;
 import com.commerce.order.service.OrderReader;
 import com.commerce.payment.entity.FailureReason;
 import com.commerce.payment.entity.PaymentMethod;
@@ -56,6 +57,7 @@ class PaymentReconciliationTest extends FacadeIntegrationTest {
     private final MemberAppender memberAppender;
     private final CartAppender cartAppender;
     private final OrderAppender orderAppender;
+    private final OrderModifier orderModifier;
     private final OrderReader orderReader;
     private final StockModifier stockModifier;
     private final StockReader stockReader;
@@ -75,6 +77,7 @@ class PaymentReconciliationTest extends FacadeIntegrationTest {
             MemberAppender memberAppender,
             CartAppender cartAppender,
             OrderAppender orderAppender,
+            OrderModifier orderModifier,
             OrderReader orderReader,
             StockModifier stockModifier,
             StockReader stockReader,
@@ -92,6 +95,7 @@ class PaymentReconciliationTest extends FacadeIntegrationTest {
         this.memberAppender = memberAppender;
         this.cartAppender = cartAppender;
         this.orderAppender = orderAppender;
+        this.orderModifier = orderModifier;
         this.orderReader = orderReader;
         this.stockModifier = stockModifier;
         this.stockReader = stockReader;
@@ -213,7 +217,10 @@ class PaymentReconciliationTest extends FacadeIntegrationTest {
         return interruptCheckoutBeforeApproval(memberId, variantId, quantity, payAmount, null, Money.ZERO);
     }
 
-    /** 주문 PENDING·재고 차감·(쿠폰 확정·)결제 REQUESTED까지 진행되고 승인 결과를 기록하지 못한 상태를 재현한다. */
+    /**
+     * 주문 PENDING·전 라인 재고 차감·차감 완료 마커·(쿠폰 확정·)결제 REQUESTED까지 진행되고 승인 결과를
+     * 기록하지 못한 상태를 재현한다. 체크아웃과 같은 순서(차감 → 마커 → 쿠폰 → 결제 요청)다.
+     */
     private InterruptedCheckout interruptCheckoutBeforeApproval(
             UUID memberId,
             UUID variantId,
@@ -227,6 +234,7 @@ class PaymentReconciliationTest extends FacadeIntegrationTest {
         UUID orderId =
                 orderAppender.place(memberId, List.of(snapshot), address(), discountAmount, Money.ZERO, issuedCouponId);
         stockModifier.deduct(variantId, quantity);
+        orderModifier.markStockDeducted(orderId);
         if (issuedCouponId != null) {
             issuedCouponModifier.use(issuedCouponId, orderId);
         }

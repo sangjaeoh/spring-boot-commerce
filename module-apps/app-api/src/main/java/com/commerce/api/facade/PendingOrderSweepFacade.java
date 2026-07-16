@@ -39,9 +39,11 @@ import org.springframework.stereotype.Component;
  * 무-payment PENDING엔 새 payment 행이 생기지 않는다(payment 행을 쓰는 유일 경로가 그 주문의 체크아웃이다).
  *
  * <p>보상은 취소·리컨실 흐름과 같은 순서다: 주문 CANCELLED 1회성 전이 선행 → 쿠폰 복원(멱등) → 재고 복원
- * (가산). 스윕 쿼리가 PENDING만 반환하므로 반복 실행이 이미 취소된 주문을 재조회하지 않아 복원이 정확히 한
- * 번이다. 취소 전이 커밋과 복원 사이 중단의 복원 유실은 취소·리컨실 흐름과 같은 잔여 한계다(무손실 복구 범위
- * 밖). 처리 건마다 경고 로그를 남겨 잔존 발생을 관측한다.
+ * (가산). 재고 복원은 체크아웃이 전 라인 차감 후 남긴 차감 완료 마커가 게이트한다 — 증거 없는 잔여(차감 전·
+ * 차감 중 중단)는 복원을 생략해 차감된 적 없는 라인의 과복원(재고 증식→오버셀)을 차단하고, 부분 차감분은
+ * 팬텀 품절로 남아 운영 대사 대상이 된다. 스윕 쿼리가 PENDING만 반환하므로 반복 실행이 이미 취소된 주문을
+ * 재조회하지 않아 복원이 정확히 한 번이다. 취소 전이 커밋과 복원 사이 중단의 복원 유실은 취소·리컨실 흐름과
+ * 같은 잔여 한계다(무손실 복구 범위 밖). 처리 건마다 경고 로그를 남겨 잔존 발생을 관측한다.
  */
 @Component
 public class PendingOrderSweepFacade {
@@ -109,6 +111,22 @@ public class PendingOrderSweepFacade {
         UUID issuedCouponId = order.issuedCouponId();
         if (issuedCouponId != null) {
             issuedCouponModifier.restoreUse(issuedCouponId, order.id());
+        }
+        restoreDeductedStock(order);
+    }
+
+    /**
+     * 차감 완료 증거(주문 단위 차감 마커)가 있는 주문만 전 라인 재고를 복원한다. 증거가 없으면 차감 전·차감 중
+     * 중단 잔여라 실제 차감량을 알 수 없으므로 복원을 생략한다 — 과복원(재고 증식→오버셀) 대신 과소복원(팬텀
+     * 품절)을 택하고 운영 대사로 강등한다.
+     */
+    private void restoreDeductedStock(OrderInfo order) {
+        if (order.stockDeductedAt() == null) {
+            log.warn(
+                    "차감 완료 증거 없는 PENDING 잔여라 재고 복원을 생략한다(운영 대사 대상): orderId={} orderNumber={}",
+                    order.id(),
+                    order.orderNumber());
+            return;
         }
         for (OrderLineInfo line : order.lines()) {
             stockModifier.restore(line.variantId(), line.quantity());

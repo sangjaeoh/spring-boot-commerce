@@ -91,6 +91,24 @@ class OrderTest {
     }
 
     @Test
+    @DisplayName("PENDING 주문에 재고 차감 완료를 기록한다")
+    void markStockDeductedRecordsEvidence() {
+        Order order = place(Money.ZERO, Money.ZERO, null);
+        assertThat(order.getStockDeductedAt()).isNull();
+        order.markStockDeducted();
+        assertThat(order.getStockDeductedAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("PENDING이 아니면 재고 차감 완료를 기록할 수 없다")
+    void markStockDeductedRejectsNonPending() {
+        assertThatThrownBy(paidOrder()::markStockDeducted).isInstanceOf(OrderStatusException.class);
+        Order cancelled = place(Money.ZERO, Money.ZERO, null);
+        cancelled.cancel(CancellationReason.CUSTOMER_REQUEST);
+        assertThatThrownBy(cancelled::markStockDeducted).isInstanceOf(OrderStatusException.class);
+    }
+
+    @Test
     @DisplayName("PENDING 주문을 취소한다")
     void cancelPendingOrder() {
         Order order = place(Money.ZERO, Money.ZERO, null);
