@@ -70,6 +70,9 @@ services:
       PAYMENT_WEBHOOK_SECRET: local-dev-only-webhook-secret
       AUTH_ADMIN_EMAIL: admin@local.dev
       AUTH_ADMIN_PASSWORD: local-admin-password
+      # 로컬 컨테이너 스택도 개발 환경이라 API 문서·swagger-ui를 연다(기본은 비노출).
+      SPRINGDOC_API_DOCS_ENABLED: "true"
+      SPRINGDOC_SWAGGER_UI_ENABLED: "true"
     healthcheck:
       # JRE 베이스 이미지에 curl/wget이 없어 bash의 /dev/tcp로 리슨 여부를 본다.
       # Tomcat은 컨텍스트 기동 완료 후에야 리슨하므로 준비 신호로 충분하다.
