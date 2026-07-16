@@ -4,7 +4,7 @@ import com.commerce.api.facade.CartView;
 import java.util.List;
 import java.util.UUID;
 
-/** 장바구니 응답이다. 라인별 변형 현재가·소계와 총액을 싣는다. */
+/** 장바구니 응답이다. 라인별 변형 현재가·소계·주문 가능 파생과 총액(주문 가능 라인 합)을 싣는다. */
 public record CartResponse(UUID memberId, List<CartLineResponse> lines, long totalAmount) {
 
     public CartResponse {

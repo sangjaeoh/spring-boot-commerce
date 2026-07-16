@@ -5,8 +5,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.commerce.cart.service.CartAppender;
 import com.commerce.core.money.Money;
 import com.commerce.member.service.MemberAppender;
+import com.commerce.product.service.ProductModifier;
+import com.commerce.product.service.ProductRemover;
 import com.commerce.product.service.ProductVariantModifier;
 import com.commerce.product.service.ProductVariantReader;
+import com.commerce.stock.service.StockModifier;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -22,6 +25,9 @@ class CartViewFacadeTest extends FacadeIntegrationTest {
     private final CartAppender cartAppender;
     private final ProductVariantReader variantReader;
     private final ProductVariantModifier variantModifier;
+    private final ProductModifier productModifier;
+    private final ProductRemover productRemover;
+    private final StockModifier stockModifier;
 
     CartViewFacadeTest(
             CartViewFacade cartViewFacade,
@@ -29,13 +35,19 @@ class CartViewFacadeTest extends FacadeIntegrationTest {
             MemberAppender memberAppender,
             CartAppender cartAppender,
             ProductVariantReader variantReader,
-            ProductVariantModifier variantModifier) {
+            ProductVariantModifier variantModifier,
+            ProductModifier productModifier,
+            ProductRemover productRemover,
+            StockModifier stockModifier) {
         this.cartViewFacade = cartViewFacade;
         this.productRegistrationFacade = productRegistrationFacade;
         this.memberAppender = memberAppender;
         this.cartAppender = cartAppender;
         this.variantReader = variantReader;
         this.variantModifier = variantModifier;
+        this.productModifier = productModifier;
+        this.productRemover = productRemover;
+        this.stockModifier = stockModifier;
     }
 
     @Test
@@ -69,20 +81,94 @@ class CartViewFacadeTest extends FacadeIntegrationTest {
         assertThat(view.totalAmount()).isEqualTo(Money.of(15000L));
     }
 
+    @Test
+    @DisplayName("비활성(DISABLED) 변형 라인은 unavailable로 표시되고 총액에서 제외된다")
+    void disabledVariantLineIsUnavailable() {
+        UUID memberId = registerMember();
+        UUID normal = seedVariant(10000L);
+        UUID disabled = seedVariant(5000L);
+        cartAppender.addItem(memberId, normal, 1);
+        cartAppender.addItem(memberId, disabled, 2);
+        variantModifier.disable(disabled);
+
+        CartView view = cartViewFacade.getCartView(memberId);
+
+        assertThat(lineOf(view, normal).orderable()).isTrue();
+        assertThat(lineOf(view, disabled).orderable()).isFalse();
+        assertThat(lineOf(view, disabled).subtotal()).isEqualTo(Money.of(10000L));
+        assertThat(view.totalAmount()).isEqualTo(Money.of(10000L));
+    }
+
+    @Test
+    @DisplayName("숨김(HIDDEN) 상품의 변형 라인은 unavailable로 표시되고 총액에서 제외된다")
+    void hiddenProductLineIsUnavailable() {
+        UUID memberId = registerMember();
+        UUID normal = seedVariant(10000L);
+        UUID productId = seedProduct(5000L);
+        UUID hidden = variantReader.getByProductId(productId).get(0).id();
+        cartAppender.addItem(memberId, normal, 1);
+        cartAppender.addItem(memberId, hidden, 1);
+        productModifier.hide(productId);
+
+        CartView view = cartViewFacade.getCartView(memberId);
+
+        assertThat(lineOf(view, hidden).orderable()).isFalse();
+        assertThat(view.totalAmount()).isEqualTo(Money.of(10000L));
+    }
+
+    @Test
+    @DisplayName("삭제된 상품의 변형 라인은 unavailable로 표시되고 총액에서 제외된다")
+    void deletedProductLineIsUnavailable() {
+        UUID memberId = registerMember();
+        UUID normal = seedVariant(10000L);
+        UUID productId = seedProduct(5000L);
+        UUID deleted = variantReader.getByProductId(productId).get(0).id();
+        cartAppender.addItem(memberId, normal, 1);
+        cartAppender.addItem(memberId, deleted, 1);
+        productRemover.delete(productId);
+
+        CartView view = cartViewFacade.getCartView(memberId);
+
+        assertThat(lineOf(view, deleted).orderable()).isFalse();
+        assertThat(view.totalAmount()).isEqualTo(Money.of(10000L));
+    }
+
+    @Test
+    @DisplayName("품절(수량 0) 변형 라인은 unavailable로 표시되고 총액에서 제외된다 — 카탈로그 품절 파생과 동일 기준")
+    void soldOutLineIsUnavailable() {
+        UUID memberId = registerMember();
+        UUID normal = seedVariant(10000L);
+        UUID soldOut = seedVariant(5000L);
+        cartAppender.addItem(memberId, normal, 1);
+        cartAppender.addItem(memberId, soldOut, 1);
+        stockModifier.deduct(soldOut, 50);
+
+        CartView view = cartViewFacade.getCartView(memberId);
+
+        assertThat(lineOf(view, soldOut).orderable()).isFalse();
+        assertThat(view.totalAmount()).isEqualTo(Money.of(10000L));
+    }
+
     private UUID registerMember() {
         return memberAppender.register("user-" + UUID.randomUUID() + "@example.com", "테스터", "password-123!");
     }
 
+    private UUID seedProduct(long price) {
+        return productRegistrationFacade.registerProduct("상품", null, Money.of(price), List.of(), 50);
+    }
+
     private UUID seedVariant(long price) {
-        UUID productId = productRegistrationFacade.registerProduct("상품", null, Money.of(price), List.of(), 50);
-        return variantReader.getByProductId(productId).get(0).id();
+        return variantReader.getByProductId(seedProduct(price)).get(0).id();
     }
 
     private static Money subtotalOf(CartView view, UUID variantId) {
+        return lineOf(view, variantId).subtotal();
+    }
+
+    private static CartLineView lineOf(CartView view, UUID variantId) {
         return view.lines().stream()
                 .filter(line -> line.variantId().equals(variantId))
                 .findFirst()
-                .orElseThrow()
-                .subtotal();
+                .orElseThrow();
     }
 }
