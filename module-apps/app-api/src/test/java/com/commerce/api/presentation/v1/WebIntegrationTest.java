@@ -5,11 +5,14 @@ import com.commerce.api.SharedRedisContainer;
 import com.commerce.auth.token.AuthRole;
 import com.commerce.auth.token.JwtTokenCodec;
 import com.commerce.member.service.MemberCredentialValidator;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
@@ -40,6 +43,18 @@ abstract class WebIntegrationTest {
 
     @Autowired
     private MemberCredentialValidator memberCredentialValidator;
+
+    @Autowired
+    private StringRedisTemplate redisTemplate;
+
+    // 공유 Redis에 남은 로그인 레이트리밋 카운터가 테스트 간 새지 않게 각 테스트 전에 비운다.
+    @BeforeEach
+    void resetLoginRateLimit() {
+        Set<String> keys = redisTemplate.keys("login-rate:*");
+        if (keys != null && !keys.isEmpty()) {
+            redisTemplate.delete(keys);
+        }
+    }
 
     @DynamicPropertySource
     static void datasourceProperties(DynamicPropertyRegistry registry) {
