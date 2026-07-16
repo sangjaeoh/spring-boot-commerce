@@ -3,10 +3,10 @@ package com.commerce.api.presentation.v1;
 import com.commerce.api.facade.MemberWithdrawalFacade;
 import com.commerce.api.presentation.v1.request.MemberRegistrationRequest;
 import com.commerce.api.presentation.v1.request.MemberRenameRequest;
+import com.commerce.api.presentation.v1.request.MemberSuspensionRequest;
+import com.commerce.api.presentation.v1.request.MemberWithdrawalRequest;
 import com.commerce.api.presentation.v1.response.MemberRegistrationResponse;
 import com.commerce.api.presentation.v1.response.MemberResponse;
-import com.commerce.member.entity.SuspensionReason;
-import com.commerce.member.entity.WithdrawalReason;
 import com.commerce.member.service.MemberAppender;
 import com.commerce.member.service.MemberModifier;
 import com.commerce.member.service.MemberReader;
@@ -88,8 +88,8 @@ public class MemberController {
     @AdminOnly
     @PostMapping("/{memberId}/suspend")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void suspend(@PathVariable UUID memberId, @RequestParam SuspensionReason reason) {
-        memberModifier.suspend(memberId, reason);
+    public void suspend(@PathVariable UUID memberId, @Valid @RequestBody MemberSuspensionRequest request) {
+        memberModifier.suspend(memberId, request.reason());
     }
 
     /** 회원 정지를 해제하고 사유를 지운다. */
@@ -110,7 +110,7 @@ public class MemberController {
     /** 본인을 탈퇴(논리삭제) 처리한다. */
     @DeleteMapping("/me")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void withdraw(AuthUser authUser, @RequestParam WithdrawalReason reason) {
-        memberWithdrawalFacade.withdraw(authUser.memberId(), reason);
+    public void withdraw(AuthUser authUser, @Valid @RequestBody MemberWithdrawalRequest request) {
+        memberWithdrawalFacade.withdraw(authUser.memberId(), request.reason());
     }
 }

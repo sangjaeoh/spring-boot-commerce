@@ -6,7 +6,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -15,11 +14,14 @@ import com.commerce.api.facade.ProductRegistrationFacade;
 import com.commerce.api.presentation.v1.request.AddCartItemRequest;
 import com.commerce.api.presentation.v1.request.MemberRegistrationRequest;
 import com.commerce.api.presentation.v1.request.MemberRenameRequest;
+import com.commerce.api.presentation.v1.request.MemberSuspensionRequest;
+import com.commerce.api.presentation.v1.request.MemberWithdrawalRequest;
 import com.commerce.api.presentation.v1.response.MemberRegistrationResponse;
 import com.commerce.cart.service.CartAppender;
 import com.commerce.core.money.Money;
 import com.commerce.member.entity.MemberStatus;
 import com.commerce.member.entity.SuspensionReason;
+import com.commerce.member.entity.WithdrawalReason;
 import com.commerce.member.exception.MemberNotFoundException;
 import com.commerce.member.info.MemberInfo;
 import com.commerce.member.service.MemberAppender;
@@ -225,7 +227,9 @@ class MemberControllerTest extends WebIntegrationTest {
 
         mvc.perform(post("/api/v1/members/{memberId}/suspend", targetId)
                         .header(HttpHeaders.AUTHORIZATION, bearer(buyerId))
-                        .param("reason", "FRAUD_SUSPECTED"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new MemberSuspensionRequest(SuspensionReason.FRAUD_SUSPECTED))))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("FORBIDDEN"));
 
@@ -237,9 +241,26 @@ class MemberControllerTest extends WebIntegrationTest {
     void suspendRejectsUnauthenticated() throws Exception {
         UUID targetId = registerMember();
 
-        mvc.perform(post("/api/v1/members/{memberId}/suspend", targetId).param("reason", "FRAUD_SUSPECTED"))
+        mvc.perform(post("/api/v1/members/{memberId}/suspend", targetId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new MemberSuspensionRequest(SuspensionReason.FRAUD_SUSPECTED))))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+    }
+
+    @Test
+    @DisplayName("정지 사유가 없는 요청은 400 VALIDATION_FAILED 구조 응답으로 거부된다")
+    void suspendRejectsMissingReason() throws Exception {
+        UUID targetId = registerMember();
+
+        mvc.perform(post("/api/v1/members/{memberId}/suspend", targetId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.errors").isNotEmpty());
     }
 
     @Test
@@ -249,7 +270,9 @@ class MemberControllerTest extends WebIntegrationTest {
 
         mvc.perform(post("/api/v1/members/{memberId}/suspend", memberId)
                         .header(HttpHeaders.AUTHORIZATION, adminBearer())
-                        .param("reason", "FRAUD_SUSPECTED"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new MemberSuspensionRequest(SuspensionReason.FRAUD_SUSPECTED))))
                 .andExpect(status().isNoContent());
         MemberInfo suspended = memberReader.getMember(memberId);
         assertThat(suspended.status()).isEqualTo(MemberStatus.SUSPENDED);
@@ -270,7 +293,9 @@ class MemberControllerTest extends WebIntegrationTest {
         UUID variantId = seedProduct(50);
         mvc.perform(post("/api/v1/members/{memberId}/suspend", memberId)
                         .header(HttpHeaders.AUTHORIZATION, adminBearer())
-                        .param("reason", "PAYMENT_ABUSE"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new MemberSuspensionRequest(SuspensionReason.PAYMENT_ABUSE))))
                 .andExpect(status().isNoContent());
 
         AddCartItemRequest request = new AddCartItemRequest(variantId, 1);
@@ -288,12 +313,16 @@ class MemberControllerTest extends WebIntegrationTest {
         UUID memberId = registerMember();
         mvc.perform(post("/api/v1/members/{memberId}/suspend", memberId)
                         .header(HttpHeaders.AUTHORIZATION, adminBearer())
-                        .param("reason", "CS_MANUAL"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new MemberSuspensionRequest(SuspensionReason.CS_MANUAL))))
                 .andExpect(status().isNoContent());
 
         mvc.perform(delete("/api/v1/members/me")
                         .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
-                        .param("reason", "NO_LONGER_USED"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new MemberWithdrawalRequest(WithdrawalReason.NO_LONGER_USED))))
                 .andExpect(status().isNoContent());
 
         assertThatThrownBy(() -> memberReader.getMember(memberId)).isInstanceOf(MemberNotFoundException.class);
@@ -335,7 +364,9 @@ class MemberControllerTest extends WebIntegrationTest {
 
         mvc.perform(delete("/api/v1/members/me")
                         .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
-                        .param("reason", "NO_LONGER_USED"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new MemberWithdrawalRequest(WithdrawalReason.NO_LONGER_USED))))
                 .andExpect(status().isNoContent());
 
         assertThatThrownBy(() -> memberReader.getMember(memberId)).isInstanceOf(MemberNotFoundException.class);
@@ -351,7 +382,9 @@ class MemberControllerTest extends WebIntegrationTest {
 
         mvc.perform(delete("/api/v1/members/me")
                         .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
-                        .param("reason", "NO_LONGER_USED"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new MemberWithdrawalRequest(WithdrawalReason.NO_LONGER_USED))))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("API_WITHDRAWAL_BLOCKED"));
 
@@ -376,20 +409,26 @@ class MemberControllerTest extends WebIntegrationTest {
 
         mvc.perform(delete("/api/v1/members/me")
                         .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
-                        .param("reason", "NO_LONGER_USED"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new MemberWithdrawalRequest(WithdrawalReason.NO_LONGER_USED))))
                 .andExpect(status().isNoContent());
 
         assertThatThrownBy(() -> memberReader.getMember(memberId)).isInstanceOf(MemberNotFoundException.class);
     }
 
     @Test
-    @DisplayName("탈퇴 사유가 없는 요청은 400 problem+json으로 거부된다")
+    @DisplayName("탈퇴 사유가 없는 요청은 400 VALIDATION_FAILED 구조 응답으로 거부된다")
     void withdrawRejectsMissingReason() throws Exception {
         UUID memberId = registerMember();
 
-        mvc.perform(delete("/api/v1/members/me").header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
+        mvc.perform(delete("/api/v1/members/me")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
                 .andExpect(status().isBadRequest())
-                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.errors").isNotEmpty());
     }
 
     @Test
@@ -422,7 +461,9 @@ class MemberControllerTest extends WebIntegrationTest {
         UUID memberId = memberAppender.register(email, "테스터", "password-123!");
         mvc.perform(delete("/api/v1/members/me")
                         .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
-                        .param("reason", "NO_LONGER_USED"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new MemberWithdrawalRequest(WithdrawalReason.NO_LONGER_USED))))
                 .andExpect(status().isNoContent());
 
         mvc.perform(get("/api/v1/members").param("email", email).header(HttpHeaders.AUTHORIZATION, adminBearer()))
