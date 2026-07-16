@@ -4,3 +4,5 @@ out/
 .idea/
 *.iml
 .DS_Store
+todo.md
+todo-prompt.md
