@@ -6,5 +6,6 @@ public enum CancellationReason {
     STOCK_SHORTAGE,
     COUPON_CONFLICT,
     CUSTOMER_REQUEST,
-    ADMIN_ACTION
+    ADMIN_ACTION,
+    CHECKOUT_ABANDONED
 }
