@@ -349,6 +349,37 @@ class OrderCancellationFacadeTest extends FacadeIntegrationTest {
         verify(paymentGateway, times(1)).cancel(any(), any());
     }
 
+    @Test
+    @DisplayName("PG 환불이 실패하면 주문은 PAID로 남고 재고·쿠폰을 복원하지 않는다")
+    void pgRefundFailureKeepsOrderPaidWithoutRestore() {
+        UUID memberId = registerMember();
+        UUID variantId = seedProduct(Money.of(10000L), 50);
+        cartAppender.addItem(memberId, variantId, 4);
+        UUID couponId =
+                couponAppender.create("정액 1000", Discount.fixed(Money.of(1000L)), Money.ZERO, validity(), 30, null);
+        UUID issuedId = issuedCouponAppender.issue(couponId, memberId);
+        UUID orderId = checkoutFacade.checkout(memberId, address(), Money.ZERO, issuedId, PaymentMethod.CARD);
+        doThrow(new IllegalStateException("PG 환불 실패 주입")).when(paymentGateway).cancel(any(), any());
+
+        assertThatThrownBy(() -> orderCancellationFacade.cancel(orderId, memberId))
+                .isInstanceOf(IllegalStateException.class);
+
+        // 환불이 복원의 선행조건이다 — 주문은 PAID로 남고 재고·쿠폰을 건드리지 않는다.
+        assertThat(orderReader.getOrder(orderId).status()).isEqualTo(OrderStatus.PAID);
+        assertThat(paymentReader.getByOrderId(orderId).status()).isEqualTo(PaymentStatus.APPROVED);
+        assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(46);
+        assertThat(issuedCouponReader.getIssuedCoupon(issuedId, memberId).status())
+                .isEqualTo(IssuedCouponStatus.USED);
+
+        // 장애가 걷힌 재시도가 취소를 완결한다.
+        Mockito.reset(paymentGateway);
+        orderCancellationFacade.cancel(orderId, memberId);
+        assertThat(orderReader.getOrder(orderId).status()).isEqualTo(OrderStatus.CANCELLED);
+        assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(50);
+        assertThat(issuedCouponReader.getIssuedCoupon(issuedId, memberId).status())
+                .isEqualTo(IssuedCouponStatus.ISSUED);
+    }
+
     private UUID registerMember() {
         return memberAppender.register("user-" + UUID.randomUUID() + "@example.com", "테스터", "password-123!");
     }

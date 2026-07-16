@@ -137,6 +137,31 @@ class CheckoutFaultCompensationTest extends FacadeIntegrationTest {
                 .isNotNull();
     }
 
+    @Test
+    @DisplayName("다중 라인 차감이 중간에 실패하면 차감된 라인만 정확히 복원되고 어떤 라인도 증식·유출되지 않는다")
+    void multiLineDeductFailureRestoresExactly() {
+        UUID memberId = registerMember();
+        UUID firstVariantId = seedProduct(50);
+        UUID secondVariantId = seedProduct(40);
+        cartAppender.addItem(memberId, firstVariantId, 2);
+        cartAppender.addItem(memberId, secondVariantId, 3);
+        doThrow(new StockShortageException(StockErrorCode.STOCK_SHORTAGE))
+                .when(stockModifier)
+                .deduct(eq(secondVariantId), anyInt());
+
+        assertThatThrownBy(() -> checkoutFacade.checkout(memberId, address(), Money.ZERO, null, PaymentMethod.CARD))
+                .isInstanceOf(StockShortageException.class);
+
+        ArgumentCaptor<UUID> orderIdCaptor = ArgumentCaptor.forClass(UUID.class);
+        verify(orderModifier).cancel(orderIdCaptor.capture(), eq(CancellationReason.STOCK_SHORTAGE));
+        // 라인 순서(실패 라인이 첫 번째든 두 번째든)와 무관하게, deducted 리스트 정밀도로 차감된 라인만
+        // 복원돼 두 라인 모두 원값이다 — 증식(과복원)도 유출(미복원)도 없다.
+        assertThat(stockReader.getByVariantId(firstVariantId).quantity()).isEqualTo(50);
+        assertThat(stockReader.getByVariantId(secondVariantId).quantity()).isEqualTo(40);
+        assertThat(orderReader.getOrder(orderIdCaptor.getValue()).stockDeductedAt())
+                .isNull();
+    }
+
     private UUID registerMember() {
         return memberAppender.register("user-" + UUID.randomUUID() + "@example.com", "테스터", "password-123!");
     }

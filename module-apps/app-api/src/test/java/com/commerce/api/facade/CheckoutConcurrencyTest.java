@@ -7,6 +7,7 @@ import com.commerce.core.money.Money;
 import com.commerce.coupon.entity.Discount;
 import com.commerce.coupon.entity.IssuedCouponStatus;
 import com.commerce.coupon.entity.ValidityPeriod;
+import com.commerce.coupon.info.IssuedCouponInfo;
 import com.commerce.coupon.service.CouponAppender;
 import com.commerce.coupon.service.IssuedCouponAppender;
 import com.commerce.coupon.service.IssuedCouponReader;
@@ -145,6 +146,58 @@ class CheckoutConcurrencyTest extends FacadeIntegrationTest {
         }
         assertThat(paid).isEqualTo(succeeded.get());
         assertThat(failedOut).isEqualTo(failed.get());
+    }
+
+    @Test
+    @DisplayName("같은 쿠폰을 실은 동시 두 체크아웃은 정확히 한 주문만 할인과 함께 완결된다(쿠폰 이중 사용 차단)")
+    void concurrentCheckoutsCannotDoubleUseSameCoupon() throws InterruptedException {
+        UUID variantId = seedProduct(50);
+        UUID memberId = registerMember();
+        cartAppender.addItem(memberId, variantId, 1);
+        UUID couponId =
+                couponAppender.create("정액 할인", Discount.fixed(Money.of(1000L)), Money.ZERO, validity(), 30, null);
+        UUID issuedId = issuedCouponAppender.issue(couponId, memberId);
+
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        CountDownLatch start = new CountDownLatch(1);
+        AtomicInteger succeeded = new AtomicInteger();
+        AtomicInteger failed = new AtomicInteger();
+        for (int i = 0; i < 2; i++) {
+            executor.execute(() -> {
+                try {
+                    start.await();
+                    checkoutFacade.checkout(memberId, address(), Money.ZERO, issuedId, PaymentMethod.CARD);
+                    succeeded.incrementAndGet();
+                } catch (RuntimeException e) {
+                    failed.incrementAndGet();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            });
+        }
+        start.countDown();
+        executor.shutdown();
+        assertThat(executor.awaitTermination(60, TimeUnit.SECONDS)).isTrue();
+
+        // IssuedCoupon 낙관락이 유일 방어다 — 어느 인터리빙이든 한쪽만 USED 전이에 성공하고, 진 쪽은 사전
+        // 검증 거부(주문 없음) 또는 쿠폰 확정 실패 보상(CANCELLED)으로 끝난다.
+        assertThat(succeeded.get()).isEqualTo(1);
+        assertThat(failed.get()).isEqualTo(1);
+        List<OrderInfo> orders = ordersOf(memberId);
+        List<OrderInfo> paidOrders =
+                orders.stream().filter(o -> o.status() == OrderStatus.PAID).toList();
+        assertThat(paidOrders).hasSize(1);
+        OrderInfo paid = paidOrders.get(0);
+        assertThat(paid.discountAmount()).isEqualTo(Money.of(1000L));
+        orders.stream()
+                .filter(o -> !o.id().equals(paid.id()))
+                .forEach(o -> assertThat(o.status()).isEqualTo(OrderStatus.CANCELLED));
+        // 쿠폰은 이긴 주문에만 걸려 있다 — 진 쪽 보상의 restoreUse는 주문 불일치 no-op이라 재장전되지 않는다.
+        IssuedCouponInfo coupon = issuedCouponReader.getIssuedCoupon(issuedId, memberId);
+        assertThat(coupon.status()).isEqualTo(IssuedCouponStatus.USED);
+        assertThat(coupon.orderId()).isEqualTo(paid.id());
+        // 진 쪽 차감은 복원돼 재고는 이긴 주문 1건만 반영한다.
+        assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(49);
     }
 
     private List<OrderInfo> ordersOf(UUID memberId) {

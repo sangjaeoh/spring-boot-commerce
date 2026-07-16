@@ -3,6 +3,7 @@ package com.commerce.payment;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
 
 import com.commerce.core.money.Money;
 import com.commerce.payment.entity.Payment;
@@ -240,6 +241,35 @@ class PaymentPersistenceTest {
 
         paymentProcessor.cancel(paymentId);
         assertThat(reload(paymentId).getVersion()).isEqualTo(2L);
+    }
+
+    @Test
+    @DisplayName("고아 승인 환불 후 한 커밋 기록이 실패해도 재시도는 이중 환불하지 않는다 — 같은 멱등 키로 PG가 한 번만 환불한다")
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void confirmOrphanedApprovalDoesNotDoubleRefundWhenPersistFailsThenRetries() {
+        UUID paymentId = paymentAppender.request(UUID.randomUUID(), Money.of(10000L), PaymentMethod.CARD);
+        // 1차: PG 환불(트랜잭션 밖)은 실제로 일어나고, 승인·취소 한 커밋 기록의 재조회에서 인프라 실패를 주입한다.
+        doThrow(new IllegalStateException("persist boom"))
+                .when(paymentRepository)
+                .findById(paymentId);
+
+        assertThatThrownBy(() -> paymentProcessor.confirmOrphanedApproval(paymentId, "PG-ORPHAN"))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(gateway.refundCount).isEqualTo(1);
+
+        // 기록이 롤백돼 결제는 REQUESTED로 남는다 — 리컨실 대상에서 이탈하지 않는다(자기복구 창 유지).
+        Mockito.reset(paymentRepository);
+        assertThat(paymentRepository.findById(paymentId).orElseThrow().getStatus())
+                .isEqualTo(PaymentStatus.REQUESTED);
+
+        // 재시도: 같은 멱등 키(CANCEL:pgTransactionId)라 PG 환불은 늘지 않고 승인·취소 기록이 완결된다.
+        paymentProcessor.confirmOrphanedApproval(paymentId, "PG-ORPHAN");
+
+        assertThat(gateway.refundCount).isEqualTo(1);
+        Payment settled = paymentRepository.findById(paymentId).orElseThrow();
+        assertThat(settled.getStatus()).isEqualTo(PaymentStatus.CANCELLED);
+        assertThat(settled.getPgTransactionId()).isEqualTo("PG-ORPHAN");
+        assertThat(settled.getPgCancelTransactionId()).isNotNull();
     }
 
     @Test

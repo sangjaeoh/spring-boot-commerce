@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -38,6 +39,14 @@ import com.commerce.stock.service.StockReader;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.BrokenBarrierException;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -219,6 +228,97 @@ class OrderRefundFacadeTest extends FacadeIntegrationTest {
         assertThat(issuedCouponReader.getIssuedCoupon(issuedId, memberId).status())
                 .isEqualTo(IssuedCouponStatus.ISSUED);
         verify(paymentGateway, times(1)).cancel(any(), any());
+    }
+
+    @Test
+    @DisplayName("PG 환불이 실패하면 주문은 PAID로 남고 재고·쿠폰을 복원하지 않는다")
+    void pgRefundFailureKeepsOrderPaidWithoutRestore() {
+        UUID memberId = registerMember();
+        UUID variantId = seedProduct(Money.of(10000L), 50);
+        cartAppender.addItem(memberId, variantId, 4);
+        UUID couponId =
+                couponAppender.create("정액 1000", Discount.fixed(Money.of(1000L)), Money.ZERO, validity(), 30, null);
+        UUID issuedId = issuedCouponAppender.issue(couponId, memberId);
+        UUID orderId = deliveredCheckout(memberId, issuedId);
+        doThrow(new IllegalStateException("PG 환불 실패 주입")).when(paymentGateway).cancel(any(), any());
+
+        assertThatThrownBy(() -> orderRefundFacade.refund(orderId, RefundReason.PRODUCT_DEFECT))
+                .isInstanceOf(IllegalStateException.class);
+
+        // 환불이 복원의 선행조건이다 — 주문은 PAID로 남고 재고·쿠폰을 건드리지 않는다.
+        assertThat(orderReader.getOrder(orderId).status()).isEqualTo(OrderStatus.PAID);
+        assertThat(paymentReader.getByOrderId(orderId).status()).isEqualTo(PaymentStatus.APPROVED);
+        assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(46);
+        assertThat(issuedCouponReader.getIssuedCoupon(issuedId, memberId).status())
+                .isEqualTo(IssuedCouponStatus.USED);
+
+        // 장애가 걷힌 재시도가 환불을 완결한다.
+        Mockito.reset(paymentGateway);
+        orderRefundFacade.refund(orderId, RefundReason.PRODUCT_DEFECT);
+        assertThat(orderReader.getOrder(orderId).status()).isEqualTo(OrderStatus.REFUNDED);
+        assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(50);
+        assertThat(issuedCouponReader.getIssuedCoupon(issuedId, memberId).status())
+                .isEqualTo(IssuedCouponStatus.ISSUED);
+    }
+
+    @Test
+    @DisplayName("동시 중복 환불 경합에서도 복원은 정확히 한 번이다")
+    void concurrentDuplicateRefundRestoresExactlyOnce() throws InterruptedException {
+        UUID memberId = registerMember();
+        UUID variantId = seedProduct(Money.of(10000L), 50);
+        cartAppender.addItem(memberId, variantId, 4);
+        UUID couponId =
+                couponAppender.create("정액 1000", Discount.fixed(Money.of(1000L)), Money.ZERO, validity(), 30, null);
+        UUID issuedId = issuedCouponAppender.issue(couponId, memberId);
+        UUID orderId = deliveredCheckout(memberId, issuedId);
+        assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(46);
+
+        // 두 스레드를 주문 환불 전이 직전에 정렬해, 둘 다 PAID를 읽고 가드를 통과한 뒤 쓰는 최악 인터리빙을
+        // 강제한다. 한쪽이 결제 취소 낙관락 경합에서 먼저 탈락하면 남은 쪽만 도달하므로 짧게 기다리고 단독
+        // 진행한다.
+        CyclicBarrier transitionGate = new CyclicBarrier(2);
+        doAnswer(invocation -> {
+                    try {
+                        transitionGate.await(2, TimeUnit.SECONDS);
+                    } catch (TimeoutException | BrokenBarrierException raceAlreadyDecided) {
+                        // 상대 스레드가 전이에 도달하지 못했다 — 단독 진행.
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                    return invocation.callRealMethod();
+                })
+                .when(orderModifier)
+                .refund(eq(orderId), any());
+
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        CountDownLatch start = new CountDownLatch(1);
+        AtomicInteger succeeded = new AtomicInteger();
+        AtomicInteger failed = new AtomicInteger();
+        for (int i = 0; i < 2; i++) {
+            executor.execute(() -> {
+                try {
+                    start.await();
+                    orderRefundFacade.refund(orderId, RefundReason.PRODUCT_DEFECT);
+                    succeeded.incrementAndGet();
+                } catch (RuntimeException e) {
+                    failed.incrementAndGet();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            });
+        }
+        start.countDown();
+        executor.shutdown();
+        assertThat(executor.awaitTermination(60, TimeUnit.SECONDS)).isTrue();
+
+        // 어느 인터리빙이든 환불은 완결되고 복원은 정확히 한 번이다 — 이중 복원이면 재고가 54로 증식한다.
+        assertThat(succeeded.get()).isBetween(1, 2);
+        assertThat(succeeded.get() + failed.get()).isEqualTo(2);
+        assertThat(orderReader.getOrder(orderId).status()).isEqualTo(OrderStatus.REFUNDED);
+        assertThat(paymentReader.getByOrderId(orderId).status()).isEqualTo(PaymentStatus.CANCELLED);
+        assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(50);
+        assertThat(issuedCouponReader.getIssuedCoupon(issuedId, memberId).status())
+                .isEqualTo(IssuedCouponStatus.ISSUED);
     }
 
     private UUID deliveredCheckout(UUID memberId, @org.jspecify.annotations.Nullable UUID issuedCouponId) {
