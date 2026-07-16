@@ -46,7 +46,7 @@
 - 범위: 중.
 
 ### 3. 주문·결제 생명주기 낙관락 [결정]
-- 상태: 대기
+- 상태: 완료
 - 결정(2026-07-16): 낙관락 승격 확정(위 선행 결정).
 - 문제(High): `Order`·`Payment` 어디에도 `@Version`이 없다. 취소 전이 가드는 load-check-write라, 동시 취소 2건이 겹치면 둘 다 PAID/APPROVED를 읽고 가드를 통과해 last-write-wins로 둘 다 커밋 → 두 스레드 모두 재고·쿠폰 복원 루프를 실행(이중 가산). PG 실환불만 결정론적 멱등 키가 방어한다. `DOMAIN_MODEL.md:563`("결제는 동시 경합이 없다")·:689("전이 가드가 정확히-1회 복원 보장")·`REQUIREMENTS.md:145`("1회성 전이가 구조적으로 거부")가 거짓 전제가 된다.
 - 완료 기준: 주문의 상태 전이(및 결제 취소)를 낙관락으로 직렬화(`@Version` + Flyway version 컬럼 + `ddl-auto=validate` 정합, 또는 상태 조건부 UPDATE). `ObjectOptimisticLockingFailureException` → 409 매핑(`docs/entity-persistence.md:107`). 동시 취소 2건 IT로 복원이 정확히 한 번임을 검증.
