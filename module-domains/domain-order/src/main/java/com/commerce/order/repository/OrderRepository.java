@@ -3,6 +3,7 @@ package com.commerce.order.repository;
 import com.commerce.order.entity.FulfillmentStatus;
 import com.commerce.order.entity.Order;
 import com.commerce.order.entity.OrderStatus;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -42,4 +43,7 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
 
     @EntityGraph(attributePaths = "lines")
     List<Order> findByIdInOrderByCreatedAtDescIdDesc(Collection<UUID> ids);
+
+    @EntityGraph(attributePaths = "lines")
+    List<Order> findByStatusAndCreatedAtBefore(OrderStatus status, Instant createdAt);
 }

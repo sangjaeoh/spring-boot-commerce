@@ -7,6 +7,7 @@ import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderNotFoundException;
 import com.commerce.order.info.OrderInfo;
 import com.commerce.order.repository.OrderRepository;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
@@ -82,6 +83,19 @@ public class OrderReader {
             OrderStatus status, FulfillmentStatus fulfillmentStatus, Pageable pageable) {
         Page<UUID> idPage = orderRepository.findIdPageByStatusAndFulfillmentStatus(status, fulfillmentStatus, pageable);
         return toOrderPage(idPage, pageable);
+    }
+
+    /**
+     * 기준 시각 이전에 생성돼 아직 PENDING인 주문을 조회한다. 없으면 빈 목록이다.
+     *
+     * <p>PENDING 주문 스윕(payment 행 없는 미결제 주문의 보상 종결)이 대상 선별로 소비한다. 소유 회원을 거르지
+     * 않으므로 시스템 스윕에서만 부른다.
+     */
+    @Transactional(readOnly = true)
+    public List<OrderInfo> findPendingBefore(Instant cutoff) {
+        return orderRepository.findByStatusAndCreatedAtBefore(OrderStatus.PENDING, cutoff).stream()
+                .map(OrderInfo::from)
+                .toList();
     }
 
     private Page<OrderInfo> toOrderPage(Page<UUID> idPage, Pageable pageable) {
