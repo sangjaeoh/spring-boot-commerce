@@ -180,7 +180,8 @@
 - 범위: 소.
 
 ### 20. 상품 상세 재고 배치 조회 (N+1 제거)
-- 상태: 대기
+- 상태: 완료
+- 완료 메모(2026-07-17): 카탈로그와 같은 `orderableVariantIds` 헬퍼 형태로 정합(미존재 재고 = 집합 부재 = orderable=false, 기존 예외 catch 의미론 동일). 배치 1회·단건 0회를 스파이 verify로 고정.
 - 문제(Low): `ProductDetailFacade.java:51-59`가 변형마다 `stockReader.getByVariantId`를 호출한다(N 쿼리). 배치 API `getByVariantIds`가 이미 있고 카탈로그 목록은 그걸 쓴다(목록은 N+1 없음). 상세만 이탈.
 - 완료 기준: 상세도 `getByVariantIds` IN 배치로 치환. 변형 N개에 재고 쿼리 1회임을 검증.
 - 범위: 소.
