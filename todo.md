@@ -130,7 +130,8 @@
 - 범위: 소~중.
 
 ### 15. 멱등 필터 fail-closed 형상 통일
-- 상태: 대기
+- 상태: 완료
+- 완료 메모(2026-07-17): 503 형상은 레이트리밋 `writeProblem` 미러(409 본문 불변, `IDEMPOTENCY_UNAVAILABLE`). 잔여 — `finally`의 `store.complete(key)` 장애는 응답 커밋 후 클린업이라 503 전환 불가·예외 전파 유지(원문이 지목한 `tryBegin` 결정 지점 아님, 필요 시 별도 항목).
 - 문제(Medium): `IdempotencyFilter.java:44-52`가 Redis 장애 시 예외를 잡지 않아 필터 밖으로 전파되고, `ProblemDetailHandler`가 DispatcherServlet 내부 예외만 처리해 problem+json이 아닌 일반 500이 된다. fail-closed(거부) 자체는 충족하나, 레이트리밋 필터가 명시적 503 problem+json을 내는 것과 형상이 불일치한다.
 - 완료 기준: 멱등 필터도 레이트리밋 필터처럼 저장소 예외를 잡아 503 problem+json으로 통일. Redis 장애 시 503 응답 형상 테스트(#11의 fail-closed 테스트와 조율).
 - 범위: 소.
