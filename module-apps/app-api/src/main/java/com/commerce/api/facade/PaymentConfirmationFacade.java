@@ -26,16 +26,22 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * 응답 유실로 미확정(REQUESTED)에 머문 결제를 PG 거래 상태 조회로 확정한다 — 주기 리컨실과 웹훅 통지가
- * 공용하는 확정 경로다. 동기 체크아웃이 정상 종결한 결제는 여기 도달하지 않는다.
+ * 응답 유실로 미확정(REQUESTED)에 머문 결제를 PG 거래 상태 조회로 확정하고, 종결 기록된(비REQUESTED) 결제가
+ * 남긴 주문측 잔여를 마저 종결한다 — 주기 리컨실과 웹훅 통지가 공용하는 확정 경로다. 동기 체크아웃이 정상
+ * 종결한 결제는 여기 도달하지 않는다.
  *
  * <p>웹훅 페이로드의 결과를 신뢰하지 않는다. 통지는 대상 결제를 지목하는 트리거일 뿐 확정 근거는 항상 PG
- * 상태 조회라 페이로드 위조가 상태를 왜곡하지 못한다. 이미 종결된 결제는 조용히 통과하므로 중복 전달·반복
- * 스윕에 멱등하다. 생성 후 유예({@code payment.reconciliation.stale-after})가 지나지 않은 결제도 손대지
- * 않는다 — 동기 체크아웃이 아직 소유 중일 수 있어, 이 유예가 확정 경로와 동기 경로의 경합을 차단한다.
+ * 상태 조회라 페이로드 위조가 상태를 왜곡하지 못한다. 이미 종결된 결제·주문 쌍은 조용히 통과하므로 중복
+ * 전달·반복 스윕에 멱등하다. 생성 후 유예({@code payment.reconciliation.stale-after})가 지나지 않은 결제도
+ * 손대지 않는다 — 동기 체크아웃이 아직 소유 중일 수 있어, 이 유예가 확정 경로와 동기 경로의 경합을 차단한다.
+ *
+ * <p>주기 스윕은 REQUESTED 결제만 선별한다. 종결 기록된 결제 × 미종결 주문 잔여(승인 커밋 후 결제완료 전
+ * 중단, 거절 기록 후 보상 취소 실패)는 결제 상태만으로는 정상 종결과 구분할 수 없어 PENDING 주문 스윕
+ * ({@link PendingOrderSweepFacade})이 발견해 위임하고, 웹훅 재전달도 같은 종결 경로에 닿는다.
  *
  * <p>결제 상태 기록을 주문측 효과(결제완료·보상) 뒤 마지막에 둔다. 중간에 중단돼도 결제가 REQUESTED로 남아
- * 다음 스윕이 같은 분기를 재실행하고, 주문측 효과는 상태 가드로 재실행을 건너뛴다. 보상의 재고·쿠폰 복원은
+ * 다음 스윕이 같은 분기를 재실행하고, 주문측 효과는 상태 가드로 재실행을 건너뛴다. 고아 청구 환불도 PG
+ * 환불을 선행하고 승인·취소 기록을 한 커밋으로 남겨 같은 자기복구를 유지한다. 보상의 재고·쿠폰 복원은
  * 주문 취소의 1회성 전이 뒤에만 태워 반복 실행이 이중 복원하지 않는다(취소 커밋과 복원 사이 중단의 복원
  * 유실은 취소 파사드와 같은 잔여 한계다 — DOMAIN_MODEL.md 취소·환불 정책 참조).
  */
@@ -96,8 +102,9 @@ public class PaymentConfirmationFacade {
     }
 
     /**
-     * 웹훅이 지목한 결제 하나를 PG 상태 조회로 확정한다. 이미 종결된 결제와 유예가 지나지 않은 결제는
-     * 무시한다(중복 전달 무해·동기 경로 경합 차단).
+     * 웹훅이 지목한 결제 하나를 종결한다. 미확정(REQUESTED) 결제는 PG 상태 조회로 확정하고, 종결 기록된
+     * 결제는 주문측 잔여를 마저 종결한다. 이미 종결된 결제·주문 쌍과 유예가 지나지 않은 결제는 무시한다
+     * (중복 전달 무해·동기 경로 경합 차단).
      *
      * @throws com.commerce.payment.exception.PaymentNotFoundException 결제가 없으면
      */
@@ -110,9 +117,15 @@ public class PaymentConfirmationFacade {
     }
 
     private void confirm(PaymentInfo payment) {
-        if (payment.status() != PaymentStatus.REQUESTED) {
+        if (payment.status() == PaymentStatus.REQUESTED) {
+            confirmFromGateway(payment);
             return;
         }
+        settleRecorded(payment);
+    }
+
+    /** 미확정(REQUESTED) 결제를 PG 거래 상태 조회로 확정한다. */
+    private void confirmFromGateway(PaymentInfo payment) {
         GatewayTransactionStatus transaction = paymentProcessor.inquireGateway(payment.id());
         OrderInfo order = orderReader.getOrder(payment.orderId());
         switch (transaction.result()) {
@@ -131,11 +144,9 @@ public class PaymentConfirmationFacade {
             }
             // 이전 확정이 결제완료 후 결제 기록 전에 중단된 잔여 — 기록만 마저 한다.
             case PAID -> paymentProcessor.confirmApproval(payment.id(), pgTransactionId);
-            // 주문은 이미 취소·환불로 종결됐고 지연 승인된 청구만 고아로 남았다 — 승인 기록 후 환불한다.
-            case CANCELLED, REFUNDED -> {
-                paymentProcessor.confirmApproval(payment.id(), pgTransactionId);
-                paymentProcessor.cancel(payment.id());
-            }
+            // 주문은 이미 취소·환불로 종결됐고 지연 승인된 청구만 고아로 남았다 — 환불을 선행하고 승인·취소를
+            // 한 커밋으로 기록한다. 어느 지점에서 중단돼도 REQUESTED로 남아 다음 스윕이 재시도한다.
+            case CANCELLED, REFUNDED -> paymentProcessor.confirmOrphanedApproval(payment.id(), pgTransactionId);
         }
     }
 
@@ -146,15 +157,56 @@ public class PaymentConfirmationFacade {
             return;
         }
         if (order.status() == OrderStatus.PENDING) {
-            orderModifier.cancel(order.id(), CancellationReason.PAYMENT_FAILED);
-            UUID issuedCouponId = order.issuedCouponId();
-            if (issuedCouponId != null) {
-                issuedCouponModifier.restoreUse(issuedCouponId, order.id());
-            }
-            for (OrderLineInfo line : order.lines()) {
-                stockModifier.restore(line.variantId(), line.quantity());
-            }
+            compensatePendingOrder(order);
         }
         paymentProcessor.confirmFailure(payment.id(), failureReason);
+    }
+
+    /**
+     * 종결 기록된(비REQUESTED) 결제가 남긴 주문측 잔여를 결제 상태 × 주문 상태의 함수로 종결한다. 결제
+     * 상태는 이미 기록됐으므로 PG를 조회하지 않는다.
+     */
+    private void settleRecorded(PaymentInfo payment) {
+        OrderInfo order = orderReader.getOrder(payment.orderId());
+        if (payment.status() == PaymentStatus.APPROVED) {
+            settleApprovedResidue(payment, order);
+        } else if (payment.status() == PaymentStatus.FAILED) {
+            settleFailedResidue(payment, order);
+        }
+        // CANCELLED(환불 완결)의 주문측 잔여(PAID 주문 취소 실패)는 취소 파사드의 재시도가 소유한다 — 손대지 않는다.
+    }
+
+    private void settleApprovedResidue(PaymentInfo payment, OrderInfo order) {
+        switch (order.status()) {
+            // 승인 커밋과 결제완료 전이 사이 중단 잔여 — 돈은 이미 빠졌으므로 주문을 결제완료로 완결한다.
+            case PENDING -> orderModifier.markPaid(order.id());
+            // 정상 종결 쌍 — 중복 전달·재발견 무해.
+            case PAID -> {}
+            // 주문은 취소·환불로 종결됐는데 청구만 승인으로 남았다 — 고아 청구를 환불한다.
+            case CANCELLED, REFUNDED -> paymentProcessor.cancel(payment.id());
+        }
+    }
+
+    private void settleFailedResidue(PaymentInfo payment, OrderInfo order) {
+        if (order.status() == OrderStatus.PAID) {
+            // 모델상 도달 불가(PAID는 PG 승인 후에만) — 기록이 모순이므로 손대지 않는다.
+            log.warn("PAID 주문의 결제가 실패로 기록돼 있다: paymentId={} orderId={}", payment.id(), order.id());
+            return;
+        }
+        // 거절 기록 후 보상 취소가 실패한 잔여 — 취소 전이 후 복원으로 보상 종결한다.
+        if (order.status() == OrderStatus.PENDING) {
+            compensatePendingOrder(order);
+        }
+    }
+
+    private void compensatePendingOrder(OrderInfo order) {
+        orderModifier.cancel(order.id(), CancellationReason.PAYMENT_FAILED);
+        UUID issuedCouponId = order.issuedCouponId();
+        if (issuedCouponId != null) {
+            issuedCouponModifier.restoreUse(issuedCouponId, order.id());
+        }
+        for (OrderLineInfo line : order.lines()) {
+            stockModifier.restore(line.variantId(), line.quantity());
+        }
     }
 }

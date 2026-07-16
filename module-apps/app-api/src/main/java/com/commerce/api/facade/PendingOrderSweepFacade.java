@@ -6,6 +6,8 @@ import com.commerce.order.info.OrderInfo;
 import com.commerce.order.info.OrderLineInfo;
 import com.commerce.order.service.OrderModifier;
 import com.commerce.order.service.OrderReader;
+import com.commerce.payment.entity.PaymentStatus;
+import com.commerce.payment.info.PaymentInfo;
 import com.commerce.payment.service.PaymentReader;
 import com.commerce.stock.service.StockModifier;
 import java.time.Duration;
@@ -19,15 +21,19 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * 결제 요청 이전에 중단돼 payment 행 없이 남은 PENDING 주문을 주기 스윕이 보상 종결한다.
+ * 결제 요청 이전에 중단돼 payment 행 없이 남은 PENDING 주문을 주기 스윕이 보상 종결하고, 종결 기록된 결제가
+ * 남긴 PENDING 잔여를 결제 리컨실에 위임한다.
  *
  * <p>체크아웃은 주문 PENDING을 사가 앵커로 먼저 커밋한 뒤 재고 차감·쿠폰 확정·결제 요청을 잇는다. 주문 생성
  * 이후~결제 요청 이전 구간에서 프로세스가 중단되면 PENDING 주문·차감 재고·사용 쿠폰이 남되 payment 행이
  * 없다 — 미확정 결제 리컨실({@link PaymentConfirmationFacade})은 REQUESTED 결제만 스윕하므로 이 잔여를 영원히
- * 발견하지 못한다(팬텀 품절, 유일한 무한 잔존 경로).
+ * 발견하지 못한다(팬텀 품절, 자동 복구 없던 무한 잔존 경로).
  *
- * <p>관할은 payment 행 존재로 가른다. payment 행이 있으면 미확정 결제 리컨실 관할이라 건드리지 않고(그
- * 리컨실의 PENDING 분기가 취소·복원을 소유한다), 없으면 이 스윕이 직접 보상한다. 생성 후 유예
+ * <p>관할은 payment 행 존재·상태로 가른다. 행이 없으면 이 스윕이 직접 보상한다. REQUESTED 행이 있으면
+ * 미확정 결제 리컨실 관할이라 건드리지 않는다(그 리컨실의 PENDING 분기가 취소·복원을 소유한다). 종결
+ * 기록된(APPROVED·FAILED) 행이 있으면 결제측 확정은 끝났는데 주문측 종결이 남은 잔여다 — 결제 스윕은
+ * REQUESTED만 선별해 이를 영영 보지 못하므로 이 스윕이 발견해 결제 리컨실 확정 경로에 위임한다(APPROVED ×
+ * PENDING → 결제완료 완결, FAILED × PENDING → 보상 종결). 생성 후 유예
  * ({@code order.reconciliation.stale-after})가 지난 주문만 손대 진행 중 체크아웃과 경합하지 않는다 — 유예를
  * 결제 리컨실 유예 이상으로 두어, payment 행 있는 PENDING이 결제 리컨실에 먼저 잡히고 유예 지난
  * 무-payment PENDING엔 새 payment 행이 생기지 않는다(payment 행을 쓰는 유일 경로가 그 주문의 체크아웃이다).
@@ -47,6 +53,7 @@ public class PendingOrderSweepFacade {
     private final OrderModifier orderModifier;
     private final StockModifier stockModifier;
     private final IssuedCouponModifier issuedCouponModifier;
+    private final PaymentConfirmationFacade paymentConfirmationFacade;
     private final Duration staleAfter;
 
     public PendingOrderSweepFacade(
@@ -55,12 +62,14 @@ public class PendingOrderSweepFacade {
             OrderModifier orderModifier,
             StockModifier stockModifier,
             IssuedCouponModifier issuedCouponModifier,
+            PaymentConfirmationFacade paymentConfirmationFacade,
             @Value("${order.reconciliation.stale-after}") Duration staleAfter) {
         this.orderReader = orderReader;
         this.paymentReader = paymentReader;
         this.orderModifier = orderModifier;
         this.stockModifier = stockModifier;
         this.issuedCouponModifier = issuedCouponModifier;
+        this.paymentConfirmationFacade = paymentConfirmationFacade;
         this.staleAfter = staleAfter;
     }
 
@@ -89,7 +98,7 @@ public class PendingOrderSweepFacade {
 
     private void sweep(OrderInfo order) {
         if (paymentReader.hasPaymentForOrder(order.id())) {
-            // 결제 행이 있으면 미확정 결제 리컨실 관할이라 건드리지 않는다(이중 개입 차단).
+            delegateToPaymentReconciliation(order);
             return;
         }
         log.warn(
@@ -104,5 +113,21 @@ public class PendingOrderSweepFacade {
         for (OrderLineInfo line : order.lines()) {
             stockModifier.restore(line.variantId(), line.quantity());
         }
+    }
+
+    private void delegateToPaymentReconciliation(OrderInfo order) {
+        PaymentInfo payment = paymentReader.getByOrderId(order.id());
+        if (payment.status() == PaymentStatus.REQUESTED) {
+            // 미확정 결제 리컨실 스윕이 PG 상태 조회로 확정한다 — 이중 개입하지 않는다.
+            return;
+        }
+        log.warn(
+                "종결 기록된 결제가 남긴 유예 경과 PENDING 주문을 결제 리컨실에 위임한다: orderId={} orderNumber={}"
+                        + " paymentId={} paymentStatus={}",
+                order.id(),
+                order.orderNumber(),
+                payment.id(),
+                payment.status());
+        paymentConfirmationFacade.confirm(payment.id());
     }
 }

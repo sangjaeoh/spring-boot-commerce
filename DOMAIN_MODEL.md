@@ -579,9 +579,9 @@
 - 승인: `PaymentGateway.approve` 성공 시 APPROVED + pgTransactionId, 실패 시 FAILED + `failureReason`(`INSUFFICIENT_BALANCE`·`LIMIT_EXCEEDED`·`INVALID_METHOD`·`RISK_DECLINED`·`GATEWAY_ERROR`). `payAmount == 0`(전액 할인)이면 PG를 호출하지 않고 APPROVED로 자동 처리한다(pgTransactionId 없음). 체크아웃 파사드가 동기 반환된 사유로 보상·안내를 분기한다.
 - 취소·환불(cancel): APPROVED에서만 CANCELLED로. `PaymentGateway.cancel` 호출 시 취소 거래 ID를 `pgCancelTransactionId`에 저장한다(승인 ID `pgTransactionId`와 분리 — 정산·CS 대사). 단 `pgTransactionId == null`(PG 미호출 승인)이면 환불 호출을 생략하고 상태만 CANCELLED로 둔다.
 - 멱등: 이미 결제된 주문(APPROVED)에 재요청은 상태 가드로 거부. 결제 실패로 주문이 취소되면 재체크아웃은 새 주문(새 orderId)을 만든다 — 실패 결제 행은 새 주문을 막지 않는다.
-- 리컨실 확정(confirmApproval·confirmFailure): 응답 유실로 REQUESTED에 남은 결제를 PG 재청구 없이 상태 조회(inquire) 결과로만 기록한다. 승인 확정은 APPROVED + pgTransactionId, 거절 확정은 FAILED + 사유, 청구 미도달(NOT_FOUND)은 돈이 움직이지 않았으므로 FAILED(`GATEWAY_ERROR`)로 확정한다. 확정 대상 선별·주문측 조율(결제완료·보상·고아 청구 환불)은 크로스 도메인 정책이 소유한다.
+- 리컨실 확정(confirmApproval·confirmFailure·confirmOrphanedApproval): 응답 유실로 REQUESTED에 남은 결제를 PG 재청구 없이 상태 조회(inquire) 결과로만 기록한다. 승인 확정은 APPROVED + pgTransactionId, 거절 확정은 FAILED + 사유, 청구 미도달(NOT_FOUND)은 돈이 움직이지 않았으므로 FAILED(`GATEWAY_ERROR`)로 확정한다. 주문이 이미 취소·환불로 종결된 지연 승인(고아 청구)은 confirmOrphanedApproval이 PG 환불을 먼저 수행하고 승인·취소 기록을 한 커밋으로 남긴다 — 어느 지점에서 중단돼도 REQUESTED로 남아 재시도되고, 환불 재호출은 결정론적 멱등 키가 흡수한다. 확정 대상 선별·주문측 조율(결제완료·보상·고아 청구 환불)은 크로스 도메인 정책이 소유한다.
 - 결제 수단: 승인/실패가 동기 확정되는 수단만(`CARD`·`EASY_PAY`·`BANK_TRANSFER`). 불변식 `amount > 0 ⇔ method != null` — `amount == 0`(전액 할인) 결제는 실 지불 수단이 없으므로 `method` 없이 PG 생략 자동 승인하고 가짜 `CARD`를 채우지 않는다. 가상계좌 등 입금 대기·비동기 통지 수단은 범위 밖(실 PG·웹훅 기준선 밖). 수단별 부가 데이터(할부·provider)는 단일 상세 컬럼으로 겸용하지 않는다.
-- 도메인 이벤트 없음. 결제 결과는 동기 승인 PG가 호출자(체크아웃 파사드)에게 즉시 반환하므로, 승인/실패 반영은 파사드가 동기로 처리한다. 응답이 유실된 잔여만 리컨실 확정 경로가 닫는다(크로스 도메인 정책 참조).
+- 도메인 이벤트 없음. 결제 결과는 동기 승인 PG가 호출자(체크아웃 파사드)에게 즉시 반환하므로, 승인/실패 반영은 파사드가 동기로 처리한다. 동기 경로가 종결하지 못한 잔여(응답 유실·기록 후 중단)만 리컨실 확정 경로가 닫는다(크로스 도메인 정책 참조).
 
 ### 오퍼레이션
 
@@ -593,6 +593,7 @@
 | inquireGateway | paymentId | PG 거래 상태 조회(포트 위임). 결제 상태 무변경 | 미존재 |
 | confirmApproval | paymentId, pgTransactionId | REQUESTED→APPROVED(+`approvedAt`). PG 재청구 없음 | 미존재; 잘못된 전이 |
 | confirmFailure | paymentId, failureReason | REQUESTED→FAILED(+failureReason). PG 재청구 없음 | 미존재; 잘못된 전이 |
+| confirmOrphanedApproval | paymentId, pgTransactionId | PG 환불 선행 후 REQUESTED→APPROVED→CANCELLED 한 커밋(+`approvedAt`·`cancelledAt`·`pgCancelTransactionId`) | 미존재; 잘못된 전이 |
 
 포트 `PaymentGateway`(approve·cancel)는 도메인이 소유하고 구현은 외부 어댑터다. 반환 형상·거부의 예외 매핑·서비스 역할 배치·네이밍은 `docs/coding-conventions.md`가 소유.
 
@@ -610,7 +611,7 @@
 4. 쿠폰 확정(있으면): `use(issuedCouponId, orderId)` → ISSUED→USED. 실패(동시 사용 등) 시 주문 취소 후 재고 복원하고 중단.
 5. 결제: `payAmount == 0`이면 PG 생략·자동 APPROVED. 아니면 `PaymentGateway.approve`.
    - APPROVED → 결제 APPROVED 기록, `Order.markPaid`(PENDING→PAID).
-   - FAILED/예외 → 동기 보상: 주문 취소(→CANCELLED) → 쿠폰 복원(USED→ISSUED) → 재고 복원. 결제 FAILED 기록. 보상은 스윕·리컨실과 같은 취소-선행 순서다 — 취소의 1회성 전이가 복원을 게이트해, 취소가 실패하면 복원 없이 PENDING이 남는다. 잔여 인계는 payment 행 상태에 따른다: 행 없음(재고·쿠폰 단계 실패)은 PENDING 스윕이, REQUESTED는 결제 리컨실이 취소 전이 후 복원을 태운다 — 단 스윕은 차감 진행도를 모른 채 전 라인을 복원하므로 부분 차감 잔여는 과복원(재고 증식)이다(운영 대사 대상). 결제 거절이 FAILED로 기록된 뒤 취소가 실패한 잔여(PENDING × FAILED)는 스윕(payment 행 존재로 제외)·리컨실(REQUESTED만 선별) 어느 관할에도 들어가지 않아 복원이 유실된다(운영 대사 대상).
+   - FAILED/예외 → 동기 보상: 주문 취소(→CANCELLED) → 쿠폰 복원(USED→ISSUED) → 재고 복원. 결제 FAILED 기록. 보상은 스윕·리컨실과 같은 취소-선행 순서다 — 취소의 1회성 전이가 복원을 게이트해, 취소가 실패하면 복원 없이 PENDING이 남는다. 잔여 인계는 payment 행 상태에 따른다: 행 없음(재고·쿠폰 단계 실패)은 PENDING 스윕이 직접 보상하고, REQUESTED는 결제 리컨실이 취소 전이 후 복원을 태우며, 종결 기록된 결제(FAILED 기록 후 취소 실패, APPROVED 기록 후 markPaid 전 중단)는 PENDING 스윕이 발견해 결제 리컨실 확정 경로에 위임한다(FAILED × PENDING → 취소 전이 후 복원, APPROVED × PENDING → markPaid 완결) — 단 스윕·리컨실은 차감 진행도를 모른 채 전 라인을 복원하므로 부분 차감 잔여는 과복원(재고 증식)이다(운영 대사 대상).
 6. 주문 PAID 커밋 후 → `OrderPaid` 발행 → 장바구니 `removeItems`(주문된 변형 라인) 리스너(멱등).
 
 - 주문 앵커: 주문 PENDING을 재고 차감 전에 만들어, 차감·쿠폰 사용 등 모든 부작용이 조회 가능한 orderId에 걸린다. 차감 후 크래시가 나도 유실이 관측·복구 가능하다(주문 없는 차감이 아니다).
@@ -639,26 +640,31 @@
 
 ### 미확정 결제 리컨실·웹훅 확정
 
-응답 유실·프로세스 중단으로 REQUESTED에 남은 결제를 확정하는 흐름(파사드, 주기 스윕·웹훅 공용):
+응답 유실·프로세스 중단으로 REQUESTED에 남은 결제를 확정하고, 종결 기록된(비REQUESTED) 결제가 남긴 주문측 잔여를 마저 종결하는 흐름(파사드, 주기 스윕·웹훅 공용):
 
-- 대상 선별: 생성 후 유예(`payment.reconciliation.stale-after`)가 지나도록 REQUESTED인 결제. 유예가 동기 체크아웃과의 경합을 차단한다 — 유예 내 결제는 체크아웃 스레드가 단독 소유하고, 확정 경로(스윕·웹훅 모두)는 손대지 않는다.
+- 대상 선별: 생성 후 유예(`payment.reconciliation.stale-after`)가 지나도록 REQUESTED인 결제. 유예가 동기 체크아웃과의 경합을 차단한다 — 유예 내 결제는 체크아웃 스레드가 단독 소유하고, 확정 경로(스윕·웹훅 모두)는 손대지 않는다. 종결 기록된 결제 × 미종결 주문 잔여는 결제 상태만으로는 정상 종결과 구분할 수 없어 이 스윕이 선별하지 못한다 — PENDING 주문 스윕이 발견해 위임하고, 웹훅 재전달도 같은 종결 경로에 닿는다.
 - 확정 근거는 항상 PG 거래 상태 조회(inquire)다. 웹훅 페이로드는 결제를 지목하는 트리거일 뿐 결과를 신뢰하지 않는다 — 서명(공유 시크릿 HMAC-SHA256)을 통과한 위조 페이로드도 상태를 왜곡하지 못한다.
 - 분기는 PG 거래 × 주문 상태의 함수다.
   - 승인 거래 × 주문 PENDING → 주문 결제완료(`markPaid`) 후 결제 승인 확정 기록. 응답 유실 전 크래시로 멈춘 체크아웃의 완결이다.
   - 승인 거래 × 주문 PAID → 결제 기록만 마저 한다(이전 확정이 결제완료 후 중단된 잔여의 자기 복구).
-  - 승인 거래 × 주문 CANCELLED·REFUNDED → 주문은 이미 취소·환불로 종결됐고 지연 승인 청구만 고아로 남았다. 승인 기록 후 즉시 환불(`cancel`)한다(REFUNDED × 미확정 결제는 환불이 결제 취소 선행을 전제해 모델상 도달 불가지만 fail-safe 방향이 같다).
+  - 승인 거래 × 주문 CANCELLED·REFUNDED → 주문은 이미 취소·환불로 종결됐고 지연 승인 청구만 고아로 남았다. PG 환불을 먼저 수행하고 승인·취소 기록을 한 커밋으로 남긴다(`confirmOrphanedApproval`) — 어느 지점에서 중단돼도 결제가 REQUESTED로 남아 다음 스윕이 재시도하고, 환불 재호출은 PG 멱등 키가 흡수한다(승인 기록을 먼저 커밋하면 환불 실패 시 APPROVED로 굳어 REQUESTED 선별에서 이탈하므로 기각). REFUNDED × 미확정 결제는 환불이 결제 취소 선행을 전제해 모델상 도달 불가지만 fail-safe 방향이 같다.
   - 거절 거래 → 보상(주문 취소 → 쿠폰 복원 → 재고 복원) 후 결제 실패 확정(거절 사유).
   - 거래 미도달(NOT_FOUND) → 청구가 PG에 닿지 않아 돈이 움직이지 않았다. 거절과 같은 보상 후 실패 확정(`GATEWAY_ERROR`).
-- 멱등: 이미 종결(비REQUESTED)된 결제는 조용히 통과한다 — 반복 스윕·중복 웹훅 전달이 무해하다. 보상의 복원은 주문 취소의 1회성 전이 뒤에만 태워 반복 실행이 이중 복원하지 않고, 주문측 효과는 상태 가드로 재실행을 건너뛴다.
+- 종결 기록된(비REQUESTED) 결제가 위임·웹훅으로 도달하면 주문측 잔여를 결제 상태 × 주문 상태의 함수로 종결한다. PG 조회 없이(결제 상태가 이미 기록돼 근거가 된다) 처리한다.
+  - APPROVED × PENDING → 주문 결제완료(`markPaid`) 완결. 승인 커밋과 markPaid 사이 중단 잔여다 — 돈이 빠졌으므로 보상이 아니라 완결이 맞다.
+  - APPROVED × CANCELLED·REFUNDED → 고아 청구 환불(`cancel`).
+  - FAILED × PENDING → 보상 종결(주문 취소 → 쿠폰 복원 → 재고 복원). 거절 기록 후 보상 취소가 실패한 잔여다.
+  - 그 외 쌍(APPROVED × PAID 등)은 이미 종결이라 무시한다. CANCELLED 결제 × PAID 주문(환불 커밋 후 주문 취소 실패)은 취소 파사드의 재시도가 소유한다.
+- 멱등: 이미 종결된 결제·주문 쌍은 조용히 통과한다 — 반복 스윕·중복 웹훅 전달이 무해하다. 보상의 복원은 주문 취소의 1회성 전이 뒤에만 태워 반복 실행이 이중 복원하지 않고, 주문측 효과는 상태 가드로 재실행을 건너뛴다.
 - 결제 상태 기록을 주문측 효과 뒤 마지막에 둔다. 중간에 중단돼도 결제가 REQUESTED로 남아 다음 스윕이 같은 분기를 재실행한다(자기 복구). 취소 전이 커밋과 복원 사이 중단의 복원 유실은 취소·환불 흐름과 같은 잔여 한계다(무손실 복구 범위 밖).
 - 스윕은 결제 단위로 실패를 격리한다 — 한 결제의 확정 실패는 로그만 남기고 남은 대상을 계속 처리하며 다음 스윕이 재시도한다.
 
 ### PENDING 주문 스윕 (주문 기준 리컨실)
 
-체크아웃은 주문 PENDING을 사가 앵커로 먼저 커밋한 뒤 재고 차감·쿠폰 확정·결제 요청을 잇는다(order-first). 주문 생성 이후~결제 요청 이전 구간에서 프로세스가 중단되면 PENDING 주문·차감 재고·사용 쿠폰이 남되 payment 행이 없다 — 미확정 결제 리컨실은 REQUESTED 결제만 스윕하므로 이 잔여를 발견하지 못한다(팬텀 품절, 자동 복구 없던 유일한 무한 잔존 경로). 이를 닫는 흐름(파사드, 주기 스윕):
+체크아웃은 주문 PENDING을 사가 앵커로 먼저 커밋한 뒤 재고 차감·쿠폰 확정·결제 요청을 잇는다(order-first). 주문 생성 이후~결제 요청 이전 구간에서 프로세스가 중단되면 PENDING 주문·차감 재고·사용 쿠폰이 남되 payment 행이 없다 — 미확정 결제 리컨실은 REQUESTED 결제만 스윕하므로 이 잔여를 발견하지 못한다(팬텀 품절, 자동 복구 없던 무한 잔존 경로). 이를 닫는 흐름(파사드, 주기 스윕):
 
-- 대상 선별: 생성 후 유예(`order.reconciliation.stale-after`)가 지나도록 PENDING인 주문. 유예를 결제 리컨실 유예(`payment.reconciliation.stale-after`) 이상으로 둔다 — 진행 중 체크아웃과 경합하지 않고, payment 행 있는 PENDING이 결제 리컨실에 먼저 잡히도록 시간을 벌어 이중 개입을 막는다.
-- 관할은 payment 행 존재로 가른다. payment 행이 있으면 미확정 결제 리컨실 관할이라 손대지 않고(그 리컨실의 승인 거래 × PENDING → `markPaid`, 거절·미도달 → 보상 분기가 소유한다), 없으면 결제 요청 이전에 중단된 잔여라 이 스윕이 직접 보상 종결한다. 유예가 지난 무-payment PENDING엔 새 payment 행이 생기지 않는다 — payment 행을 쓰는 유일 경로가 그 주문의 체크아웃이라, 유예를 넘겨 잔존한 주문의 체크아웃은 이미 중단됐다.
+- 대상 선별: 생성 후 유예(`order.reconciliation.stale-after`)가 지나도록 PENDING인 주문. 유예를 결제 리컨실 유예(`payment.reconciliation.stale-after`) 이상으로 둔다 — 진행 중 체크아웃과 경합하지 않고, REQUESTED 행 있는 PENDING이 결제 리컨실에 먼저 잡히도록 시간을 벌어 이중 개입을 막는다.
+- 관할은 payment 행 존재·상태로 가른다. 행이 없으면 결제 요청 이전에 중단된 잔여라 이 스윕이 직접 보상 종결한다. REQUESTED 행이 있으면 미확정 결제 리컨실 관할이라 손대지 않는다(그 리컨실의 승인 거래 × PENDING → `markPaid`, 거절·미도달 → 보상 분기가 소유한다). 종결 기록된(APPROVED·FAILED) 행이 있으면 결제측 확정은 끝났는데 주문측 종결이 남은 잔여다 — 결제 리컨실 스윕은 REQUESTED만 선별해 이를 보지 못하므로, 이 스윕이 발견해 결제 리컨실 확정 경로에 위임한다(APPROVED × PENDING → markPaid 완결, FAILED × PENDING → 보상 종결). 유예가 지난 무-payment PENDING엔 새 payment 행이 생기지 않는다 — payment 행을 쓰는 유일 경로가 그 주문의 체크아웃이라, 유예를 넘겨 잔존한 주문의 체크아웃은 이미 중단됐다.
 - 보상 종결: 주문 취소(`cancel`, PENDING→CANCELLED, 사유 `CHECKOUT_ABANDONED`) 1회성 전이 선행 → 쿠폰 복원(USED→ISSUED, 멱등) → 재고 복원(가산). 취소·환불 흐름과 같은 순서다.
 - 멱등: 스윕 쿼리가 PENDING만 반환하므로 반복 실행이 이미 취소된 주문을 재조회하지 않아 복원이 정확히 한 번이다. 취소 전이 커밋과 복원 사이 중단의 복원 유실은 취소·리컨실 흐름과 같은 잔여 한계다(무손실 복구 범위 밖).
 - 스윕은 주문 단위로 실패를 격리하고, 처리 건마다 경고 로그를 남겨 잔존 발생을 관측한다.
@@ -684,7 +690,7 @@
 
 ### 정합·보장 수준
 
-- 결제 이후 핵심 상태(PAID/CANCELLED)는 파사드가 동기로 확정하므로 동기 경로엔 "결제됐는데 PENDING" 같은 창이 없다. 동기 경로가 기록하지 못한 잔여(응답 유실·중단)는 유예 + 스윕 주기 안에 수렴한다 — payment 행 있는 미확정 결제는 결제 리컨실이 PG 상태 조회로, 결제 요청 이전 중단으로 payment 행 없이 남은 PENDING 주문은 PENDING 스윕이 보상 종결로 닫는다.
+- 결제 이후 핵심 상태(PAID/CANCELLED)는 파사드가 동기로 확정하므로 동기 경로엔 "결제됐는데 PENDING" 같은 창이 없다. 동기 경로가 기록하지 못한 잔여(응답 유실·중단)는 유예 + 스윕 주기 안에 수렴한다 — REQUESTED 결제는 결제 리컨실이 PG 상태 조회로, 결제 요청 이전 중단으로 payment 행 없이 남은 PENDING 주문은 PENDING 스윕이 보상 종결로, 결제는 기록됐는데 주문측 종결이 남은 잔여(승인 커밋 후 markPaid 전 중단, 거절 기록 후 보상 취소 실패)는 PENDING 스윕이 발견해 결제 리컨실 확정 경로가 닫는다.
 - in-process 이벤트(`OrderPaid`)는 커밋 후 발행하되 무손실 보장이 아니다. 리스너는 멱등하고, 유실 시 장바구니가 남는 것 외 영향이 없다.
 - 복원 정확성: 모든 재고·쿠폰 복원은 주문의 1회성 전이(`PENDING·PAID → CANCELLED` 또는 `PAID → REFUNDED`)가 게이트한다. `restore`는 가산·교환법칙이라 낙관락 충돌 시 재시도해도 안전하지만 멱등은 아니므로(커밋된 복원을 재전달하면 이중 가산), 이 전이 가드가 정확히-1회 복원을 보장한다.
 - 크로스 트랜잭션 부분 실패(예: 보상 도중 프로세스 크래시)의 무손실 복구는 범위 밖이다. 낙관락 충돌 재시도 수렴(가산·재시도 안전)과 크래시 리플레이 멱등(제공 안 함)은 구분된다.

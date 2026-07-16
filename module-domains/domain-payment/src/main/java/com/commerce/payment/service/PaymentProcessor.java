@@ -25,7 +25,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * <p>승인·취소 모두 PG 호출을 트랜잭션 밖에서 내고 결과 영속만 좁힌다. 승인은 영속 실패 시 고아 청구를 환불로
  * 역보상한다(청구가 환불 없이 고아로 남지 않게). 취소는 환불이 비가역이라 역보상 대신 멱등 키로 재시도 이중
  * 환불을 막는다. 응답 유실로 요청 상태에 머문 결제는 확정 기록({@code confirm*})이 PG 재청구 없이 상태 조회
- * 결과만 반영한다.
+ * 결과만 반영하고, 주문이 이미 종결된 지연 승인은 환불을 선행한 뒤 승인·취소를 한 커밋으로 기록한다.
  */
 @Service
 public class PaymentProcessor {
@@ -126,6 +126,19 @@ public class PaymentProcessor {
         return inTransaction(() -> recordApproval(paymentId, PaymentApproval.declined(failureReason)));
     }
 
+    /**
+     * 주문이 이미 취소·환불로 종결된 결제의 지연 승인(고아 청구)을 환불로 종결한다. PG 환불을 트랜잭션 밖에서
+     * 먼저 수행하고 승인·취소 기록을 한 커밋으로 남긴다 — 어느 지점에서 중단돼도 결제가 요청 상태로 남아 다음
+     * 리컨실이 재시도하고, 환불 재호출은 결정론적 멱등 키가 이중 환불을 막는다. 호출자는 이 메서드를 트랜잭션
+     * 밖에서 부른다.
+     *
+     * @throws PaymentStatusException 요청 상태가 아니면
+     */
+    public PaymentInfo confirmOrphanedApproval(UUID paymentId, String pgTransactionId) {
+        String pgCancelTransactionId = paymentGateway.cancel(pgTransactionId, refundIdempotencyKey(pgTransactionId));
+        return inTransaction(() -> recordRefundedApproval(paymentId, pgTransactionId, pgCancelTransactionId));
+    }
+
     private PaymentInfo recordAutoApproval(UUID paymentId) {
         Payment payment = find(paymentId);
         payment.approveWithoutGateway();
@@ -144,6 +157,13 @@ public class PaymentProcessor {
 
     private PaymentInfo recordCancellation(UUID paymentId, @Nullable String pgCancelTransactionId) {
         Payment payment = find(paymentId);
+        payment.cancel(pgCancelTransactionId);
+        return PaymentInfo.from(payment);
+    }
+
+    private PaymentInfo recordRefundedApproval(UUID paymentId, String pgTransactionId, String pgCancelTransactionId) {
+        Payment payment = find(paymentId);
+        payment.approve(pgTransactionId);
         payment.cancel(pgCancelTransactionId);
         return PaymentInfo.from(payment);
     }
