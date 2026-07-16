@@ -54,6 +54,8 @@ docker compose --profile full up -d --build --wait
    ./gradlew :module-apps:app-api:bootRun --args='--spring.profiles.active=local'
    ```
 
+API 문서(swagger-ui): `http://localhost:8080/swagger-ui.html` — 두 실행 경로 모두에서 열린다(로컬 외 기본 비노출).
+
 ## 스모크 테스트 — 가입 → 상품 등록 → 담기 → 체크아웃
 
 앱을 띄운 채 다른 터미널에서 순서대로 실행한다. 상품 등록은 관리자 전용이라 기동 시 시딩되는 로컬 관리자 계정(`admin@local.dev` — 컨테이너 경로는 compose 환경변수, gradlew 경로는 local 프로필 기본값)으로 로그인한다.

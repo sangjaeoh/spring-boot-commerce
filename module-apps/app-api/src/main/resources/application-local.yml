@@ -9,6 +9,13 @@ spring:
       host: localhost
       port: 56379
 
+springdoc:
+  # 로컬에서만 API 문서·swagger-ui를 연다(기본은 비노출).
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+
 auth:
   jwt:
     # 로컬 전용 개발 키. 운영 키는 환경변수(AUTH_JWT_SECRET)로만 주입한다.

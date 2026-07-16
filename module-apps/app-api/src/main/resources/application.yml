@@ -13,6 +13,13 @@ logging:
       # 전 프로필 동일 포맷(local 포함) — 프로필 간 로그 형상이 갈리면 로컬에서 검증한 파싱이 배포에서 깨진다.
       console: ecs
 
+springdoc:
+  # 의도적 기본 비노출 — API 문서·swagger-ui는 개발 표면이라 로컬 환경(local 프로필·compose full)에서만 연다.
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
 management:
   endpoints:
     web:

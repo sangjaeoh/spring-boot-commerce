@@ -11,6 +11,7 @@ errorprone-gradle-plugin = "5.1.0"
 querydsl = "7.4.0"
 archunit = "1.4.1"
 nimbus-jose-jwt = "10.9.1"
+springdoc = "3.0.3"
 
 [libraries]
 # build-logic tooling — gradle plugin jars, consumed as regular dependencies in build-logic/build.gradle.kts
@@ -41,6 +42,8 @@ nimbus-jose-jwt = { module = "com.nimbusds:nimbus-jose-jwt", version.ref = "nimb
 
 # app-api
 spring-boot-starter-web = { module = "org.springframework.boot:spring-boot-starter-web" }
+# app-api — OpenAPI 자동 문서 + swagger-ui. Spring Boot 4.x 호환은 3.x 라인(2.x는 Boot 3 전용)이라 버전을 명시한다
+springdoc-openapi-starter-webmvc-ui = { module = "org.springdoc:springdoc-openapi-starter-webmvc-ui", version.ref = "springdoc" }
 spring-boot-starter-actuator = { module = "org.springframework.boot:spring-boot-starter-actuator" }
 spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-starter-test" }
 
