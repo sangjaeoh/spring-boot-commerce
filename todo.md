@@ -123,7 +123,8 @@
 - 범위: 소.
 
 ### 14. 모듈 경계·아키텍처 테스트 강제 구멍 보강
-- 상태: 대기
+- 상태: 완료
+- 완료 메모(2026-07-17): 경계 검사는 선언된 프로젝트 의존 전수(`configurations.configureEach`)를 잡는다 — `dependencySubstitution`·`files(...)` 직접 참조 같은 저수준 우회는 보장 밖(독립 리뷰 참고, 비현실 경로로 범위 밖 판단). build-logic 테스트는 루트 `check`에 연결해 `./gradlew build` 게이트에 포함했다. ArchUnit 면제 베이스는 도메인 7개 + common-jpa(`@MappedSuperclass` 소유)로 파생·가드된다.
 - 문제(Medium): (a) 모듈 경계 화이트리스트가 `api`/`implementation`만 순회해(`ModuleDependencyRules.kt:12`, `convention.external-module.gradle.kts:18`) `compileOnly`·`testImplementation` 등으로 타 도메인 컴파일 의존이 가능 — "경계를 컴파일 의존성으로 강제"(`docs/architecture.md:34`)의 구멍. (b) 엔티티 비노출 ArchUnit 규칙의 제외가 전역 패키지명 기준이라(`ArchitectureTest.java:55`) app-api에 `...service`/`...entity` 패키지를 만들면 생 엔티티 참조가 면제된다.
 - 완료 기준: 경계 검사 대상 구성을 `compileOnly`·`compileOnlyApi`·`runtimeOnly`·`testImplementation`까지 확대(또는 프로젝트 의존 전수 검사). ArchUnit 엔티티 제외를 도메인 모듈 접두로 한정. 각각 우회 시도가 실패로 잡히는 테스트/검증 추가.
 - 범위: 소~중.
