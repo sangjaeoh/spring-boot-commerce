@@ -36,9 +36,10 @@ import org.springframework.test.context.TestConstructor;
  * "오버셀 없음" 비기능 요구를 재고 낙관락 경합으로 검증한다.
  *
  * <p>재고 M에 동시 체크아웃 N(&gt;M)을 태워, 성공 주문 수가 M을 넘지 않고 최종 재고가 정확히 {@code M − 성공}
- * (0 이상)으로 보존됨을 확인한다. 실패 체크아웃은 재고 차감(낙관락 충돌·수량 가드)에서 걸려 주문이 CANCELLED로
- * 종결되고 실린 쿠폰은 소진되지 않는다. 재시도가 없어 성공 수는 M 이하로만 보장되므로(정확히 M을 단정하지 않는다)
- * 경합 편차에 무관하게 반복 통과한다.
+ * (0 이상)으로 보존됨을 확인한다. 실패 체크아웃은 주문 생성 전 사전 재고 가드에서 걸려 주문이 남지 않거나(0건),
+ * 주문 생성 후 재고 차감(낙관락 충돌·수량 가드)에서 걸려 주문이 CANCELLED로 종결되며, 어느 쪽이든 실린 쿠폰은
+ * 소진되지 않는다. 재시도가 없어 성공 수는 M 이하로만 보장되므로(정확히 M을 단정하지 않는다) 경합 편차에 무관하게
+ * 반복 통과한다.
  */
 @TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 class CheckoutConcurrencyTest extends FacadeIntegrationTest {
@@ -120,32 +121,34 @@ class CheckoutConcurrencyTest extends FacadeIntegrationTest {
         assertThat(failed.get()).isEqualTo(concurrency - succeeded.get());
         assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(stock - succeeded.get());
 
-        // 모든 시도가 종결: 성공은 PAID·쿠폰 USED, 실패는 CANCELLED·쿠폰 ISSUED(미소진).
+        // 모든 시도가 종결: 성공은 PAID 주문 1건·쿠폰 USED. 실패는 사전 재고 가드에서 걸려 주문이 없거나(0건)
+        // 차감 경합에서 취소된 CANCELLED 주문 1건이며, 어느 쪽이든 쿠폰은 ISSUED로 미소진이다. 체크아웃 1회당
+        // 주문은 최대 1건이다.
         int paid = 0;
-        int cancelled = 0;
+        int failedOut = 0;
         for (Buyer buyer : buyers) {
-            OrderInfo order = onlyOrderOf(buyer.memberId());
+            List<OrderInfo> orders = ordersOf(buyer.memberId());
+            assertThat(orders.size()).isLessThanOrEqualTo(1);
             IssuedCouponStatus couponStatus = issuedCouponReader
                     .getIssuedCoupon(buyer.issuedCouponId(), buyer.memberId())
                     .status();
-            if (order.status() == OrderStatus.PAID) {
+            if (orders.size() == 1 && orders.get(0).status() == OrderStatus.PAID) {
                 assertThat(couponStatus).isEqualTo(IssuedCouponStatus.USED);
                 paid++;
             } else {
-                assertThat(order.status()).isEqualTo(OrderStatus.CANCELLED);
+                if (!orders.isEmpty()) {
+                    assertThat(orders.get(0).status()).isEqualTo(OrderStatus.CANCELLED);
+                }
                 assertThat(couponStatus).isEqualTo(IssuedCouponStatus.ISSUED);
-                cancelled++;
+                failedOut++;
             }
         }
         assertThat(paid).isEqualTo(succeeded.get());
-        assertThat(cancelled).isEqualTo(failed.get());
+        assertThat(failedOut).isEqualTo(failed.get());
     }
 
-    private OrderInfo onlyOrderOf(UUID memberId) {
-        List<OrderInfo> orders =
-                orderReader.getOrdersByMember(memberId, PageRequest.of(0, 10)).getContent();
-        assertThat(orders).hasSize(1);
-        return orders.get(0);
+    private List<OrderInfo> ordersOf(UUID memberId) {
+        return orderReader.getOrdersByMember(memberId, PageRequest.of(0, 10)).getContent();
     }
 
     private UUID registerMember() {
