@@ -590,12 +590,12 @@
 | 연산 | 입력 | 강제 불변식 | 거부 |
 |---|---|---|---|
 | request | orderId, amount, method? | orderId 유니크, amount = 주문 payAmount, `amount>0 ⇔ method≠null`, 최초 REQUESTED | 주문당 결제 중복 |
-| approve | paymentId | REQUESTED→APPROVED(+pgTransactionId·`approvedAt`) 또는 FAILED(+failureReason); `payAmount == 0`이면 PG 생략 자동 승인 | 미존재; 잘못된 전이 |
+| approve | paymentId | REQUESTED→APPROVED(+pgTransactionId·`approvedAt`) 또는 FAILED(+failureReason); `payAmount == 0`이면 PG 생략 자동 승인 | 미존재; 잘못된 전이; 낙관락 충돌 |
 | cancel | paymentId | APPROVED→CANCELLED(+`cancelledAt`); PG 환불 시 `pgCancelTransactionId` 세팅; `pgTransactionId == null`이면 PG 생략 | 미존재; 잘못된 전이; 낙관락 충돌 |
 | inquireGateway | paymentId | PG 거래 상태 조회(포트 위임). 결제 상태 무변경 | 미존재 |
-| confirmApproval | paymentId, pgTransactionId | REQUESTED→APPROVED(+`approvedAt`). PG 재청구 없음 | 미존재; 잘못된 전이 |
-| confirmFailure | paymentId, failureReason | REQUESTED→FAILED(+failureReason). PG 재청구 없음 | 미존재; 잘못된 전이 |
-| confirmOrphanedApproval | paymentId, pgTransactionId | PG 환불 선행 후 REQUESTED→APPROVED→CANCELLED 한 커밋(+`approvedAt`·`cancelledAt`·`pgCancelTransactionId`) | 미존재; 잘못된 전이 |
+| confirmApproval | paymentId, pgTransactionId | REQUESTED→APPROVED(+`approvedAt`). PG 재청구 없음 | 미존재; 잘못된 전이; 낙관락 충돌 |
+| confirmFailure | paymentId, failureReason | REQUESTED→FAILED(+failureReason). PG 재청구 없음 | 미존재; 잘못된 전이; 낙관락 충돌 |
+| confirmOrphanedApproval | paymentId, pgTransactionId | PG 환불 선행 후 REQUESTED→APPROVED→CANCELLED 한 커밋(+`approvedAt`·`cancelledAt`·`pgCancelTransactionId`) | 미존재; 잘못된 전이; 낙관락 충돌 |
 
 포트 `PaymentGateway`(approve·cancel)는 도메인이 소유하고 구현은 외부 어댑터다. 반환 형상·거부의 예외 매핑·서비스 역할 배치·네이밍은 `docs/coding-conventions.md`가 소유.
 
