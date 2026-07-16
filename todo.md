@@ -116,7 +116,8 @@
 - 범위: 소~중.
 
 ### 13. 문서-코드 정합 (아웃박스 과잉 주장·품질 게이트 서술)
-- 상태: 대기
+- 상태: 완료
+- 완료 메모(2026-07-16): 부수 항목(무제한 정책 쿠폰의 관리자 issuedCount 0 표시)은 제품 결정이 필요해 미수정 보고로 남겼다 — 선택지: (i) 무제한이면 null 표시(응답 계약 변경, 권장 최소안), (ii) 실발급 총계 표시(목록 N+1 비용), (iii) 0 유지+문서화. 결정 후 소 슬라이스로 처리할 것.
 - 문제(Medium): `docs/architecture.md:99`가 common-messaging을 "발행 포트·아웃박스·멱등 소비 지원"이라 적지만 실제는 마커 인터페이스+포트 1개(아웃박스는 `DOMAIN_MODEL.md:767`이 범위 밖으로 선언). `docs/code-quality.md:25-26`의 NullAway "@NullMarked 범위에서만 검사" 서술이 실배선(`AnnotatedPackages=com.commerce` 전역 검사)과 다르고, `:38`의 "Error Prone이 Javadoc 구조를 컴파일 시점에 강제"는 게이트가 아니라 경고. `architecture.md:168`의 "타입 위치" 아키텍처 테스트는 부재. 부수로 무제한 정책(maxIssuance=null) 쿠폰이 관리자 표면에 issuedCount 0으로 표시되는 표시 정합.
 - 완료 기준: architecture.md 아웃박스 문구를 실재("발행 포트")로 축소, NullAway/Error Prone 서술을 실배선 기준으로 정정, "타입 위치"를 빼거나 규칙 추가 방향 명시. 문서-코드가 어긋난 나머지 지점 정합.
 - 범위: 소.
