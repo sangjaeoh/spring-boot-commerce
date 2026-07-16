@@ -224,6 +224,21 @@ class ProductControllerTest extends WebIntegrationTest {
     }
 
     @Test
+    @DisplayName("옵션 값이 한도를 넘으면 409 중복이 아니라 400 VALIDATION_FAILED로 거부된다")
+    void addVariantRejectsOversizedOptionValue() throws Exception {
+        UUID productId = registerProductViaHttp("길이초과셔츠", 10000L, 5);
+
+        VariantRegistrationRequest oversized =
+                new VariantRegistrationRequest(12000L, List.of(new OptionRequest("색상", "가".repeat(41))), 1);
+        mvc.perform(post("/api/v1/products/{productId}/variants", productId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(oversized)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+    }
+
+    @Test
     @DisplayName("은퇴한 옵션 조합은 새 변형으로 재등록된다")
     void addVariantAllowsRetiredCombinationAgain() throws Exception {
         UUID productId = registerProductViaHttp("재등록셔츠", 10000L, 5);

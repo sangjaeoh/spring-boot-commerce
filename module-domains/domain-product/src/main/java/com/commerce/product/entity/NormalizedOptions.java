@@ -43,8 +43,8 @@ public record NormalizedOptions(String signature, @Nullable String label) {
         StringBuilder label = new StringBuilder();
         for (ProductOption option : options) {
             String rawValue = option.value().trim();
-            String name = caseFold(option.name().trim());
-            String value = caseFold(rawValue);
+            String name = caseFold(option.name());
+            String value = caseFold(option.value());
             if (name.isEmpty() || value.isEmpty() || hasSeparator(name) || hasSeparator(value)) {
                 throw new InvalidVariantException(ProductErrorCode.INVALID_OPTION);
             }
@@ -64,6 +64,6 @@ public record NormalizedOptions(String signature, @Nullable String label) {
     }
 
     private static String caseFold(String value) {
-        return Normalizer.normalize(value, Normalizer.Form.NFKC).toLowerCase(Locale.ROOT);
+        return Normalizer.normalize(value, Normalizer.Form.NFKC).strip().toLowerCase(Locale.ROOT);
     }
 }

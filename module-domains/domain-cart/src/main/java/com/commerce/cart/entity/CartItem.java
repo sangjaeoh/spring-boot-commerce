@@ -62,6 +62,10 @@ public class CartItem extends BaseTimeEntity<UUID> {
 
     void addQuantity(int amount) {
         requirePositive(amount);
+        // 합산 자체의 오버플로를 피하려 남은 여유(MAX - quantity)와 비교한다
+        if (amount > Integer.MAX_VALUE - this.quantity) {
+            throw new InvalidCartItemException(CartErrorCode.QUANTITY_LIMIT_EXCEEDED);
+        }
         this.quantity += amount;
     }
 

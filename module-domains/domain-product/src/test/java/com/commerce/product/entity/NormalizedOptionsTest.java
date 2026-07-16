@@ -44,6 +44,17 @@ class NormalizedOptionsTest {
     }
 
     @Test
+    @DisplayName("NBSP(U+00A0)로 감싼 값은 NFKC 후 strip돼 시그니처에 잔류하지 않는다")
+    void stripsNbspRevealedByNormalizationFromSignature() {
+        // NBSP는 Character.isWhitespace가 아니라 strip 단독으로는 안 지워지고, NFKC가 일반 공백(U+0020)으로 접은 뒤 strip돼야 제거된다
+        NormalizedOptions padded =
+                NormalizedOptions.of(List.of(new ProductOption("\u00A0Color\u00A0", "\u00A0Red\u00A0")));
+        NormalizedOptions clean = NormalizedOptions.of(List.of(new ProductOption("Color", "Red")));
+        assertThat(padded.signature()).isEqualTo("color:red");
+        assertThat(padded.signature()).isEqualTo(clean.signature());
+    }
+
+    @Test
     @DisplayName("옵션명이 대소문자만 다르면 중복으로 거부한다")
     void rejectsDuplicateOptionNameCaseInsensitively() {
         assertThatThrownBy(() -> NormalizedOptions.of(

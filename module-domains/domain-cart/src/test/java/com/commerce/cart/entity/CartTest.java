@@ -110,4 +110,14 @@ class CartTest {
         cart.addItem(variantId, 1);
         assertThatThrownBy(() -> cart.changeItemQuantity(variantId, 0)).isInstanceOf(InvalidCartItemException.class);
     }
+
+    @Test
+    @DisplayName("수량 합산이 int 상한을 넘으면 거부하고 기존 수량은 보존된다")
+    void rejectsQuantitySumOverflow() {
+        Cart cart = Cart.create(UUID.randomUUID());
+        UUID variantId = UUID.randomUUID();
+        cart.addItem(variantId, Integer.MAX_VALUE);
+        assertThatThrownBy(() -> cart.addItem(variantId, 1)).isInstanceOf(InvalidCartItemException.class);
+        assertThat(quantityOf(cart, variantId)).isEqualTo(Integer.MAX_VALUE);
+    }
 }

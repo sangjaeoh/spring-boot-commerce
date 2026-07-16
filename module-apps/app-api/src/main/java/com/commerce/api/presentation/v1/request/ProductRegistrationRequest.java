@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
+import jakarta.validation.constraints.Size;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
 
@@ -19,7 +20,7 @@ public record ProductRegistrationRequest(
         @NotBlank String name,
         @Nullable String description,
         @NotNull @Positive Long price,
-        @NotNull @Valid List<@NotNull OptionRequest> options,
+        @NotNull @Valid @Size(max = 10) List<@NotNull OptionRequest> options,
         @NotNull @PositiveOrZero Integer initialQuantity) {
 
     /** 옵션 요청 목록을 도메인 옵션 입력 목록으로 변환한다. */
