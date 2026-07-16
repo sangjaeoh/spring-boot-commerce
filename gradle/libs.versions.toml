@@ -13,6 +13,8 @@ archunit = "1.4.1"
 nimbus-jose-jwt = "10.9.1"
 springdoc = "3.0.3"
 shedlock = "7.7.0"
+# build-logic 자체 테스트용 — 모듈 테스트는 Spring Boot BOM이 관리하지만 build-logic은 BOM 밖이라 버전을 명시한다
+junit = "6.0.3"
 
 [libraries]
 # build-logic tooling — gradle plugin jars, consumed as regular dependencies in build-logic/build.gradle.kts

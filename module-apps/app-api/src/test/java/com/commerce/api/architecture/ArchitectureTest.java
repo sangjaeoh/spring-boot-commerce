@@ -1,9 +1,13 @@
 package com.commerce.api.architecture;
 
+import static com.tngtech.archunit.base.DescribedPredicate.not;
 import static com.tngtech.archunit.core.domain.properties.CanBeAnnotated.Predicates.annotatedWith;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import com.commerce.api.architecture.bypass.service.EntityReferencingFixture;
+import com.commerce.member.entity.Member;
 import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaClasses;
@@ -41,24 +45,68 @@ class ArchitectureTest {
     // 해석에 의존하지 않는다. softDeleteEntityNames가 CLASSES를 순회하므로 반드시 CLASSES 선언 뒤에 둔다.
     private static final Set<String> SOFT_DELETE_ENTITY_NAMES = softDeleteEntityNames();
 
+    // 매핑 클래스(@Entity·@MappedSuperclass)가 사는 {base}.entity 패키지에서 파생한 소유 모듈 베이스 패키지
+    // 집합 — 도메인 모듈(com.commerce.{domain})과 공통 베이스 엔티티의 common-jpa(com.commerce.jpa).
+    // 엔티티 접근 면제를 이 접두로 한정한다. entityOwningBasePackages가 CLASSES를 순회하므로 CLASSES 선언 뒤에 둔다.
+    private static final Set<String> ENTITY_OWNING_BASE_PACKAGES = entityOwningBasePackages();
+
+    // 도메인 모듈 안에서 @Entity를 정당하게 참조하는 4개 서브 패키지(entity 상호참조, Info.from(Entity),
+    // service·repository). port·event·exception은 값 타입만 참조하므로(PaymentGateway→enum, OrderPaid→UUID)
+    // 면제하지 않는다.
+    private static final Set<String> ENTITY_ACCESS_EXEMPT_SUBPACKAGES =
+            Set.of("entity", "info", "service", "repository");
+
     @Test
     void jpaEntitiesAreOnlyAccessedWithinTheirOwnDomainModule() {
+        jpaEntityAccessConfinedToDomainModules().check(CLASSES);
+    }
+
+    @Test
+    void entityOwningBasePackagesAreDetected() {
+        // 면제 한정의 변별력은 ENTITY_OWNING_BASE_PACKAGES가 매핑 클래스 소유 모듈만 담고 있음에 달렸다 —
+        // 앱 등 다른 모듈에 매핑 클래스가 생기면 그 베이스가 면제 접두로 승격되므로 여기서 실패시킨다.
+        assertEquals(
+                Set.of(
+                        "com.commerce.cart",
+                        "com.commerce.coupon",
+                        "com.commerce.jpa",
+                        "com.commerce.member",
+                        "com.commerce.order",
+                        "com.commerce.payment",
+                        "com.commerce.product",
+                        "com.commerce.stock"),
+                ENTITY_OWNING_BASE_PACKAGES);
+    }
+
+    @Test
+    void entityAccessExemptionDoesNotCoverServicePackagesOutsideDomainModules() {
+        // 도메인 밖 ...service 패키지의 생 엔티티 참조가 면제 없이 위반으로 잡히는지 고정한다.
+        JavaClasses bypassAttempt = new ClassFileImporter().importClasses(EntityReferencingFixture.class, Member.class);
+
+        assertThrows(
+                AssertionError.class,
+                () -> jpaEntityAccessConfinedToDomainModules().check(bypassAttempt));
+    }
+
+    // 면제는 매핑 클래스 소유 모듈의 베이스 패키지 접두로 한정한다 — 전역 패키지명 기준(..service.. 등)이면
+    // 앱이 ...service 패키지를 만들어 생 엔티티를 참조해도 면제되는 우회가 생긴다.
+    private static ArchRule jpaEntityAccessConfinedToDomainModules() {
         DescribedPredicate<CanBeAnnotated> jpaMapped = annotatedWith("jakarta.persistence.Entity")
                 .or(annotatedWith("jakarta.persistence.MappedSuperclass"))
                 .as("@Entity 또는 @MappedSuperclass 매핑 클래스");
-        ArchRule rule = noClasses()
-                .that()
-                // @Entity를 정당하게 참조하는 4개 패키지만 제외한다(entity 상호참조, Info.from(Entity),
-                // service·repository). port·event·exception은 값 타입만 참조하므로(PaymentGateway→enum,
-                // OrderPaid→UUID) 제외하지 않는다 — 제외하면 앱 event/listener 등이 생 엔티티를 참조해도
-                // 못 잡는 구멍이 생긴다.
-                .resideOutsideOfPackages("..entity..", "..info..", "..service..", "..repository..")
+        DescribedPredicate<JavaClass> entityOwningModuleInternal =
+                new DescribedPredicate<>("매핑 클래스 소유 모듈 내부 패키지(entity·info·service·repository)") {
+                    @Override
+                    public boolean test(JavaClass clazz) {
+                        return isEntityOwningModuleInternal(clazz.getPackageName());
+                    }
+                };
+        return noClasses()
+                .that(not(entityOwningModuleInternal))
                 .should()
                 .dependOnClassesThat(jpaMapped)
                 .because("JPA 엔티티(@Entity·@MappedSuperclass)는 소유 도메인 모듈 내부에서만 접근한다"
                         + " — architecture.md 경계 원칙. 값 타입(enum·record·@Embeddable VO)은 경계 계약으로 통과 허용");
-
-        rule.check(CLASSES);
     }
 
     @Test
@@ -104,6 +152,36 @@ class ArchitectureTest {
         assertEquals(
                 Set.of("com.commerce.member.entity.Member", "com.commerce.product.entity.Product"),
                 SOFT_DELETE_ENTITY_NAMES);
+    }
+
+    // 클래스가 매핑 클래스 소유 모듈의 면제 서브 패키지({base}.{entity|info|service|repository} 이하)에 있으면 참이다.
+    private static boolean isEntityOwningModuleInternal(String packageName) {
+        for (String basePackage : ENTITY_OWNING_BASE_PACKAGES) {
+            if (!packageName.startsWith(basePackage + ".")) {
+                continue;
+            }
+            String firstSubpackage =
+                    packageName.substring(basePackage.length() + 1).split("\\.", 2)[0];
+            if (ENTITY_ACCESS_EXEMPT_SUBPACKAGES.contains(firstSubpackage)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static Set<String> entityOwningBasePackages() {
+        Set<String> basePackages = new HashSet<>();
+        for (JavaClass candidate : CLASSES) {
+            if (candidate.isAnnotatedWith("jakarta.persistence.Entity")
+                    || candidate.isAnnotatedWith("jakarta.persistence.MappedSuperclass")) {
+                String packageName = candidate.getPackageName();
+                int entityIndex = (packageName + ".").indexOf(".entity.");
+                if (entityIndex >= 0) {
+                    basePackages.add(packageName.substring(0, entityIndex));
+                }
+            }
+        }
+        return Set.copyOf(basePackages);
     }
 
     // 리포지토리의 제네릭 상위 인터페이스(JpaRepository<E, ID> 등) 타입 인자가 소프트삭제 엔티티면 참이다.
