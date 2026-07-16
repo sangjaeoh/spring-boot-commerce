@@ -14,7 +14,8 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * {@link OrderPaid}를 커밋 후 소비해 주문된 변형 라인을 장바구니에서 비운다.
  *
  * <p>커밋 후 실행이라 결제 완료 커밋을 되돌리지 않는다. 장바구니 비우기는 정합성 비필수(유실돼도 무해)라
- * 소비 실패를 삼키고 로그만 남긴다. {@code removeItems}는 구조적으로 멱등이다.
+ * 소비 실패를 삼키고 로그만 남긴다. {@code removeItems}는 구조적으로 멱등이다. 제거가 동시 재담기와
+ * 라인 낙관락({@code CartItem.@Version})으로 충돌해 건너뛰어질 수 있으나 같은 무해 범주다(사용자 재제거 가능).
  */
 @Component
 public class OrderPaidListener {

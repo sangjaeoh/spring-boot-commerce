@@ -6,6 +6,7 @@ import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
@@ -16,6 +17,10 @@ import org.springframework.transaction.support.TransactionTemplate;
  * 상대가 커밋한 장바구니·라인 위에서 합산으로 다시 시도한다(product·stock Appender의 유니크 경합 방어와
  * 같은 계열). 동일 라인 동시 합산은 {@code CartItem}의 낙관락이 유실을 막고, 충돌은 재시도 없이
  * 전파한다(409, 클라이언트 재시도 — {@code docs/entity-persistence.md}의 무재시도 규약).
+ *
+ * <p>재시도가 상대의 커밋을 보려면 시도마다 독립 물리 트랜잭션이어야 하므로 {@code REQUIRES_NEW}로
+ * 격리한다 — 외부 트랜잭션에 합류하면 1차 시도의 위반이 그 트랜잭션을 rollback-only로 오염시켜 재시도가
+ * 성립하지 않는다.
  */
 @Service
 public class CartAppender {
@@ -26,6 +31,7 @@ public class CartAppender {
     public CartAppender(CartRepository cartRepository, PlatformTransactionManager transactionManager) {
         this.cartRepository = cartRepository;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
+        this.transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     /** 회원 장바구니가 없으면 만들고 변형을 담는다. 같은 변형은 수량을 합산한다. */
