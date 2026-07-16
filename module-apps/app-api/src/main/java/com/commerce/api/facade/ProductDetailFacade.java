@@ -7,13 +7,14 @@ import com.commerce.product.info.ProductVariantInfo;
 import com.commerce.product.service.ProductReader;
 import com.commerce.product.service.ProductVariantReader;
 import com.commerce.stock.entity.StockStatus;
-import com.commerce.stock.exception.StockNotFoundException;
 import com.commerce.stock.info.StockInfo;
 import com.commerce.stock.service.StockReader;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 
 /**
@@ -46,14 +47,15 @@ public class ProductDetailFacade {
      */
     public ProductView getProductDetail(UUID productId) {
         ProductInfo product = productReader.getExposedProduct(productId);
+        List<ProductVariantInfo> activeVariants = variantReader.getByProductId(productId).stream()
+                .filter(variant -> variant.status() == ProductVariantStatus.ACTIVE)
+                .toList();
+        Set<UUID> orderableVariantIds = orderableVariantIds(activeVariants);
         List<ProductVariantView> variants = new ArrayList<>();
         Money fromPrice = null;
         boolean anyOrderable = false;
-        for (ProductVariantInfo variant : variantReader.getByProductId(productId)) {
-            if (variant.status() != ProductVariantStatus.ACTIVE) {
-                continue;
-            }
-            boolean orderable = isOrderable(variant.id());
+        for (ProductVariantInfo variant : activeVariants) {
+            boolean orderable = orderableVariantIds.contains(variant.id());
             variants.add(new ProductVariantView(variant.id(), variant.optionLabel(), variant.price(), orderable));
             fromPrice = fromPrice == null ? variant.price() : min(fromPrice, variant.price());
             anyOrderable = anyOrderable || orderable;
@@ -66,14 +68,16 @@ public class ProductDetailFacade {
                 product.id(), product.name(), product.description(), product.status(), fromPrice, soldOut, variants);
     }
 
-    private boolean isOrderable(UUID variantId) {
-        StockInfo stock;
-        try {
-            stock = stockReader.getByVariantId(variantId);
-        } catch (StockNotFoundException e) {
-            return false;
+    private Set<UUID> orderableVariantIds(List<ProductVariantInfo> activeVariants) {
+        if (activeVariants.isEmpty()) {
+            return Set.of();
         }
-        return stock.status() == StockStatus.SELLABLE && stock.quantity() >= 1;
+        List<UUID> variantIds =
+                activeVariants.stream().map(ProductVariantInfo::id).toList();
+        return stockReader.getByVariantIds(variantIds).stream()
+                .filter(stock -> stock.status() == StockStatus.SELLABLE && stock.quantity() >= 1)
+                .map(StockInfo::variantId)
+                .collect(Collectors.toSet());
     }
 
     private static Money min(Money a, Money b) {

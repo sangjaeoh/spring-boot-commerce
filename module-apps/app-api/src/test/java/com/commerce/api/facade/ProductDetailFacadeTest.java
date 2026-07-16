@@ -2,6 +2,11 @@ package com.commerce.api.facade;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 import com.commerce.core.money.Money;
 import com.commerce.product.entity.ProductOption;
@@ -13,14 +18,19 @@ import com.commerce.product.service.ProductVariantModifier;
 import com.commerce.product.service.ProductVariantReader;
 import com.commerce.stock.service.StockAppender;
 import com.commerce.stock.service.StockModifier;
+import com.commerce.stock.service.StockReader;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.context.TestConstructor;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 @TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 class ProductDetailFacadeTest extends FacadeIntegrationTest {
+
+    @MockitoSpyBean
+    private StockReader stockReader;
 
     private final ProductDetailFacade productDetailFacade;
     private final ProductRegistrationFacade productRegistrationFacade;
@@ -102,6 +112,20 @@ class ProductDetailFacadeTest extends FacadeIntegrationTest {
 
         assertThat(detail.variants().get(0).orderable()).isFalse();
         assertThat(detail.soldOut()).isTrue();
+    }
+
+    @Test
+    @DisplayName("변형 N개의 재고를 배치(IN) 1회로 조회한다(변형별 단건 조회 없음)")
+    void queriesStockOnceForAllActiveVariants() {
+        UUID productId = productRegistrationFacade.registerProduct("셔츠", null, Money.of(10000L), List.of(), 5);
+        addActiveVariant(productId, 8000L, "블랙", 3);
+        addActiveVariant(productId, 12000L, "화이트", 3);
+        clearInvocations(stockReader);
+
+        productDetailFacade.getProductDetail(productId);
+
+        verify(stockReader).getByVariantIds(anyCollection());
+        verify(stockReader, never()).getByVariantId(any(UUID.class));
     }
 
     @Test
