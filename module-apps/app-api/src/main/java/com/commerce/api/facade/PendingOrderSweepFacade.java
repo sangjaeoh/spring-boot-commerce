@@ -75,7 +75,14 @@ public class PendingOrderSweepFacade {
             IssuedCouponModifier issuedCouponModifier,
             PaymentConfirmationFacade paymentConfirmationFacade,
             @Value("${order.reconciliation.stale-after}") Duration staleAfter,
+            @Value("${payment.reconciliation.stale-after}") Duration paymentStaleAfter,
             MeterRegistry meterRegistry) {
+        // 관할 분리의 전제: order 유예가 payment 유예 이상이어야 REQUESTED 행 있는 PENDING이 결제 리컨실에
+        // 먼저 잡힌다. 역전되면 이 스윕이 먼저 손대 "이중 개입 차단"이 조용히 깨지므로 기동 시점에 거부한다.
+        if (staleAfter.compareTo(paymentStaleAfter) < 0) {
+            throw new IllegalArgumentException("order.reconciliation.stale-after는 payment.reconciliation.stale-after"
+                    + " 이상이어야 한다: order=" + staleAfter + " payment=" + paymentStaleAfter);
+        }
         this.orderReader = orderReader;
         this.paymentReader = paymentReader;
         this.orderModifier = orderModifier;
