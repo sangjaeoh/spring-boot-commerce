@@ -53,4 +53,14 @@ public class ProductReader {
                 .findExposedPage(ProductStatus.ON_SALE, ProductVariantStatus.ACTIVE, pageable)
                 .map(ProductInfo::from);
     }
+
+    /**
+     * 미삭제 상품 페이지를 최신 등록순으로 조회한다. 노출 여부·변형 유무와 무관하게 숨김({@code HIDDEN})을 포함한다.
+     *
+     * <p>관리자 상품 관리 표면이 소비한다(숨김 상품 발견). 카탈로그({@link #getExposedPage})와 달리 노출 필터가 없다.
+     */
+    @Transactional(readOnly = true)
+    public Page<ProductInfo> getPage(Pageable pageable) {
+        return productRepository.findByDeletedAtIsNullOrderByIdDesc(pageable).map(ProductInfo::from);
+    }
 }

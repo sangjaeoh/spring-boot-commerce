@@ -377,6 +377,51 @@ class ProductControllerTest extends WebIntegrationTest {
         mvc.perform(get("/api/v1/products/{productId}", productId)).andExpect(status().isOk());
     }
 
+    @Test
+    @DisplayName("관리자 상품 목록은 200으로 숨김 상품을 포함해 최신 등록순 페이지로 싣는다")
+    void adminListIncludesHiddenProduct() throws Exception {
+        UUID productId = registerProductViaHttp("관리목록셔츠", 10000L, 5);
+
+        mvc.perform(get("/api/v1/products/admin")
+                        .param("page", "0")
+                        .param("size", "20")
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.products[0].id").value(productId.toString()))
+                .andExpect(jsonPath("$.products[0].status").value("ON_SALE"))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(20))
+                .andExpect(jsonPath("$.totalElements").isNumber())
+                .andExpect(jsonPath("$.totalPages").isNumber());
+
+        mvc.perform(post("/api/v1/products/{productId}/hide", productId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
+                .andExpect(status().isNoContent());
+
+        mvc.perform(get("/api/v1/products/admin").header(HttpHeaders.AUTHORIZATION, adminBearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.products[0].id").value(productId.toString()))
+                .andExpect(jsonPath("$.products[0].status").value("HIDDEN"));
+    }
+
+    @Test
+    @DisplayName("구매자 토큰의 관리자 상품 목록 조회는 403 FORBIDDEN으로 거부된다")
+    void adminListRejectsBuyerToken() throws Exception {
+        UUID buyerId = memberAppender.register("user-" + UUID.randomUUID() + "@example.com", "테스터", "password-123!");
+
+        mvc.perform(get("/api/v1/products/admin").header(HttpHeaders.AUTHORIZATION, bearer(buyerId)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    @DisplayName("미인증 관리자 상품 목록 조회는 401 UNAUTHENTICATED로 거부된다")
+    void adminListRejectsUnauthenticated() throws Exception {
+        mvc.perform(get("/api/v1/products/admin"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+    }
+
     private UUID checkoutViaHttp(UUID memberId) throws Exception {
         CheckoutRequest request = new CheckoutRequest(addressRequest(), 0L, null, PaymentMethod.CARD);
         String body = mvc.perform(post("/api/v1/orders")

@@ -11,6 +11,8 @@ import com.commerce.coupon.repository.CouponRepository;
 import com.commerce.coupon.repository.IssuedCouponRepository;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -45,6 +47,18 @@ public class IssuedCouponReader {
         return issuedCouponRepository.findByMemberIdOrderByCreatedAtDescIdDesc(memberId).stream()
                 .map(IssuedCouponInfo::from)
                 .toList();
+    }
+
+    /**
+     * 쿠폰 정책의 발급분 목록을 최신순 페이지로 조회한다. 없으면 빈 페이지다. 같은 생성 시각은 id로 결정적 순서를 둔다.
+     *
+     * <p>관리자 무효화 대상 발급분 발견 표면이 소비한다. 소유 회원을 거르지 않으므로 관리자 가드 뒤에서만 부른다.
+     */
+    @Transactional(readOnly = true)
+    public Page<IssuedCouponInfo> getIssuedCouponsByCoupon(UUID couponId, Pageable pageable) {
+        return issuedCouponRepository
+                .findByCouponIdOrderByCreatedAtDescIdDesc(couponId, pageable)
+                .map(IssuedCouponInfo::from);
     }
 
     /**

@@ -746,6 +746,68 @@ class OrderControllerTest extends WebIntegrationTest {
                 .andExpect(jsonPath("$.orders[0].lines.length()").value(2));
     }
 
+    @Test
+    @DisplayName("관리자 주문 목록은 200으로 결제완료·준비중 주문을 최신순 페이지로 싣고 이행 축 상태를 따른다")
+    void adminOrderListReturnsPaidPreparingOrdersAndFollowsFulfillment() throws Exception {
+        UUID orderId = checkoutForMember(registerMember());
+
+        mvc.perform(get("/api/v1/orders/admin")
+                        .param("status", "PAID")
+                        .param("fulfillmentStatus", "PREPARING")
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.orders[0].id").value(orderId.toString()))
+                .andExpect(jsonPath("$.orders[0].status").value("PAID"))
+                .andExpect(jsonPath("$.orders[0].fulfillmentStatus").value("PREPARING"))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(20))
+                .andExpect(jsonPath("$.totalElements").isNumber())
+                .andExpect(jsonPath("$.totalPages").isNumber());
+
+        orderModifier.ship(orderId, "CJ대한통운", "688900123456");
+
+        mvc.perform(get("/api/v1/orders/admin")
+                        .param("status", "PAID")
+                        .param("fulfillmentStatus", "SHIPPED")
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.orders[0].id").value(orderId.toString()))
+                .andExpect(jsonPath("$.orders[0].fulfillmentStatus").value("SHIPPED"));
+    }
+
+    @Test
+    @DisplayName("관리자 주문 목록은 결제 축 상태로 미결제(PENDING) 주문을 구분해 싣는다")
+    void adminOrderListFiltersByPaymentStatus() throws Exception {
+        UUID pendingOrderId = placePendingOrder(registerMember());
+
+        mvc.perform(get("/api/v1/orders/admin")
+                        .param("status", "PENDING")
+                        .param("fulfillmentStatus", "NOT_STARTED")
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.orders[0].id").value(pendingOrderId.toString()))
+                .andExpect(jsonPath("$.orders[0].status").value("PENDING"));
+    }
+
+    @Test
+    @DisplayName("구매자 토큰의 관리자 주문 목록 조회는 403 FORBIDDEN으로 거부된다")
+    void adminOrderListRejectsBuyerToken() throws Exception {
+        mvc.perform(get("/api/v1/orders/admin")
+                        .param("status", "PAID")
+                        .param("fulfillmentStatus", "PREPARING")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(registerMember())))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    @DisplayName("미인증 관리자 주문 목록 조회는 401 UNAUTHENTICATED로 거부된다")
+    void adminOrderListRejectsUnauthenticated() throws Exception {
+        mvc.perform(get("/api/v1/orders/admin").param("status", "PAID").param("fulfillmentStatus", "PREPARING"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+    }
+
     private String shipRequestBody() {
         return objectMapper.writeValueAsString(new OrderShipRequest("CJ대한통운", "688900123456"));
     }

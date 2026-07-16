@@ -1,6 +1,7 @@
 package com.commerce.api.presentation.v1;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -179,6 +180,42 @@ class StockControllerTest extends WebIntegrationTest {
                 .andExpect(jsonPath("$.code").value("FORBIDDEN"));
 
         assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(10);
+    }
+
+    @Test
+    @DisplayName("관리자 재고 현황 조회는 200으로 변형의 수량·상태를 싣고 재고 없는 변형은 생략한다")
+    void getStocksReturnsStatusAndOmitsMissing() throws Exception {
+        UUID variantId = seedProduct(10);
+        UUID missingVariantId = UUID.randomUUID();
+
+        mvc.perform(get("/api/v1/stocks")
+                        .param("variantIds", variantId.toString(), missingVariantId.toString())
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].variantId").value(variantId.toString()))
+                .andExpect(jsonPath("$[0].quantity").value(10))
+                .andExpect(jsonPath("$[0].status").value("SELLABLE"));
+    }
+
+    @Test
+    @DisplayName("구매자 토큰의 재고 현황 조회는 403 FORBIDDEN으로 거부된다")
+    void getStocksRejectsBuyerToken() throws Exception {
+        UUID variantId = seedProduct(10);
+
+        mvc.perform(get("/api/v1/stocks")
+                        .param("variantIds", variantId.toString())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(registerMember())))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    @DisplayName("미인증 재고 현황 조회는 401 UNAUTHENTICATED로 거부된다")
+    void getStocksRejectsUnauthenticated() throws Exception {
+        mvc.perform(get("/api/v1/stocks").param("variantIds", UUID.randomUUID().toString()))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
     }
 
     private ResultActions increase(UUID variantId, int quantity) throws Exception {

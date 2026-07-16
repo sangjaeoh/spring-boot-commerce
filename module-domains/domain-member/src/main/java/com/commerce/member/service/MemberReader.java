@@ -1,5 +1,6 @@
 package com.commerce.member.service;
 
+import com.commerce.member.entity.Email;
 import com.commerce.member.entity.Member;
 import com.commerce.member.exception.MemberErrorCode;
 import com.commerce.member.exception.MemberNotFoundException;
@@ -28,6 +29,22 @@ public class MemberReader {
     public MemberInfo getMember(UUID memberId) {
         Member member = memberRepository
                 .findByIdAndDeletedAtIsNull(memberId)
+                .orElseThrow(() -> new MemberNotFoundException(MemberErrorCode.MEMBER_NOT_FOUND));
+        return MemberInfo.from(member);
+    }
+
+    /**
+     * 이메일 정확 일치로 활성 회원을 조회한다. 정지 회원·정지 사유를 포함한다.
+     *
+     * <p>관리자 회원 검색 표면이 소비한다(대상 회원 ID 발견).
+     *
+     * @throws MemberNotFoundException 해당 이메일의 활성 회원이 없으면
+     * @throws com.commerce.member.exception.InvalidEmailException 이메일 형식이 올바르지 않으면
+     */
+    @Transactional(readOnly = true)
+    public MemberInfo getMemberByEmail(String email) {
+        Member member = memberRepository
+                .findByEmailAndDeletedAtIsNull(Email.of(email))
                 .orElseThrow(() -> new MemberNotFoundException(MemberErrorCode.MEMBER_NOT_FOUND));
         return MemberInfo.from(member);
     }

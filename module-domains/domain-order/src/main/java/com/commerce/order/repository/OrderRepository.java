@@ -29,6 +29,17 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
             """)
     Page<UUID> findIdPageByMemberId(@Param("memberId") UUID memberId, Pageable pageable);
 
+    @Query("""
+            select o.id
+            from Order o
+            where o.status = :status and o.fulfillmentStatus = :fulfillmentStatus
+            order by o.createdAt desc, o.id desc
+            """)
+    Page<UUID> findIdPageByStatusAndFulfillmentStatus(
+            @Param("status") OrderStatus status,
+            @Param("fulfillmentStatus") FulfillmentStatus fulfillmentStatus,
+            Pageable pageable);
+
     @EntityGraph(attributePaths = "lines")
     List<Order> findByIdInOrderByCreatedAtDescIdDesc(Collection<UUID> ids);
 }

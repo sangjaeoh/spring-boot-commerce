@@ -7,7 +7,6 @@ import com.commerce.coupon.exception.CouponStatusException;
 import com.commerce.coupon.exception.InvalidCouponException;
 import com.commerce.jpa.converter.MoneyConverter;
 import com.commerce.jpa.entity.BaseTimeEntity;
-import com.google.errorprone.annotations.Keep;
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
 import jakarta.persistence.Embedded;
@@ -54,7 +53,6 @@ public class Coupon extends BaseTimeEntity<UUID> {
     @Nullable
     private Integer maxIssuance;
 
-    @Keep
     @Column(name = "issued_count")
     private int issuedCount;
 
@@ -153,12 +151,28 @@ public class Coupon extends BaseTimeEntity<UUID> {
         return name;
     }
 
+    public Discount getDiscount() {
+        return discount;
+    }
+
     public Money getMinOrderAmount() {
         return minOrderAmount;
     }
 
+    public ValidityPeriod getValidity() {
+        return validity;
+    }
+
     public int getUsageValidDays() {
         return usageValidDays;
+    }
+
+    public @Nullable Integer getMaxIssuance() {
+        return maxIssuance;
+    }
+
+    public int getIssuedCount() {
+        return issuedCount;
     }
 
     public CouponStatus getStatus() {
