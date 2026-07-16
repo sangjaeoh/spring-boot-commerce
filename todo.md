@@ -187,7 +187,8 @@
 - 범위: 소.
 
 ### 21. 시간 소스 Clock 주입 일관화 [결정]
-- 상태: 대기
+- 상태: 완료
+- 완료 메모(2026-07-17): main의 `Instant.now()` 0건. 엔티티 12개 전이 메서드는 `Instant now` 파라미터, 서비스·파사드·`JwtTokenCodec`은 Clock 주입. member·order·payment·product 영속 테스트 컨텍스트에 coupon과 같은 고정 Clock 빈 추가, JWT 만료 고정 시각 결정론 테스트 추가. 범위 밖 잔여 — `Order` 주문번호 생성의 `System.currentTimeMillis()`·`UuidV7Generator`의 타임스탬프(선재, 시각 판정 아님).
 - 결정(2026-07-16): 전면 일관화 확정(위 선행 결정) — 빈은 `Clock` 주입, 엔티티 메서드는 `Instant now` 파라미터(coupon 패턴), `JwtTokenCodec` 포함.
 - 문제(Low): coupon만 `Clock`을 주입하고 나머지 엔티티는 `Instant.now()` 직접 호출이다(`Member.java:103`·`Product.java:86`·`Order.java:171,187,204,213,223`·`Payment.java:95,102,123`). coupon 내부도 혼용(`IssuedCoupon.revoke`가 `Instant.now()`, `:109`). 앱 전역 `ClockConfig` 빈이 있는데도 `PendingOrderSweepFacade`·`PaymentConfirmationFacade`가 `Instant.now()` 직접, `JwtTokenCodec`도 시각 판정 2곳 직접. 테스트 결정성·일관성 저하.
 - 완료 기준: main 소스의 `Instant.now()` 직접 호출 전부를 주입 `Clock` 경유로 일관화(coupon 패턴, 무관한 스타일 변경 금지). 고정 시각 테스트 가능성 확보.
