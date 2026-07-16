@@ -109,7 +109,7 @@ class CheckoutFaultCompensationTest extends FacadeIntegrationTest {
         UUID memberId = registerMember();
         UUID variantId = seedProduct(50);
         cartAppender.addItem(memberId, variantId, 2);
-        UUID couponId = couponAppender.create("10% 할인", Discount.rate(10), Money.of(10000L), validity(), 30);
+        UUID couponId = couponAppender.create("10% 할인", Discount.rate(10), Money.of(10000L), validity(), 30, null);
         UUID issuedId = issuedCouponAppender.issue(couponId, memberId);
         doThrow(new CouponStatusException(CouponErrorCode.ISSUED_COUPON_NOT_USABLE))
                 .when(issuedCouponModifier)

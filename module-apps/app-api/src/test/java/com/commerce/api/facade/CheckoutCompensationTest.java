@@ -109,7 +109,7 @@ class CheckoutCompensationTest extends FacadeIntegrationTest {
         // 5,555 × 2 = 11,110 − 10% 할인 1,111 = 9,999 — fake PG 거절 트리거
         UUID variantId = seedProduct(Money.of(5555L), 50);
         cartAppender.addItem(memberId, variantId, 2);
-        UUID couponId = couponAppender.create("10% 할인", Discount.rate(10), Money.of(10000L), validity(), 30);
+        UUID couponId = couponAppender.create("10% 할인", Discount.rate(10), Money.of(10000L), validity(), 30, null);
         UUID issuedId = issuedCouponAppender.issue(couponId, memberId);
 
         assertThatThrownBy(() -> checkoutFacade.checkout(memberId, address(), Money.ZERO, issuedId, PaymentMethod.CARD))

@@ -13,6 +13,7 @@ import com.commerce.coupon.entity.IssuedCouponStatus;
 import com.commerce.coupon.entity.ValidityPeriod;
 import com.commerce.coupon.service.CouponAppender;
 import com.commerce.coupon.service.IssuedCouponAppender;
+import com.commerce.coupon.service.IssuedCouponModifier;
 import com.commerce.coupon.service.IssuedCouponReader;
 import com.commerce.member.entity.SuspensionReason;
 import com.commerce.member.service.MemberAppender;
@@ -42,6 +43,7 @@ class CheckoutFacadeTest extends FacadeIntegrationTest {
     private final CartAppender cartAppender;
     private final CouponAppender couponAppender;
     private final IssuedCouponAppender issuedCouponAppender;
+    private final IssuedCouponModifier issuedCouponModifier;
     private final OrderReader orderReader;
     private final CartReader cartReader;
     private final ProductVariantReader variantReader;
@@ -56,6 +58,7 @@ class CheckoutFacadeTest extends FacadeIntegrationTest {
             CartAppender cartAppender,
             CouponAppender couponAppender,
             IssuedCouponAppender issuedCouponAppender,
+            IssuedCouponModifier issuedCouponModifier,
             OrderReader orderReader,
             CartReader cartReader,
             ProductVariantReader variantReader,
@@ -68,6 +71,7 @@ class CheckoutFacadeTest extends FacadeIntegrationTest {
         this.cartAppender = cartAppender;
         this.couponAppender = couponAppender;
         this.issuedCouponAppender = issuedCouponAppender;
+        this.issuedCouponModifier = issuedCouponModifier;
         this.orderReader = orderReader;
         this.cartReader = cartReader;
         this.variantReader = variantReader;
@@ -98,7 +102,7 @@ class CheckoutFacadeTest extends FacadeIntegrationTest {
         UUID memberId = registerMember();
         UUID variantId = seedProduct(Money.of(10000L), 50);
         cartAppender.addItem(memberId, variantId, 2);
-        UUID couponId = couponAppender.create("10% 할인", Discount.rate(10), Money.of(10000L), validity(), 30);
+        UUID couponId = couponAppender.create("10% 할인", Discount.rate(10), Money.of(10000L), validity(), 30, null);
         UUID issuedId = issuedCouponAppender.issue(couponId, memberId);
 
         UUID orderId = checkoutFacade.checkout(memberId, address(), Money.ZERO, issuedId, PaymentMethod.CARD);
@@ -109,6 +113,25 @@ class CheckoutFacadeTest extends FacadeIntegrationTest {
         assertThat(order.issuedCouponId()).isEqualTo(issuedId);
         assertThat(issuedCouponReader.getIssuedCoupon(issuedId, memberId).status())
                 .isEqualTo(IssuedCouponStatus.USED);
+    }
+
+    @Test
+    @DisplayName("무효화된 쿠폰 체크아웃은 적용 불가로 거부되고 재고를 차감하지 않는다")
+    void checkoutRejectsRevokedCoupon() {
+        UUID memberId = registerMember();
+        UUID variantId = seedProduct(Money.of(10000L), 50);
+        cartAppender.addItem(memberId, variantId, 2);
+        UUID couponId = couponAppender.create("10% 할인", Discount.rate(10), Money.of(10000L), validity(), 30, null);
+        UUID issuedId = issuedCouponAppender.issue(couponId, memberId);
+        issuedCouponModifier.revoke(issuedId, "오발급 회수");
+
+        assertThatThrownBy(() -> checkoutFacade.checkout(memberId, address(), Money.ZERO, issuedId, PaymentMethod.CARD))
+                .isInstanceOfSatisfying(
+                        ApiException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(ApiErrorCode.COUPON_NOT_APPLICABLE));
+        assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(50);
+        assertThat(issuedCouponReader.getIssuedCoupon(issuedId, memberId).status())
+                .isEqualTo(IssuedCouponStatus.REVOKED);
     }
 
     @Test

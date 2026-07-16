@@ -10,7 +10,7 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 발급 쿠폰 사용·복원을 담당한다. */
+/** 발급 쿠폰 사용·복원·무효화를 담당한다. */
 @Service
 public class IssuedCouponModifier {
 
@@ -36,6 +36,17 @@ public class IssuedCouponModifier {
     @Transactional
     public void restoreUse(UUID issuedCouponId) {
         find(issuedCouponId).restoreUse();
+    }
+
+    /**
+     * 발급분을 무효화한다. 무효화된 발급분은 사용이 거부된다.
+     *
+     * @throws IssuedCouponNotFoundException 발급분이 없으면
+     * @throws CouponStatusException 미사용({@code ISSUED}) 상태가 아니면
+     */
+    @Transactional
+    public void revoke(UUID issuedCouponId, String reason) {
+        find(issuedCouponId).revoke(reason);
     }
 
     private IssuedCoupon find(UUID issuedCouponId) {

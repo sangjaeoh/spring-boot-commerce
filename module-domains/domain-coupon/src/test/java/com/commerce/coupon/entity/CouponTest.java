@@ -18,7 +18,7 @@ class CouponTest {
     private static final Instant IN_PERIOD = Instant.parse("2026-01-01T00:00:00Z");
 
     private Coupon activeCoupon() {
-        return Coupon.create("정률 10%", Discount.rate(10), Money.of(10000L), ValidityPeriod.of(FROM, UNTIL), 30);
+        return Coupon.create("정률 10%", Discount.rate(10), Money.of(10000L), ValidityPeriod.of(FROM, UNTIL), 30, null);
     }
 
     @Test
@@ -30,8 +30,26 @@ class CouponTest {
     @Test
     @DisplayName("사용 창이 1 미만이면 생성할 수 없다")
     void rejectsUsageValidDaysBelowOne() {
-        assertThatThrownBy(() -> Coupon.create("x", Discount.rate(10), Money.ZERO, ValidityPeriod.of(FROM, UNTIL), 0))
+        assertThatThrownBy(() ->
+                        Coupon.create("x", Discount.rate(10), Money.ZERO, ValidityPeriod.of(FROM, UNTIL), 0, null))
                 .isInstanceOf(InvalidCouponException.class);
+    }
+
+    @Test
+    @DisplayName("발급 한도가 1 미만이면 생성할 수 없다")
+    void rejectsMaxIssuanceBelowOne() {
+        assertThatThrownBy(
+                        () -> Coupon.create("x", Discount.rate(10), Money.ZERO, ValidityPeriod.of(FROM, UNTIL), 30, 0))
+                .isInstanceOf(InvalidCouponException.class);
+    }
+
+    @Test
+    @DisplayName("발급 한도가 없으면 무제한, 있으면 한도 걸림으로 판정된다")
+    void hasIssuanceLimitReflectsMaxIssuance() {
+        assertThat(activeCoupon().hasIssuanceLimit()).isFalse();
+        assertThat(Coupon.create("한도", Discount.rate(10), Money.ZERO, ValidityPeriod.of(FROM, UNTIL), 30, 100)
+                        .hasIssuanceLimit())
+                .isTrue();
     }
 
     @Test

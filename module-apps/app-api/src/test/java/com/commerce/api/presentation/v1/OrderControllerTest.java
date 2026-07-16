@@ -96,7 +96,7 @@ class OrderControllerTest extends WebIntegrationTest {
         UUID memberId = registerMember();
         UUID variantId = seedProduct(50);
         cartAppender.addItem(memberId, variantId, 2);
-        UUID couponId = couponAppender.create("10% 할인", Discount.rate(10), Money.of(10000L), validity(), 30);
+        UUID couponId = couponAppender.create("10% 할인", Discount.rate(10), Money.of(10000L), validity(), 30, null);
         UUID issuedId = issuedCouponAppender.issue(couponId, memberId);
         CheckoutRequest request = new CheckoutRequest(addressRequest(), 3000L, issuedId, PaymentMethod.CARD);
 
@@ -629,7 +629,7 @@ class OrderControllerTest extends WebIntegrationTest {
     void getPaymentOmitsGatewayFieldsForZeroAmountPayment() throws Exception {
         UUID memberId = registerMember();
         cartAppender.addItem(memberId, seedProduct(50), 1);
-        UUID couponId = couponAppender.create("100% 할인", Discount.rate(100), Money.of(10000L), validity(), 30);
+        UUID couponId = couponAppender.create("100% 할인", Discount.rate(100), Money.of(10000L), validity(), 30, null);
         UUID issuedId = issuedCouponAppender.issue(couponId, memberId);
         UUID orderId = checkout(memberId, new CheckoutRequest(addressRequest(), 0L, issuedId, null));
 

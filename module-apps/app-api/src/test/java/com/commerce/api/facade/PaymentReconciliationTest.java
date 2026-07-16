@@ -134,7 +134,7 @@ class PaymentReconciliationTest extends FacadeIntegrationTest {
     void reconcileCompensatesUnreachedChargeIdempotently() {
         UUID memberId = registerMember();
         UUID variantId = seedProduct(Money.of(10000L), 50);
-        UUID couponId = couponAppender.create("10% 할인", Discount.rate(10), Money.of(10000L), validity(), 30);
+        UUID couponId = couponAppender.create("10% 할인", Discount.rate(10), Money.of(10000L), validity(), 30, null);
         UUID issuedId = issuedCouponAppender.issue(couponId, memberId);
         InterruptedCheckout state =
                 interruptCheckoutBeforeApproval(memberId, variantId, 2, Money.of(18000L), issuedId, Money.of(2000L));

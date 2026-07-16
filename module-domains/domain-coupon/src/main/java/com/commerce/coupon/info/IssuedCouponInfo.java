@@ -15,6 +15,8 @@ public record IssuedCouponInfo(
         Instant expiresAt,
         @Nullable Instant usedAt,
         @Nullable UUID orderId,
+        @Nullable Instant revokedAt,
+        @Nullable String revokeReason,
         Instant createdAt,
         Instant updatedAt) {
 
@@ -27,6 +29,8 @@ public record IssuedCouponInfo(
                 issued.getExpiresAt(),
                 issued.getUsedAt(),
                 issued.getOrderId(),
+                issued.getRevokedAt(),
+                issued.getRevokeReason(),
                 issued.getCreatedAt(),
                 issued.getUpdatedAt());
     }

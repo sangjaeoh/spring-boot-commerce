@@ -10,11 +10,13 @@ import com.commerce.coupon.entity.Discount;
 import com.commerce.coupon.entity.IssuedCouponStatus;
 import com.commerce.coupon.entity.ValidityPeriod;
 import com.commerce.coupon.exception.CouponErrorCode;
+import com.commerce.coupon.exception.CouponExhaustedException;
 import com.commerce.coupon.exception.CouponStatusException;
 import com.commerce.coupon.exception.DuplicateIssuanceException;
 import com.commerce.coupon.exception.IssuedCouponNotFoundException;
 import com.commerce.coupon.service.CouponAppender;
 import com.commerce.coupon.service.CouponModifier;
+import com.commerce.coupon.service.IssuedCouponAppender;
 import com.commerce.coupon.service.IssuedCouponReader;
 import com.commerce.member.entity.SuspensionReason;
 import com.commerce.member.entity.WithdrawalReason;
@@ -24,6 +26,11 @@ import com.commerce.member.service.MemberModifier;
 import com.commerce.member.service.MemberRemover;
 import java.time.Instant;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.context.TestConstructor;
@@ -34,6 +41,7 @@ class CouponIssuanceFacadeTest extends FacadeIntegrationTest {
     private final CouponIssuanceFacade couponIssuanceFacade;
     private final CouponAppender couponAppender;
     private final CouponModifier couponModifier;
+    private final IssuedCouponAppender issuedCouponAppender;
     private final IssuedCouponReader issuedCouponReader;
     private final MemberAppender memberAppender;
     private final MemberModifier memberModifier;
@@ -43,6 +51,7 @@ class CouponIssuanceFacadeTest extends FacadeIntegrationTest {
             CouponIssuanceFacade couponIssuanceFacade,
             CouponAppender couponAppender,
             CouponModifier couponModifier,
+            IssuedCouponAppender issuedCouponAppender,
             IssuedCouponReader issuedCouponReader,
             MemberAppender memberAppender,
             MemberModifier memberModifier,
@@ -50,6 +59,7 @@ class CouponIssuanceFacadeTest extends FacadeIntegrationTest {
         this.couponIssuanceFacade = couponIssuanceFacade;
         this.couponAppender = couponAppender;
         this.couponModifier = couponModifier;
+        this.issuedCouponAppender = issuedCouponAppender;
         this.issuedCouponReader = issuedCouponReader;
         this.memberAppender = memberAppender;
         this.memberModifier = memberModifier;
@@ -109,7 +119,8 @@ class CouponIssuanceFacadeTest extends FacadeIntegrationTest {
         UUID memberId = registerMember();
         ValidityPeriod pastValidity =
                 ValidityPeriod.of(Instant.parse("2020-01-01T00:00:00Z"), Instant.parse("2021-01-01T00:00:00Z"));
-        UUID couponId = couponAppender.create("과거 쿠폰", Discount.fixed(Money.of(1000L)), Money.ZERO, pastValidity, 30);
+        UUID couponId =
+                couponAppender.create("과거 쿠폰", Discount.fixed(Money.of(1000L)), Money.ZERO, pastValidity, 30, null);
 
         assertThatThrownBy(() -> couponIssuanceFacade.issue(couponId, memberId))
                 .isInstanceOfSatisfying(
@@ -131,6 +142,49 @@ class CouponIssuanceFacadeTest extends FacadeIntegrationTest {
     }
 
     @Test
+    @DisplayName("발급 한도가 소진되면 발급이 거부된다")
+    void issueRejectsWhenLimitExhausted() {
+        UUID couponId = createLimitedCoupon(1);
+        couponIssuanceFacade.issue(couponId, registerMember());
+
+        assertThatThrownBy(() -> couponIssuanceFacade.issue(couponId, registerMember()))
+                .isInstanceOfSatisfying(
+                        CouponExhaustedException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(CouponErrorCode.ISSUANCE_LIMIT_EXHAUSTED));
+    }
+
+    @Test
+    @DisplayName("동시 발급 경합에서도 한도를 초과하지 않는다")
+    void concurrentIssuanceNeverExceedsLimit() throws InterruptedException {
+        int limit = 3;
+        int attempts = 10;
+        UUID couponId = createLimitedCoupon(limit);
+        ExecutorService executor = Executors.newFixedThreadPool(attempts);
+        CountDownLatch start = new CountDownLatch(1);
+        AtomicInteger issued = new AtomicInteger();
+        AtomicInteger exhausted = new AtomicInteger();
+        for (int i = 0; i < attempts; i++) {
+            executor.execute(() -> {
+                try {
+                    start.await();
+                    issuedCouponAppender.issue(couponId, UUID.randomUUID());
+                    issued.incrementAndGet();
+                } catch (CouponExhaustedException e) {
+                    exhausted.incrementAndGet();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            });
+        }
+        start.countDown();
+        executor.shutdown();
+        assertThat(executor.awaitTermination(30, TimeUnit.SECONDS)).isTrue();
+
+        assertThat(issued.get()).isEqualTo(limit);
+        assertThat(exhausted.get()).isEqualTo(attempts - limit);
+    }
+
+    @Test
     @DisplayName("타인 발급분 조회는 미존재로 거부된다")
     void getIssuedCouponRejectsNonOwner() {
         UUID memberA = registerMember();
@@ -147,7 +201,11 @@ class CouponIssuanceFacadeTest extends FacadeIntegrationTest {
     }
 
     private UUID createCoupon() {
-        return couponAppender.create("쿠폰", Discount.fixed(Money.of(1000L)), Money.ZERO, validity(), 30);
+        return couponAppender.create("쿠폰", Discount.fixed(Money.of(1000L)), Money.ZERO, validity(), 30, null);
+    }
+
+    private UUID createLimitedCoupon(int maxIssuance) {
+        return couponAppender.create("한도 쿠폰", Discount.fixed(Money.of(1000L)), Money.ZERO, validity(), 30, maxIssuance);
     }
 
     private static ValidityPeriod validity() {
