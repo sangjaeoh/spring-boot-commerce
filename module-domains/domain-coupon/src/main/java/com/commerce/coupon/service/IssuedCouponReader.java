@@ -6,9 +6,11 @@ import com.commerce.coupon.entity.IssuedCoupon;
 import com.commerce.coupon.exception.CouponErrorCode;
 import com.commerce.coupon.exception.CouponNotFoundException;
 import com.commerce.coupon.exception.IssuedCouponNotFoundException;
+import com.commerce.coupon.info.DiscountPreviewInfo;
 import com.commerce.coupon.info.IssuedCouponInfo;
 import com.commerce.coupon.repository.CouponRepository;
 import com.commerce.coupon.repository.IssuedCouponRepository;
+import java.time.Clock;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
@@ -22,10 +24,13 @@ public class IssuedCouponReader {
 
     private final IssuedCouponRepository issuedCouponRepository;
     private final CouponRepository couponRepository;
+    private final Clock clock;
 
-    public IssuedCouponReader(IssuedCouponRepository issuedCouponRepository, CouponRepository couponRepository) {
+    public IssuedCouponReader(
+            IssuedCouponRepository issuedCouponRepository, CouponRepository couponRepository, Clock clock) {
         this.issuedCouponRepository = issuedCouponRepository;
         this.couponRepository = couponRepository;
+        this.clock = clock;
     }
 
     /**
@@ -62,19 +67,40 @@ public class IssuedCouponReader {
     }
 
     /**
-     * 발급분의 쿠폰 정책으로 주문 금액에 대한 할인액을 산출한다.
+     * 본인 발급분에 대해 주문 금액 기준 예상 할인을 산출한다. 계산만 하고 상태를 바꾸지 않으며, 적용 불가는
+     * 예외가 아니라 사유와 0원으로 표현한다. 미소유는 미존재로 취급한다. 결과는 보증이 아니며 체크아웃 시점
+     * 재검증이 진실이다.
      *
-     * @throws IssuedCouponNotFoundException 발급분이 없으면
+     * @throws IssuedCouponNotFoundException 본인 발급분이 없으면
      * @throws CouponNotFoundException 쿠폰 정책이 없으면
      */
     @Transactional(readOnly = true)
-    public Money calculateDiscount(UUID issuedCouponId, Money orderAmount) {
+    public DiscountPreviewInfo getDiscountPreview(UUID issuedCouponId, UUID memberId, Money orderAmount) {
         IssuedCoupon issued = issuedCouponRepository
-                .findById(issuedCouponId)
+                .findByIdAndMemberId(issuedCouponId, memberId)
                 .orElseThrow(() -> new IssuedCouponNotFoundException(CouponErrorCode.ISSUED_COUPON_NOT_FOUND));
+        DiscountPreviewInfo.Reason statusReason =
+                switch (issued.getStatus()) {
+                    case ISSUED -> null;
+                    case USED -> DiscountPreviewInfo.Reason.ALREADY_USED;
+                    case REVOKED -> DiscountPreviewInfo.Reason.REVOKED;
+                };
+        if (statusReason != null) {
+            return DiscountPreviewInfo.notApplicable(statusReason);
+        }
+        if (issued.getExpiresAt().isBefore(clock.instant())) {
+            return DiscountPreviewInfo.notApplicable(DiscountPreviewInfo.Reason.EXPIRED);
+        }
         Coupon coupon = couponRepository
                 .findById(issued.getCouponId())
                 .orElseThrow(() -> new CouponNotFoundException(CouponErrorCode.COUPON_NOT_FOUND));
-        return coupon.calculateDiscount(orderAmount);
+        Money discount = coupon.calculateDiscount(orderAmount);
+        if (discount.isZero()) {
+            return DiscountPreviewInfo.notApplicable(
+                    coupon.isMinOrderAmountMet(orderAmount)
+                            ? DiscountPreviewInfo.Reason.ZERO_DISCOUNT
+                            : DiscountPreviewInfo.Reason.MIN_ORDER_AMOUNT_NOT_MET);
+        }
+        return DiscountPreviewInfo.applicable(discount);
     }
 }

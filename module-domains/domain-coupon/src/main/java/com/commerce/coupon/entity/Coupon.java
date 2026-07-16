@@ -134,9 +134,14 @@ public class Coupon extends BaseTimeEntity<UUID> {
         return maxIssuance != null;
     }
 
+    /** 주문 금액이 최소 주문 금액 이상인지 판정한다. */
+    public boolean isMinOrderAmountMet(Money orderAmount) {
+        return orderAmount.isGreaterThanOrEqualTo(minOrderAmount);
+    }
+
     /** 주문 금액에 대한 할인액을 산출한다. 최소주문금액 미달이면 0을 반환한다. */
     public Money calculateDiscount(Money orderAmount) {
-        if (orderAmount.isLessThan(minOrderAmount)) {
+        if (!isMinOrderAmountMet(orderAmount)) {
             return Money.ZERO;
         }
         return discount.applyTo(orderAmount);

@@ -10,6 +10,7 @@ import com.commerce.coupon.entity.IssuedCouponStatus;
 import com.commerce.coupon.entity.ValidityPeriod;
 import com.commerce.coupon.exception.CouponExpiredException;
 import com.commerce.coupon.exception.DuplicateIssuanceException;
+import com.commerce.coupon.info.DiscountPreviewInfo;
 import com.commerce.coupon.info.IssuedCouponInfo;
 import com.commerce.coupon.service.CouponAppender;
 import com.commerce.coupon.service.IssuedCouponAppender;
@@ -86,17 +87,37 @@ class CouponPersistenceTest {
                 Discount.rate(10, Money.of(2000L)), Money.of(10000L), ValidityPeriod.of(FROM, UNTIL), 30, null);
     }
 
+    private UUID createFixedCoupon() {
+        return couponAppender.create(
+                "정액 1000", Discount.fixed(Money.of(1000L)), Money.ZERO, ValidityPeriod.of(FROM, UNTIL), 30, null);
+    }
+
+    private UUID issueRateCouponTo(UUID memberId) {
+        return issueTo(createRateCoupon(), memberId);
+    }
+
+    private UUID issueFixedCouponTo(UUID memberId) {
+        return issueTo(createFixedCoupon(), memberId);
+    }
+
+    private UUID issueTo(UUID couponId, UUID memberId) {
+        em.flush();
+        UUID issuedId = issuedCouponAppender.issue(couponId, memberId);
+        em.flush();
+        em.clear();
+        return issuedId;
+    }
+
     @Test
     @DisplayName("발급 후 조회·할인 산출 왕복 — 판별 유니온 @Embedded·validate 스키마 정합")
     void issueThenReadAndCalculate() {
         UUID couponId = createRateCoupon();
-        em.flush();
         UUID memberId = UUID.randomUUID();
-        UUID issuedId = issuedCouponAppender.issue(couponId, memberId);
-        em.flush();
-        em.clear();
+        UUID issuedId = issueTo(couponId, memberId);
 
-        Money discount = issuedCouponReader.calculateDiscount(issuedId, Money.of(50000L));
+        Money discount = issuedCouponReader
+                .getDiscountPreview(issuedId, memberId, Money.of(50000L))
+                .discountAmount();
         assertThat(discount).isEqualTo(Money.of(2000L));
 
         IssuedCouponInfo info = issuedCouponReader.getIssuedCoupon(issuedId, memberId);
@@ -107,28 +128,13 @@ class CouponPersistenceTest {
     @Test
     @DisplayName("정액 쿠폰도 왕복한다 — discount_amount 컬럼 매핑 검증")
     void fixedDiscountRoundTrip() {
-        UUID couponId = couponAppender.create(
-                "정액 1000", Discount.fixed(Money.of(1000L)), Money.ZERO, ValidityPeriod.of(FROM, UNTIL), 30, null);
-        em.flush();
-        UUID issuedId = issuedCouponAppender.issue(couponId, UUID.randomUUID());
-        em.flush();
-        em.clear();
+        UUID memberId = UUID.randomUUID();
+        UUID issuedId = issueFixedCouponTo(memberId);
 
-        assertThat(issuedCouponReader.calculateDiscount(issuedId, Money.of(5000L)))
+        assertThat(issuedCouponReader
+                        .getDiscountPreview(issuedId, memberId, Money.of(5000L))
+                        .discountAmount())
                 .isEqualTo(Money.of(1000L));
-    }
-
-    @Test
-    @DisplayName("주문 금액이 최소주문금액 미달이면 산출 할인은 0 — 체크아웃 게이트")
-    void calculateDiscountBelowMinOrderIsZero() {
-        UUID couponId = createRateCoupon();
-        em.flush();
-        UUID issuedId = issuedCouponAppender.issue(couponId, UUID.randomUUID());
-        em.flush();
-        em.clear();
-
-        assertThat(issuedCouponReader.calculateDiscount(issuedId, Money.of(9999L)))
-                .isEqualTo(Money.ZERO);
     }
 
     @Test
@@ -171,6 +177,133 @@ class CouponPersistenceTest {
         assertThat(atBoundary.getStatus()).isEqualTo(IssuedCouponStatus.USED);
         assertThatThrownBy(() -> issuedCouponModifier.use(justExpired.getId(), UUID.randomUUID()))
                 .isInstanceOf(CouponExpiredException.class);
+    }
+
+    @Test
+    @DisplayName("미리보기 — 정액 쿠폰은 적용 가능과 예상 할인액을 싣는다")
+    void previewFixedDiscountApplicable() {
+        UUID memberId = UUID.randomUUID();
+        UUID issuedId = issueFixedCouponTo(memberId);
+
+        DiscountPreviewInfo preview = issuedCouponReader.getDiscountPreview(issuedId, memberId, Money.of(15000L));
+
+        assertThat(preview.applicable()).isTrue();
+        assertThat(preview.reason()).isNull();
+        assertThat(preview.discountAmount()).isEqualTo(Money.of(1000L));
+    }
+
+    @Test
+    @DisplayName("미리보기 — 정률 쿠폰은 퍼센트 할인에 상한을 적용한다")
+    void previewRateDiscountHonorsCap() {
+        UUID memberId = UUID.randomUUID();
+        UUID issuedId = issueRateCouponTo(memberId);
+
+        assertThat(issuedCouponReader
+                        .getDiscountPreview(issuedId, memberId, Money.of(15000L))
+                        .discountAmount())
+                .isEqualTo(Money.of(1500L));
+        assertThat(issuedCouponReader
+                        .getDiscountPreview(issuedId, memberId, Money.of(50000L))
+                        .discountAmount())
+                .isEqualTo(Money.of(2000L));
+    }
+
+    @Test
+    @DisplayName("미리보기 — 최소주문금액 미달은 사유와 0원으로 표현된다")
+    void previewBelowMinOrderNotApplicable() {
+        UUID memberId = UUID.randomUUID();
+        UUID issuedId = issueRateCouponTo(memberId);
+
+        DiscountPreviewInfo preview = issuedCouponReader.getDiscountPreview(issuedId, memberId, Money.of(9999L));
+
+        assertThat(preview.applicable()).isFalse();
+        assertThat(preview.reason()).isEqualTo(DiscountPreviewInfo.Reason.MIN_ORDER_AMOUNT_NOT_MET);
+        assertThat(preview.discountAmount()).isEqualTo(Money.ZERO);
+    }
+
+    @Test
+    @DisplayName("미리보기 — 고정 Clock 기준 기한 경과는 EXPIRED, 기한 정각은 적용 가능이다")
+    void previewExpiryBoundaryAgainstFixedClock() {
+        UUID couponId = createRateCoupon();
+        em.flush();
+        UUID expiredOwnerId = UUID.randomUUID();
+        UUID boundaryOwnerId = UUID.randomUUID();
+        IssuedCoupon justExpired = em.persist(
+                IssuedCoupon.create(couponId, expiredOwnerId, PersistenceTestConfig.FIXED_NOW.minusMillis(1)));
+        IssuedCoupon atBoundary =
+                em.persist(IssuedCoupon.create(couponId, boundaryOwnerId, PersistenceTestConfig.FIXED_NOW));
+        em.flush();
+
+        DiscountPreviewInfo expired =
+                issuedCouponReader.getDiscountPreview(justExpired.getId(), expiredOwnerId, Money.of(50000L));
+        assertThat(expired.applicable()).isFalse();
+        assertThat(expired.reason()).isEqualTo(DiscountPreviewInfo.Reason.EXPIRED);
+        assertThat(expired.discountAmount()).isEqualTo(Money.ZERO);
+
+        assertThat(issuedCouponReader
+                        .getDiscountPreview(atBoundary.getId(), boundaryOwnerId, Money.of(50000L))
+                        .applicable())
+                .isTrue();
+    }
+
+    @Test
+    @DisplayName("미리보기 — 사용된 발급분은 ALREADY_USED다")
+    void previewUsedNotApplicable() {
+        UUID memberId = UUID.randomUUID();
+        UUID issuedId = issueRateCouponTo(memberId);
+        issuedCouponModifier.use(issuedId, UUID.randomUUID());
+        em.flush();
+        em.clear();
+
+        DiscountPreviewInfo preview = issuedCouponReader.getDiscountPreview(issuedId, memberId, Money.of(50000L));
+
+        assertThat(preview.applicable()).isFalse();
+        assertThat(preview.reason()).isEqualTo(DiscountPreviewInfo.Reason.ALREADY_USED);
+        assertThat(preview.discountAmount()).isEqualTo(Money.ZERO);
+    }
+
+    @Test
+    @DisplayName("미리보기 — 무효화된 발급분은 REVOKED다")
+    void previewRevokedNotApplicable() {
+        UUID memberId = UUID.randomUUID();
+        UUID issuedId = issueRateCouponTo(memberId);
+        issuedCouponModifier.revoke(issuedId, "오발급 회수");
+        em.flush();
+        em.clear();
+
+        DiscountPreviewInfo preview = issuedCouponReader.getDiscountPreview(issuedId, memberId, Money.of(50000L));
+
+        assertThat(preview.applicable()).isFalse();
+        assertThat(preview.reason()).isEqualTo(DiscountPreviewInfo.Reason.REVOKED);
+    }
+
+    @Test
+    @DisplayName("미리보기 — 최소주문금액은 넘지만 산출 할인이 0이면 ZERO_DISCOUNT다")
+    void previewZeroDiscountNotApplicable() {
+        UUID memberId = UUID.randomUUID();
+        UUID issuedId = issueFixedCouponTo(memberId);
+
+        DiscountPreviewInfo preview = issuedCouponReader.getDiscountPreview(issuedId, memberId, Money.ZERO);
+
+        assertThat(preview.applicable()).isFalse();
+        assertThat(preview.reason()).isEqualTo(DiscountPreviewInfo.Reason.ZERO_DISCOUNT);
+        assertThat(preview.discountAmount()).isEqualTo(Money.ZERO);
+    }
+
+    @Test
+    @DisplayName("미리보기는 발급분 상태를 바꾸지 않는다")
+    void previewDoesNotMutateIssuedCoupon() {
+        UUID memberId = UUID.randomUUID();
+        UUID issuedId = issueRateCouponTo(memberId);
+
+        issuedCouponReader.getDiscountPreview(issuedId, memberId, Money.of(50000L));
+        em.flush();
+        em.clear();
+
+        IssuedCouponInfo info = issuedCouponReader.getIssuedCoupon(issuedId, memberId);
+        assertThat(info.status()).isEqualTo(IssuedCouponStatus.ISSUED);
+        assertThat(info.usedAt()).isNull();
+        assertThat(info.orderId()).isNull();
     }
 
     @Test
