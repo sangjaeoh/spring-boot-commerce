@@ -131,7 +131,7 @@ class OrderCancellationFacadeTest extends FacadeIntegrationTest {
         UUID variantId = seedProduct(Money.of(10000L), 50);
         cartAppender.addItem(memberId, variantId, 1);
         UUID orderId = checkoutFacade.checkout(memberId, address(), Money.ZERO, null, PaymentMethod.CARD);
-        orderModifier.ship(orderId);
+        orderModifier.ship(orderId, "CJ대한통운", "688900123456");
 
         assertThatThrownBy(() -> orderCancellationFacade.cancel(orderId, memberId))
                 .isInstanceOfSatisfying(

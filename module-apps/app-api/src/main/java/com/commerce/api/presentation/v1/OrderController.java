@@ -6,6 +6,7 @@ import com.commerce.api.facade.OrderRefundFacade;
 import com.commerce.api.presentation.v1.request.CheckoutRequest;
 import com.commerce.api.presentation.v1.request.FulfillmentHoldRequest;
 import com.commerce.api.presentation.v1.request.OrderRefundRequest;
+import com.commerce.api.presentation.v1.request.OrderShipRequest;
 import com.commerce.api.presentation.v1.response.CheckoutResponse;
 import com.commerce.api.presentation.v1.response.OrderPageResponse;
 import com.commerce.api.presentation.v1.response.OrderResponse;
@@ -94,12 +95,12 @@ public class OrderController {
         orderRefundFacade.refund(orderId, request.reason());
     }
 
-    /** 결제 완료 주문을 출고 처리한다. */
+    /** 결제 완료 주문을 택배사·운송장 번호와 함께 출고 처리한다. */
     @AdminOnly
     @PostMapping("/{orderId}/ship")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void ship(@PathVariable UUID orderId) {
-        orderModifier.ship(orderId);
+    public void ship(@PathVariable UUID orderId, @Valid @RequestBody OrderShipRequest request) {
+        orderModifier.ship(orderId, request.carrier(), request.trackingNumber());
     }
 
     /** 출고된 주문을 배송 완료 처리한다. */

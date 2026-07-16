@@ -82,6 +82,14 @@ public class Order extends BaseTimeEntity<UUID> {
     @Nullable
     private Instant shippedAt;
 
+    @Column(name = "carrier")
+    @Nullable
+    private String carrier;
+
+    @Column(name = "tracking_number")
+    @Nullable
+    private String trackingNumber;
+
     @Column(name = "delivered_at")
     @Nullable
     private Instant deliveredAt;
@@ -197,12 +205,14 @@ public class Order extends BaseTimeEntity<UUID> {
         this.refundReason = reason;
     }
 
-    /** 출고한다. */
-    public void ship() {
+    /** 출고한다. 택배사·운송장 번호를 기록한다. */
+    public void ship(String carrier, String trackingNumber) {
         requirePaid();
         requireFulfillment(FulfillmentStatus.PREPARING);
         this.fulfillmentStatus = FulfillmentStatus.SHIPPED;
         this.shippedAt = Instant.now();
+        this.carrier = carrier;
+        this.trackingNumber = trackingNumber;
     }
 
     /** 배송 완료 처리한다. */
@@ -325,6 +335,14 @@ public class Order extends BaseTimeEntity<UUID> {
 
     public @Nullable Instant getShippedAt() {
         return shippedAt;
+    }
+
+    public @Nullable String getCarrier() {
+        return carrier;
+    }
+
+    public @Nullable String getTrackingNumber() {
+        return trackingNumber;
     }
 
     public @Nullable Instant getDeliveredAt() {

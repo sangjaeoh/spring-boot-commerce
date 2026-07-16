@@ -14,6 +14,9 @@ import org.junit.jupiter.api.Test;
 
 class OrderTest {
 
+    private static final String CARRIER = "CJ대한통운";
+    private static final String TRACKING_NUMBER = "688900123456";
+
     private OrderLineSnapshot line(long price, int quantity) {
         return new OrderLineSnapshot(UUID.randomUUID(), UUID.randomUUID(), "티셔츠", "Red / L", Money.of(price), quantity);
     }
@@ -99,7 +102,7 @@ class OrderTest {
     @DisplayName("출고 이후 주문은 취소할 수 없다")
     void cancelRejectedAfterShipped() {
         Order order = paidOrder();
-        order.ship();
+        order.ship(CARRIER, TRACKING_NUMBER);
         assertThatThrownBy(() -> order.cancel(CancellationReason.CUSTOMER_REQUEST))
                 .isInstanceOf(OrderStatusException.class);
     }
@@ -128,7 +131,7 @@ class OrderTest {
 
     private Order deliveredOrder() {
         Order order = paidOrder();
-        order.ship();
+        order.ship(CARRIER, TRACKING_NUMBER);
         order.confirmDelivery();
         return order;
     }
@@ -151,7 +154,7 @@ class OrderTest {
                 .isInstanceOf(OrderStatusException.class);
 
         Order shipped = paidOrder();
-        shipped.ship();
+        shipped.ship(CARRIER, TRACKING_NUMBER);
         assertThatThrownBy(() -> shipped.refund(RefundReason.CHANGE_OF_MIND)).isInstanceOf(OrderStatusException.class);
     }
 
@@ -177,17 +180,30 @@ class OrderTest {
     @DisplayName("이행 전진은 결제 완료에서만 유효하다")
     void fulfillmentRequiresPaid() {
         Order pending = place(Money.ZERO, Money.ZERO, null);
-        assertThatThrownBy(pending::ship).isInstanceOf(FulfillmentStatusException.class);
+        assertThatThrownBy(() -> pending.ship(CARRIER, TRACKING_NUMBER)).isInstanceOf(FulfillmentStatusException.class);
     }
 
     @Test
     @DisplayName("준비→출고→배송 완료로 이행한다")
     void fulfillmentFlow() {
         Order order = paidOrder();
-        order.ship();
+        order.ship(CARRIER, TRACKING_NUMBER);
         assertThat(order.getFulfillmentStatus()).isEqualTo(FulfillmentStatus.SHIPPED);
         order.confirmDelivery();
         assertThat(order.getFulfillmentStatus()).isEqualTo(FulfillmentStatus.DELIVERED);
+    }
+
+    @Test
+    @DisplayName("출고 시 택배사·운송장 번호를 기록하고 출고 전에는 null이다")
+    void shipRecordsTrackingInfo() {
+        Order order = paidOrder();
+        assertThat(order.getCarrier()).isNull();
+        assertThat(order.getTrackingNumber()).isNull();
+
+        order.ship(CARRIER, TRACKING_NUMBER);
+
+        assertThat(order.getCarrier()).isEqualTo(CARRIER);
+        assertThat(order.getTrackingNumber()).isEqualTo(TRACKING_NUMBER);
     }
 
     @Test
@@ -196,7 +212,7 @@ class OrderTest {
         Order order = paidOrder();
         order.holdFulfillment(HoldReason.FRAUD_REVIEW);
         assertThat(order.getFulfillmentStatus()).isEqualTo(FulfillmentStatus.ON_HOLD);
-        assertThatThrownBy(order::ship).isInstanceOf(FulfillmentStatusException.class);
+        assertThatThrownBy(() -> order.ship(CARRIER, TRACKING_NUMBER)).isInstanceOf(FulfillmentStatusException.class);
         order.releaseFulfillment();
         assertThat(order.getFulfillmentStatus()).isEqualTo(FulfillmentStatus.PREPARING);
     }

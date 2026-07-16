@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
-/** 주문 조회 경계 모델이다. 결제·이행 축 상태와 이력 시각·사유를 함께 싣는다. */
+/** 주문 조회 경계 모델이다. 결제·이행 축 상태와 이력 시각·사유·운송장 기록을 함께 싣는다. */
 public record OrderInfo(
         UUID id,
         String orderNumber,
@@ -28,6 +28,8 @@ public record OrderInfo(
         List<OrderLineInfo> lines,
         @Nullable Instant paidAt,
         @Nullable Instant shippedAt,
+        @Nullable String carrier,
+        @Nullable String trackingNumber,
         @Nullable Instant deliveredAt,
         @Nullable Instant cancelledAt,
         @Nullable CancellationReason cancellationReason,
@@ -57,6 +59,8 @@ public record OrderInfo(
                 order.getLines().stream().map(OrderLineInfo::from).toList(),
                 order.getPaidAt(),
                 order.getShippedAt(),
+                order.getCarrier(),
+                order.getTrackingNumber(),
                 order.getDeliveredAt(),
                 order.getCancelledAt(),
                 order.getCancellationReason(),

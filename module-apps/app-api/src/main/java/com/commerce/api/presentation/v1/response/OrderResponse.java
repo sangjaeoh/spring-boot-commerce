@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
-/** 주문 상세 응답이다. 결제·이행 축 상태와 이력 시각·사유를 싣는다. */
+/** 주문 상세 응답이다. 결제·이행 축 상태와 이력 시각·사유·운송장 기록을 싣는다. */
 public record OrderResponse(
         UUID id,
         String orderNumber,
@@ -29,6 +29,8 @@ public record OrderResponse(
         Instant createdAt,
         @Nullable Instant paidAt,
         @Nullable Instant shippedAt,
+        @Nullable String carrier,
+        @Nullable String trackingNumber,
         @Nullable Instant deliveredAt,
         @Nullable Instant cancelledAt,
         @Nullable CancellationReason cancellationReason,
@@ -60,6 +62,8 @@ public record OrderResponse(
                 order.createdAt(),
                 order.paidAt(),
                 order.shippedAt(),
+                order.carrier(),
+                order.trackingNumber(),
                 order.deliveredAt(),
                 order.cancelledAt(),
                 order.cancellationReason(),

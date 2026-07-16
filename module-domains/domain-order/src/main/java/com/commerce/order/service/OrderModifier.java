@@ -58,10 +58,10 @@ public class OrderModifier {
         find(orderId).refund(reason);
     }
 
-    /** 출고한다. */
+    /** 출고한다. 택배사·운송장 번호를 기록한다. */
     @Transactional
-    public void ship(UUID orderId) {
-        find(orderId).ship();
+    public void ship(UUID orderId, String carrier, String trackingNumber) {
+        find(orderId).ship(carrier, trackingNumber);
     }
 
     /** 배송 완료 처리한다. */
