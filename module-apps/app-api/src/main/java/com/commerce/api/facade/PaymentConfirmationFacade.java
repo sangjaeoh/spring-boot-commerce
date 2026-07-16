@@ -18,6 +18,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -40,6 +41,9 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class PaymentConfirmationFacade {
+
+    // 스윕 분산 락 이름. 락 검증 테스트가 같은 락을 참조하므로 상수로 공유한다.
+    static final String LOCK_NAME = "payment-reconciliation";
 
     private static final Logger log = LoggerFactory.getLogger(PaymentConfirmationFacade.class);
 
@@ -68,8 +72,13 @@ public class PaymentConfirmationFacade {
         this.staleAfter = staleAfter;
     }
 
-    /** 유예가 지난 REQUESTED 결제를 주기적으로 리컨실한다. */
+    /** 유예가 지난 REQUESTED 결제를 주기적으로 리컨실한다. 노드 간 동시 스윕은 분산 락이 하나로 줄인다. */
     @Scheduled(fixedDelayString = "${payment.reconciliation.fixed-delay}")
+    // lockAtMostFor는 스윕 소요 상한이다 — 평시 대상 0~수 건 × (PG 조회 + 확정 트랜잭션)으로 초 단위지만
+    // 장애 복구 직후 적체를 감안해 10분을 둔다. 크래시로 남은 락은 10분 뒤 회수되고, 상한 초과로 락이 풀려
+    // 실행이 겹쳐도 확정이 멱등이라 무해하다. 락 획득 실패는 정상 건너뜀이고 다음 주기가 재시도한다.
+    // 락의 목적·기각 대안은 REQUIREMENTS.md 제약·전제가 소유한다.
+    @SchedulerLock(name = LOCK_NAME, lockAtMostFor = "PT10M")
     public void reconcileStaleRequested() {
         reconcile(Instant.now().minus(staleAfter));
     }

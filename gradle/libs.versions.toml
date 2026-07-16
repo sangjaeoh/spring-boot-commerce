@@ -12,6 +12,7 @@ querydsl = "7.4.0"
 archunit = "1.4.1"
 nimbus-jose-jwt = "10.9.1"
 springdoc = "3.0.3"
+shedlock = "7.7.0"
 
 [libraries]
 # build-logic tooling — gradle plugin jars, consumed as regular dependencies in build-logic/build.gradle.kts
@@ -47,8 +48,13 @@ springdoc-openapi-starter-webmvc-ui = { module = "org.springdoc:springdoc-openap
 spring-boot-starter-actuator = { module = "org.springframework.boot:spring-boot-starter-actuator" }
 spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-starter-test" }
 
-# infra-redis — Redis 멱등 키 저장소. 버전은 Spring Boot BOM
+# infra-redis — Redis 멱등 키·레이트리밋·분산 락 저장소. 버전은 Spring Boot BOM
 spring-boot-starter-data-redis = { module = "org.springframework.boot:spring-boot-starter-data-redis" }
+
+# 스케줄 스윕 분산 락(ShedLock). app-api가 애노테이션(shedlock-spring), infra-redis가 Redis
+# LockProvider(shedlock-provider-redis-spring)를 쓴다. Spring Boot BOM 비관리라 버전을 명시한다
+shedlock-spring = { module = "net.javacrumbs.shedlock:shedlock-spring", version.ref = "shedlock" }
+shedlock-provider-redis-spring = { module = "net.javacrumbs.shedlock:shedlock-provider-redis-spring", version.ref = "shedlock" }
 
 # common-web — 슬림 스프링 웹 프레임워크(임베디드 서버 스타터 회피). 버전은 Spring Boot BOM
 spring-webmvc = { module = "org.springframework:spring-webmvc" }
