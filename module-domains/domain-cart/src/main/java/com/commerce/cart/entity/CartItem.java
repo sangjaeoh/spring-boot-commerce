@@ -14,12 +14,14 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.util.UUID;
 
 /**
  * 장바구니 라인이다. 소속 장바구니는 애그리거트 내부 연관으로 참조한다.
  *
- * <p>생성·수정은 부모 {@link Cart}를 통해서만 한다.
+ * <p>생성·수정은 부모 {@link Cart}를 통해서만 한다. 동일 라인 동시 수량 합산(더블서밋)이 실재해
+ * 낙관락({@code @Version})으로 합산 유실을 막는다 — 진 쪽은 충돌로 끝난다(409, 클라이언트 재시도).
  */
 @Entity
 @Table(schema = "cart", name = "cart_item")
@@ -39,6 +41,10 @@ public class CartItem extends BaseTimeEntity<UUID> {
 
     @Column(name = "quantity")
     private int quantity;
+
+    @Version
+    @Column(name = "version")
+    private long version;
 
     protected CartItem() {}
 
@@ -81,5 +87,9 @@ public class CartItem extends BaseTimeEntity<UUID> {
 
     public int getQuantity() {
         return quantity;
+    }
+
+    public long getVersion() {
+        return version;
     }
 }

@@ -2,6 +2,7 @@ package com.commerce.cart;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.commerce.cart.entity.CartItem;
 import com.commerce.cart.info.CartInfo;
 import com.commerce.cart.info.CartItemInfo;
 import com.commerce.cart.service.CartAppender;
@@ -91,6 +92,31 @@ class CartPersistenceTest {
 
         assertThat(cart.items()).hasSize(1);
         assertThat(cart.items().get(0).quantity()).isEqualTo(5);
+    }
+
+    @Test
+    @DisplayName("같은 변형 합산이 라인의 낙관락 버전을 증가시킨다")
+    void mergeIncrementsLineVersion() {
+        UUID memberId = UUID.randomUUID();
+        UUID variantId = UUID.randomUUID();
+        cartAppender.addItem(memberId, variantId, 1);
+        em.flush();
+        assertThat(findItem(variantId).getVersion()).isZero();
+
+        cartAppender.addItem(memberId, variantId, 1);
+        em.flush();
+        em.clear();
+
+        CartItem item = findItem(variantId);
+        assertThat(item.getQuantity()).isEqualTo(2);
+        assertThat(item.getVersion()).isEqualTo(1L);
+    }
+
+    private CartItem findItem(UUID variantId) {
+        return em.getEntityManager()
+                .createQuery("select i from CartItem i where i.variantId = :variantId", CartItem.class)
+                .setParameter("variantId", variantId)
+                .getSingleResult();
     }
 
     @Test
