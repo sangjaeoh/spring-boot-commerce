@@ -150,7 +150,8 @@
 ## 있으면 좋음
 
 ### 16. 리컨실 유예 관계 기동 검증
-- 상태: 대기
+- 상태: 완료
+- 완료 메모(2026-07-17): 검증 지점은 `PendingOrderSweepFacade` 생성자(관계의 소비자, 두 값을 아는 기존 자리) — 역전 시 IAE로 빈 배선 실패 = 기동 실패. 역전 거부·경계 동등·초과 수용 단위 테스트로 고정.
 - 문제(Low): `order.reconciliation.stale-after`(15m) ≥ `payment.reconciliation.stale-after`(10m) 관계(`application.yml`)는 현재 값은 충족하나 이를 강제하는 코드가 없다. 설정 역전 시 "이중 개입 차단" 전제가 조용히 깨진다(`REQUIREMENTS.md:165`).
 - 완료 기준: 두 파사드 중 한쪽 생성자(또는 기동 검증)에서 관계를 assert. 역전 설정 시 기동 실패 테스트.
 - 범위: 소.
