@@ -103,13 +103,13 @@ class OrderPersistenceTest {
     }
 
     @Test
-    @DisplayName("결제·출고·배송 완료 이행이 반영된다")
+    @DisplayName("결제·출고·배송 완료 이행이 반영되고 운송장 기록이 왕복한다")
     void fulfillmentFlowPersists() {
         UUID orderId = place();
         em.flush();
         orderModifier.markPaid(orderId);
         em.flush();
-        orderModifier.ship(orderId);
+        orderModifier.ship(orderId, "CJ대한통운", "688900123456");
         em.flush();
         orderModifier.confirmDelivery(orderId);
         em.flush();
@@ -118,6 +118,8 @@ class OrderPersistenceTest {
         OrderInfo order = orderReader.getOrder(orderId);
         assertThat(order.status()).isEqualTo(OrderStatus.PAID);
         assertThat(order.fulfillmentStatus()).isEqualTo(FulfillmentStatus.DELIVERED);
+        assertThat(order.carrier()).isEqualTo("CJ대한통운");
+        assertThat(order.trackingNumber()).isEqualTo("688900123456");
     }
 
     @Test

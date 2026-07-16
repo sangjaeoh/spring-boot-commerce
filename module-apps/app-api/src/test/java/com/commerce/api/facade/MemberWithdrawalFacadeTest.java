@@ -85,7 +85,7 @@ class MemberWithdrawalFacadeTest extends FacadeIntegrationTest {
         UUID variantId = seedProduct(50);
         cartAppender.addItem(memberId, variantId, 1);
         UUID orderId = checkoutFacade.checkout(memberId, address(), Money.ZERO, null, PaymentMethod.CARD);
-        orderModifier.ship(orderId);
+        orderModifier.ship(orderId, "CJ대한통운", "688900123456");
         orderModifier.confirmDelivery(orderId);
 
         memberWithdrawalFacade.withdraw(memberId, WithdrawalReason.NO_LONGER_USED);

@@ -140,7 +140,7 @@ class OrderRefundFacadeTest extends FacadeIntegrationTest {
                         ApiException.class,
                         ex -> assertThat(ex.getErrorCode()).isEqualTo(ApiErrorCode.ORDER_NOT_REFUNDABLE));
 
-        orderModifier.ship(orderId);
+        orderModifier.ship(orderId, "CJ대한통운", "688900123456");
         assertThatThrownBy(() -> orderRefundFacade.refund(orderId, RefundReason.CHANGE_OF_MIND))
                 .isInstanceOfSatisfying(
                         ApiException.class,
@@ -215,7 +215,7 @@ class OrderRefundFacadeTest extends FacadeIntegrationTest {
 
     private UUID deliveredCheckout(UUID memberId, @org.jspecify.annotations.Nullable UUID issuedCouponId) {
         UUID orderId = checkoutFacade.checkout(memberId, address(), Money.ZERO, issuedCouponId, PaymentMethod.CARD);
-        orderModifier.ship(orderId);
+        orderModifier.ship(orderId, "CJ대한통운", "688900123456");
         orderModifier.confirmDelivery(orderId);
         return orderId;
     }

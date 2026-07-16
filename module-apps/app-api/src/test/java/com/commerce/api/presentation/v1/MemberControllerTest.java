@@ -365,7 +365,10 @@ class MemberControllerTest extends WebIntegrationTest {
         UUID variantId = seedProduct(50);
         cartAppender.addItem(memberId, variantId, 1);
         UUID orderId = checkoutFacade.checkout(memberId, address(), Money.ZERO, null, PaymentMethod.CARD);
-        mvc.perform(post("/api/v1/orders/{orderId}/ship", orderId).header(HttpHeaders.AUTHORIZATION, adminBearer()))
+        mvc.perform(post("/api/v1/orders/{orderId}/ship", orderId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"carrier\":\"CJ대한통운\",\"trackingNumber\":\"688900123456\"}"))
                 .andExpect(status().isNoContent());
         mvc.perform(post("/api/v1/orders/{orderId}/delivery-confirmation", orderId)
                         .header(HttpHeaders.AUTHORIZATION, adminBearer()))
