@@ -1,5 +1,6 @@
 package com.commerce.web.ratelimit;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -24,6 +25,11 @@ class LoginRateLimitFilterTest {
 
     private static final int MAX_ATTEMPTS = 3;
     private static final Duration WINDOW = Duration.ofMinutes(5);
+    private static final RateLimitScope SCOPE = new RateLimitScope(
+            "login:",
+            "TOO_MANY_LOGIN_ATTEMPTS",
+            "로그인 시도가 너무 많다. 잠시 후 다시 시도해 주세요.",
+            "일시적으로 로그인을 처리할 수 없다. 잠시 후 다시 시도해 주세요.");
 
     private final WebApplicationContext context;
 
@@ -33,7 +39,7 @@ class LoginRateLimitFilterTest {
 
     private MockMvc mvcWith(LoginRateLimitStore store) {
         return MockMvcBuilders.webAppContextSetup(context)
-                .addFilters(new LoginRateLimitFilter(store, MAX_ATTEMPTS, WINDOW))
+                .addFilters(new LoginRateLimitFilter(store, SCOPE, MAX_ATTEMPTS, WINDOW))
                 .build();
     }
 
@@ -79,6 +85,20 @@ class LoginRateLimitFilterTest {
         }
         mvc.perform(fromAddress("10.0.0.1")).andExpect(status().isTooManyRequests());
         mvc.perform(fromAddress("10.0.0.2")).andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("POST가 아닌 요청은 시도로 세지 않고 한도 소진 후에도 통과한다")
+    void nonPostRequestsBypassThrottle() throws Exception {
+        MockMvc mvc = mvcWith(new InMemoryLoginRateLimitStore(new AtomicLong()::get));
+
+        for (int attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+            mvc.perform(post("/test/echo")).andExpect(status().isOk());
+        }
+        mvc.perform(post("/test/echo")).andExpect(status().isTooManyRequests());
+
+        // 같은 경로에 겹칠 수 있는 비-POST 표면(관리자 GET 검색 등)은 스로틀 대상이 아니다.
+        mvc.perform(get("/test/echo")).andExpect(status().isOk());
     }
 
     @Test

@@ -6,12 +6,15 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.commerce.api.facade.CheckoutFacade;
 import com.commerce.api.facade.ProductRegistrationFacade;
 import com.commerce.api.presentation.v1.request.AddCartItemRequest;
+import com.commerce.api.presentation.v1.request.LoginRequest;
 import com.commerce.api.presentation.v1.request.MemberRegistrationRequest;
 import com.commerce.api.presentation.v1.request.MemberRenameRequest;
 import com.commerce.api.presentation.v1.request.MemberSuspensionRequest;
@@ -38,10 +41,16 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestConstructor;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import tools.jackson.databind.ObjectMapper;
 
 @TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 class MemberControllerTest extends WebIntegrationTest {
+
+    // RateLimitConfig가 로그인·가입 표면에 공통으로 적용하는 창당 한도. 초과 시도가 429로 거부되는지 검증한다.
+    private static final int MAX_ATTEMPTS_PER_WINDOW = 10;
+    private static final String SIGNUP_PATH = "/api/v1/members";
+    private static final String LOGIN_PATH = "/api/v1/auth/login";
 
     private final MockMvc mvc;
     private final ObjectMapper objectMapper;
@@ -152,6 +161,43 @@ class MemberControllerTest extends WebIntegrationTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("MEMBER_INVALID_PASSWORD_FORMAT"));
+    }
+
+    @Test
+    @DisplayName("한 창 안 가입 시도가 한도를 넘으면 429 TOO_MANY_SIGNUP_ATTEMPTS로 거부되고 한도 내 가입은 201로 성공한다")
+    void registerRejectsAfterTooManyAttempts() throws Exception {
+        // 다른 테스트가 공유하는 기본 클라이언트 IP를 오염시키지 않도록 전용 IP로 한도를 채운다.
+        String clientIp = "203.0.113.20";
+
+        for (int attempt = 0; attempt < MAX_ATTEMPTS_PER_WINDOW; attempt++) {
+            mvc.perform(postFrom(SIGNUP_PATH, clientIp, uniqueRegistration())).andExpect(status().isCreated());
+        }
+
+        mvc.perform(postFrom(SIGNUP_PATH, clientIp, uniqueRegistration()))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(header().string("Retry-After", "300"))
+                // 필터 단계에서 거부된 응답에도 시큐리티 헤더가 실린다.
+                .andExpect(header().string("X-Content-Type-Options", "nosniff"))
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.code").value("TOO_MANY_SIGNUP_ATTEMPTS"));
+    }
+
+    @Test
+    @DisplayName("같은 IP의 로그인 한도 소진이 가입 한도를 소모하지 않는다(표면별 카운터 분리)")
+    void signupThrottleIsIsolatedFromLogin() throws Exception {
+        String clientIp = "203.0.113.21";
+        String loginBody = objectMapper.writeValueAsString(
+                new LoginRequest("nobody-" + UUID.randomUUID() + "@example.com", "password-123!"));
+
+        // 같은 IP로 로그인 카운터를 한도 초과까지 채운다.
+        for (int attempt = 0; attempt < MAX_ATTEMPTS_PER_WINDOW; attempt++) {
+            mvc.perform(postFrom(LOGIN_PATH, clientIp, loginBody)).andExpect(status().isUnauthorized());
+        }
+        mvc.perform(postFrom(LOGIN_PATH, clientIp, loginBody)).andExpect(status().isTooManyRequests());
+
+        // 같은 IP의 가입은 별도 카운터라 정상 201로 통과한다.
+        mvc.perform(postFrom(SIGNUP_PATH, clientIp, uniqueRegistration())).andExpect(status().isCreated());
     }
 
     @Test
@@ -493,6 +539,18 @@ class MemberControllerTest extends WebIntegrationTest {
 
     private UUID registerMember() {
         return memberAppender.register("user-" + UUID.randomUUID() + "@example.com", "테스터", "password-123!");
+    }
+
+    private String uniqueRegistration() {
+        return objectMapper.writeValueAsString(
+                new MemberRegistrationRequest("user-" + UUID.randomUUID() + "@example.com", "테스터", "password-123!"));
+    }
+
+    private static MockHttpServletRequestBuilder postFrom(String path, String clientIp, String body) {
+        return post(path).contentType(MediaType.APPLICATION_JSON).content(body).with(request -> {
+            request.setRemoteAddr(clientIp);
+            return request;
+        });
     }
 
     private UUID seedProduct(int quantity) {
