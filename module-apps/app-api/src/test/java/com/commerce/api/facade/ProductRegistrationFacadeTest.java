@@ -104,11 +104,26 @@ class ProductRegistrationFacadeTest extends FacadeIntegrationTest {
         UUID interrupted = variantAppender.create(productId, Money.of(12000L), options);
         stockAppender.create(interrupted, 30);
 
-        UUID resumed = productRegistrationFacade.addVariant(productId, Money.of(12000L), options, 99);
+        UUID resumed = productRegistrationFacade.addVariant(productId, Money.of(15000L), options, 99);
 
         assertThat(resumed).isEqualTo(interrupted);
         assertThat(variantReader.getVariant(interrupted).status()).isEqualTo(ProductVariantStatus.ACTIVE);
-        // 재개는 기존 재고를 재시딩하지 않는다 — 초기수량 99가 아니라 중단 시점의 30 유지.
+        // 재개는 기존 재고를 재시딩하지 않고 기존 가격을 유지한다 — 재시도 입력(99·15000)이 아니라 중단 시점 값.
+        assertThat(stockReader.getByVariantId(interrupted).quantity()).isEqualTo(30);
+        assertThat(variantReader.getVariant(interrupted).price()).isEqualTo(Money.of(12000L));
+    }
+
+    @Test
+    @DisplayName("표기가 다른 같은 옵션으로 재시도해도 정규화가 수렴시켜 같은 변형을 재개한다")
+    void addVariantResumeConvergesAcrossOptionFormatting() {
+        UUID productId = registerBaseProduct();
+        UUID interrupted = variantAppender.create(productId, Money.of(12000L), List.of(new ProductOption("색상", "파랑")));
+
+        UUID resumed = productRegistrationFacade.addVariant(
+                productId, Money.of(12000L), List.of(new ProductOption(" 색상 ", " 파랑 ")), 30);
+
+        assertThat(resumed).isEqualTo(interrupted);
+        assertThat(variantReader.getVariant(interrupted).status()).isEqualTo(ProductVariantStatus.ACTIVE);
         assertThat(stockReader.getByVariantId(interrupted).quantity()).isEqualTo(30);
     }
 
