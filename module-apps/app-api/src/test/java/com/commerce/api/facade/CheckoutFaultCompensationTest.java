@@ -23,6 +23,7 @@ import com.commerce.member.service.MemberAppender;
 import com.commerce.order.entity.Address;
 import com.commerce.order.entity.CancellationReason;
 import com.commerce.order.service.OrderModifier;
+import com.commerce.order.service.OrderReader;
 import com.commerce.payment.entity.PaymentMethod;
 import com.commerce.product.service.ProductVariantReader;
 import com.commerce.stock.exception.StockErrorCode;
@@ -34,6 +35,7 @@ import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.test.context.TestConstructor;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
@@ -41,7 +43,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
  * 체크아웃 사가의 중간 실패(재고 차감·쿠폰 확정) 보상 분기를 결함 주입으로 검증한다.
  *
  * <p>이 두 분기는 낙관락·경합으로만 트리거돼 자연 재현이 어려우므로 도메인 서비스를 spy로 감싸 던지게 한다.
- * 취소 호출과 취소 사유, 복원 결과를 확인한다.
+ * 취소 호출과 취소 사유, 복원 결과, 차감 완료 마커의 기록 시점(전 라인 차감 뒤 ∧ 쿠폰 확정 앞)을 확인한다.
  */
 @TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 class CheckoutFaultCompensationTest extends FacadeIntegrationTest {
@@ -64,6 +66,7 @@ class CheckoutFaultCompensationTest extends FacadeIntegrationTest {
     private final StockReader stockReader;
     private final IssuedCouponReader issuedCouponReader;
     private final ProductVariantReader variantReader;
+    private final OrderReader orderReader;
 
     CheckoutFaultCompensationTest(
             CheckoutFacade checkoutFacade,
@@ -74,7 +77,8 @@ class CheckoutFaultCompensationTest extends FacadeIntegrationTest {
             IssuedCouponAppender issuedCouponAppender,
             StockReader stockReader,
             IssuedCouponReader issuedCouponReader,
-            ProductVariantReader variantReader) {
+            ProductVariantReader variantReader,
+            OrderReader orderReader) {
         this.checkoutFacade = checkoutFacade;
         this.productRegistrationFacade = productRegistrationFacade;
         this.memberAppender = memberAppender;
@@ -84,6 +88,7 @@ class CheckoutFaultCompensationTest extends FacadeIntegrationTest {
         this.stockReader = stockReader;
         this.issuedCouponReader = issuedCouponReader;
         this.variantReader = variantReader;
+        this.orderReader = orderReader;
     }
 
     @Test
@@ -99,8 +104,12 @@ class CheckoutFaultCompensationTest extends FacadeIntegrationTest {
         assertThatThrownBy(() -> checkoutFacade.checkout(memberId, address(), Money.ZERO, null, PaymentMethod.CARD))
                 .isInstanceOf(StockShortageException.class);
 
-        verify(orderModifier).cancel(any(UUID.class), eq(CancellationReason.STOCK_SHORTAGE));
+        ArgumentCaptor<UUID> orderIdCaptor = ArgumentCaptor.forClass(UUID.class);
+        verify(orderModifier).cancel(orderIdCaptor.capture(), eq(CancellationReason.STOCK_SHORTAGE));
         assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(50);
+        // 차감 전·중 실패에는 차감 완료 마커가 기록되지 않는다 — 마커 존재 ⇒ 전 라인 차감 완료의 한 방향.
+        assertThat(orderReader.getOrder(orderIdCaptor.getValue()).stockDeductedAt())
+                .isNull();
     }
 
     @Test
@@ -118,10 +127,14 @@ class CheckoutFaultCompensationTest extends FacadeIntegrationTest {
         assertThatThrownBy(() -> checkoutFacade.checkout(memberId, address(), Money.ZERO, issuedId, PaymentMethod.CARD))
                 .isInstanceOf(CouponStatusException.class);
 
-        verify(orderModifier).cancel(any(UUID.class), eq(CancellationReason.COUPON_CONFLICT));
+        ArgumentCaptor<UUID> orderIdCaptor = ArgumentCaptor.forClass(UUID.class);
+        verify(orderModifier).cancel(orderIdCaptor.capture(), eq(CancellationReason.COUPON_CONFLICT));
         assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(50);
         assertThat(issuedCouponReader.getIssuedCoupon(issuedId, memberId).status())
                 .isEqualTo(IssuedCouponStatus.ISSUED);
+        // 쿠폰 확정에 도달했다면 차감 완료 마커가 이미 기록돼 있다 — 마커가 전 라인 차감 뒤·쿠폰 확정 앞임을 고정.
+        assertThat(orderReader.getOrder(orderIdCaptor.getValue()).stockDeductedAt())
+                .isNotNull();
     }
 
     private UUID registerMember() {
