@@ -46,6 +46,7 @@ spring-boot-starter-web = { module = "org.springframework.boot:spring-boot-start
 # app-api — OpenAPI 자동 문서 + swagger-ui. Spring Boot 4.x 호환은 3.x 라인(2.x는 Boot 3 전용)이라 버전을 명시한다
 springdoc-openapi-starter-webmvc-ui = { module = "org.springdoc:springdoc-openapi-starter-webmvc-ui", version.ref = "springdoc" }
 spring-boot-starter-actuator = { module = "org.springframework.boot:spring-boot-starter-actuator" }
+slf4j-api = { module = "org.slf4j:slf4j-api" }
 spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-starter-test" }
 
 # infra-redis — Redis 멱등 키·레이트리밋·분산 락 저장소. 버전은 Spring Boot BOM

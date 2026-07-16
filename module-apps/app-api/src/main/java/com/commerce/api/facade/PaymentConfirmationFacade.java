@@ -14,6 +14,8 @@ import com.commerce.payment.port.GatewayTransactionStatus;
 import com.commerce.payment.service.PaymentProcessor;
 import com.commerce.payment.service.PaymentReader;
 import com.commerce.stock.service.StockModifier;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
@@ -66,6 +68,9 @@ public class PaymentConfirmationFacade {
     private final StockModifier stockModifier;
     private final IssuedCouponModifier issuedCouponModifier;
     private final Duration staleAfter;
+    private final Counter processedPayments;
+    private final Counter failedPayments;
+    private final Counter skippedStockRestores;
 
     public PaymentConfirmationFacade(
             PaymentReader paymentReader,
@@ -74,7 +79,8 @@ public class PaymentConfirmationFacade {
             OrderModifier orderModifier,
             StockModifier stockModifier,
             IssuedCouponModifier issuedCouponModifier,
-            @Value("${payment.reconciliation.stale-after}") Duration staleAfter) {
+            @Value("${payment.reconciliation.stale-after}") Duration staleAfter,
+            MeterRegistry meterRegistry) {
         this.paymentReader = paymentReader;
         this.paymentProcessor = paymentProcessor;
         this.orderReader = orderReader;
@@ -82,6 +88,10 @@ public class PaymentConfirmationFacade {
         this.stockModifier = stockModifier;
         this.issuedCouponModifier = issuedCouponModifier;
         this.staleAfter = staleAfter;
+        // 조용한 잔존·보상 실패를 수치로 관측한다 — 확정 처리·실패 건수와 증거 없는 복원 생략(운영 대사 대상).
+        this.processedPayments = meterRegistry.counter("reconcile.payments.processed");
+        this.failedPayments = meterRegistry.counter("reconcile.payments.failed");
+        this.skippedStockRestores = meterRegistry.counter("compensation.stock_restore.skipped");
     }
 
     /** 유예가 지난 REQUESTED 결제를 주기적으로 리컨실한다. 노드 간 동시 스윕은 분산 락이 하나로 줄인다. */
@@ -100,8 +110,10 @@ public class PaymentConfirmationFacade {
         for (PaymentInfo payment : paymentReader.findRequestedBefore(cutoff)) {
             try {
                 confirm(payment);
+                processedPayments.increment();
             } catch (RuntimeException e) {
                 // 한 결제의 확정 실패가 스윕을 중단시키지 않는다 — 남은 대상을 계속 처리하고 다음 스윕이 재시도한다.
+                failedPayments.increment();
                 log.warn("결제 리컨실 확정 실패: paymentId={}", payment.id(), e);
             }
         }
@@ -215,6 +227,7 @@ public class PaymentConfirmationFacade {
         // 도달한 주문은 증거가 있는 게 정상이지만, 그 보장은 체크아웃 단계 순서라는 비국소 불변식이라 복원
         // 지점마다 같은 게이트로 지역 강제한다 — 증거 없으면 복원을 생략한다(과복원 대신 팬텀 품절, 운영 대사).
         if (order.stockDeductedAt() == null) {
+            skippedStockRestores.increment();
             log.warn(
                     "차감 완료 증거 없는 PENDING 보상이라 재고 복원을 생략한다(운영 대사 대상): orderId={} orderNumber={}",
                     order.id(),

@@ -10,6 +10,8 @@ import com.commerce.payment.entity.PaymentStatus;
 import com.commerce.payment.info.PaymentInfo;
 import com.commerce.payment.service.PaymentReader;
 import com.commerce.stock.service.StockModifier;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
@@ -61,6 +63,9 @@ public class PendingOrderSweepFacade {
     private final IssuedCouponModifier issuedCouponModifier;
     private final PaymentConfirmationFacade paymentConfirmationFacade;
     private final Duration staleAfter;
+    private final Counter processedOrders;
+    private final Counter failedOrders;
+    private final Counter skippedStockRestores;
 
     public PendingOrderSweepFacade(
             OrderReader orderReader,
@@ -69,7 +74,8 @@ public class PendingOrderSweepFacade {
             StockModifier stockModifier,
             IssuedCouponModifier issuedCouponModifier,
             PaymentConfirmationFacade paymentConfirmationFacade,
-            @Value("${order.reconciliation.stale-after}") Duration staleAfter) {
+            @Value("${order.reconciliation.stale-after}") Duration staleAfter,
+            MeterRegistry meterRegistry) {
         this.orderReader = orderReader;
         this.paymentReader = paymentReader;
         this.orderModifier = orderModifier;
@@ -77,6 +83,10 @@ public class PendingOrderSweepFacade {
         this.issuedCouponModifier = issuedCouponModifier;
         this.paymentConfirmationFacade = paymentConfirmationFacade;
         this.staleAfter = staleAfter;
+        // 조용한 잔존·보상 실패를 수치로 관측한다 — 처리·실패 건수와 증거 없는 복원 생략(운영 대사 대상).
+        this.processedOrders = meterRegistry.counter("sweep.pending_orders.processed");
+        this.failedOrders = meterRegistry.counter("sweep.pending_orders.failed");
+        this.skippedStockRestores = meterRegistry.counter("compensation.stock_restore.skipped");
     }
 
     /** 유예가 지난 PENDING 주문을 주기적으로 스윕한다. 노드 간 동시 스윕은 분산 락이 하나로 줄인다. */
@@ -95,8 +105,10 @@ public class PendingOrderSweepFacade {
         for (OrderInfo order : orderReader.findPendingBefore(cutoff)) {
             try {
                 sweep(order);
+                processedOrders.increment();
             } catch (RuntimeException e) {
                 // 한 주문의 종결 실패가 스윕을 중단시키지 않는다 — 남은 대상을 계속 처리하고 다음 스윕이 재시도한다.
+                failedOrders.increment();
                 log.warn("PENDING 주문 스윕 종결 실패: orderId={}", order.id(), e);
             }
         }
@@ -126,6 +138,7 @@ public class PendingOrderSweepFacade {
      */
     private void restoreDeductedStock(OrderInfo order) {
         if (order.stockDeductedAt() == null) {
+            skippedStockRestores.increment();
             log.warn(
                     "차감 완료 증거 없는 PENDING 잔여라 재고 복원을 생략한다(운영 대사 대상): orderId={} orderNumber={}",
                     order.id(),

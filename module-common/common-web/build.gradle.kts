@@ -18,6 +18,9 @@ dependencies {
     // 낙관락 충돌(ObjectOptimisticLockingFailureException) → 409 매핑용(entity-persistence.md).
     implementation(libs.spring.orm)
 
+    // 요청 상관관계 ID 필터가 MDC를 배선한다. 구현(logback)은 실행 앱의 로깅 스타터가 런타임 제공한다.
+    implementation(libs.slf4j.api)
+
     // 서블릿 API는 실행 앱(서블릿 컨테이너)이 런타임에 제공하므로 compileOnly.
     compileOnly(libs.jakarta.servlet.api)
 

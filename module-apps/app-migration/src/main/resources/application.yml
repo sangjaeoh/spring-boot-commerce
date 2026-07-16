@@ -9,3 +9,9 @@ spring:
   jpa:
     hibernate:
       ddl-auto: none
+
+logging:
+  structured:
+    format:
+      # app-api와 같은 ECS 구조화 로깅 — 마이그레이션 로그도 동일 파이프라인으로 수집·파싱한다.
+      console: ecs

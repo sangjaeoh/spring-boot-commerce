@@ -46,8 +46,9 @@ management:
   endpoints:
     web:
       exposure:
-        # 의도적 최소 노출 — health만. metrics는 수집기가 없어 소비자가 없으므로 노출하지 않는다.
-        include: health
+        # 관측 최소셋 — health와 metrics만. metrics는 커넥션 풀(hikari)·HTTP 상태(409 비율)·스윕/보상
+        # 카운터를 노출해 조용한 잔존·보상 실패를 감지한다(내부망 전제, PII·시크릿 미포함).
+        include: health,metrics
   endpoint:
     health:
       probes:

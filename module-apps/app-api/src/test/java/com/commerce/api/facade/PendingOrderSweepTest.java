@@ -31,6 +31,7 @@ import com.commerce.product.info.ProductVariantInfo;
 import com.commerce.product.service.ProductVariantReader;
 import com.commerce.stock.service.StockModifier;
 import com.commerce.stock.service.StockReader;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -72,6 +73,7 @@ class PendingOrderSweepTest extends FacadeIntegrationTest {
     private final IssuedCouponReader issuedCouponReader;
     private final ProductVariantReader variantReader;
     private final JdbcTemplate jdbcTemplate;
+    private final MeterRegistry meterRegistry;
 
     PendingOrderSweepTest(
             PendingOrderSweepFacade pendingOrderSweepFacade,
@@ -91,7 +93,8 @@ class PendingOrderSweepTest extends FacadeIntegrationTest {
             IssuedCouponModifier issuedCouponModifier,
             IssuedCouponReader issuedCouponReader,
             ProductVariantReader variantReader,
-            JdbcTemplate jdbcTemplate) {
+            JdbcTemplate jdbcTemplate,
+            MeterRegistry meterRegistry) {
         this.pendingOrderSweepFacade = pendingOrderSweepFacade;
         this.productRegistrationFacade = productRegistrationFacade;
         this.memberAppender = memberAppender;
@@ -110,6 +113,7 @@ class PendingOrderSweepTest extends FacadeIntegrationTest {
         this.issuedCouponReader = issuedCouponReader;
         this.variantReader = variantReader;
         this.jdbcTemplate = jdbcTemplate;
+        this.meterRegistry = meterRegistry;
     }
 
     @Test
@@ -143,6 +147,29 @@ class PendingOrderSweepTest extends FacadeIntegrationTest {
         assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(50);
         assertThat(issuedCouponReader.getIssuedCoupon(issuedId, memberId).status())
                 .isEqualTo(IssuedCouponStatus.ISSUED);
+    }
+
+    @Test
+    @DisplayName("스윕 처리와 증거 없는 복원 생략이 메트릭 카운터로 관측된다")
+    void sweepOutcomesAreCounted() {
+        double processedBefore =
+                meterRegistry.counter("sweep.pending_orders.processed").count();
+        double skippedBefore =
+                meterRegistry.counter("compensation.stock_restore.skipped").count();
+        UUID memberId = registerMember();
+        UUID variantId = seedProduct(Money.of(10000L), 50);
+        // 증거 없는 잔여(차감 전 크래시) — 처리 1건과 복원 생략 1건으로 집계돼 조용한 잔존이 수치로 드러난다.
+        UUID orderId =
+                orderAppender.place(memberId, List.of(snapshot(variantId, 2)), address(), Money.ZERO, Money.ZERO, null);
+
+        pendingOrderSweepFacade.reconcile(Instant.now());
+
+        assertThat(orderReader.getOrder(orderId).status()).isEqualTo(OrderStatus.CANCELLED);
+        // 공유 DB의 다른 잔여도 함께 스윕될 수 있어 하한으로 단언한다.
+        assertThat(meterRegistry.counter("sweep.pending_orders.processed").count())
+                .isGreaterThanOrEqualTo(processedBefore + 1);
+        assertThat(meterRegistry.counter("compensation.stock_restore.skipped").count())
+                .isGreaterThanOrEqualTo(skippedBefore + 1);
     }
 
     @Test
