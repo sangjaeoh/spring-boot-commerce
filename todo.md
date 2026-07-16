@@ -60,7 +60,7 @@
 - 범위: 중.
 
 ### 5. 장바구니 쓰기 경로 동시성 견고화
-- 상태: 대기
+- 상태: 완료
 - 문제(High): `CartAppender.java:22-24`의 get-or-create가 무방비다. 동시 첫 담기 2건 → 둘 다 `findByMemberId` 빈 결과 → 둘 다 `save` → `cart.member_id` 유니크 위반 → 어떤 핸들러도 안 잡아 **500**. 동일 변형 동시 담기 → `cart_item(cart_id,variant_id)` 유니크 위반 → 500. 라인 있는 동시 합산은 `CartItem.java:57-60`의 메모리 read-modify-write + `@Version` 부재라 합산이 소실(qty 1+1이 3 대신 조용히 잘못된 값). product·stock Appender는 동일 경합을 `saveAndFlush`+catch로 방어하는데 cart만 이탈한다(유일하게 실결함으로 이어진 비일관성).
 - 완료 기준: 유니크 위반 catch 후 재조회-재시도(get-or-create), 수량 합산을 원자적(`@Version` 또는 조건부 UPDATE)으로. 동시 담기 IT로 500 부재 + 합산 정확성 검증. product/stock의 기존 이중화 패턴과 정합.
 - 범위: 소~중.
