@@ -77,6 +77,75 @@ class IssuedCouponControllerTest extends WebIntegrationTest {
     }
 
     @Test
+    @DisplayName("할인 미리보기는 200으로 적용 가능 여부와 예상 할인액을 싣는다")
+    void getDiscountPreviewReturnsExpectedDiscount() throws Exception {
+        UUID ownerId = registerMember();
+        UUID issuedId = issuedCouponAppender.issue(createCoupon(), ownerId);
+
+        mvc.perform(get("/api/v1/issued-coupons/{issuedCouponId}/discount-preview", issuedId)
+                        .param("orderAmount", "15000")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(ownerId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.applicable").value(true))
+                .andExpect(jsonPath("$.discountAmount").value(1000));
+    }
+
+    @Test
+    @DisplayName("최소주문금액 미달 할인 미리보기는 200으로 적용 불가와 사유·0원을 싣는다")
+    void getDiscountPreviewRepresentsMinOrderShortfall() throws Exception {
+        UUID ownerId = registerMember();
+        UUID couponId = couponAppender.create(
+                "정률 10% (상한 2000)",
+                Discount.rate(10, Money.of(2000L)),
+                Money.of(10000L),
+                ValidityPeriod.of(Instant.parse("2020-01-01T00:00:00Z"), Instant.parse("2030-01-01T00:00:00Z")),
+                30,
+                null);
+        UUID issuedId = issuedCouponAppender.issue(couponId, ownerId);
+
+        mvc.perform(get("/api/v1/issued-coupons/{issuedCouponId}/discount-preview", issuedId)
+                        .param("orderAmount", "9999")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(ownerId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.applicable").value(false))
+                .andExpect(jsonPath("$.reason").value("MIN_ORDER_AMOUNT_NOT_MET"))
+                .andExpect(jsonPath("$.discountAmount").value(0));
+    }
+
+    @Test
+    @DisplayName("타인 발급분 할인 미리보기는 404 ISSUED_COUPON_NOT_FOUND로 거부된다")
+    void getDiscountPreviewRejectsNonOwner() throws Exception {
+        UUID ownerId = registerMember();
+        UUID otherId = registerMember();
+        UUID issuedId = issuedCouponAppender.issue(createCoupon(), ownerId);
+
+        mvc.perform(get("/api/v1/issued-coupons/{issuedCouponId}/discount-preview", issuedId)
+                        .param("orderAmount", "15000")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(otherId)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("ISSUED_COUPON_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("범위 밖 주문 금액(음수·상한 초과)의 할인 미리보기는 400 VALIDATION_FAILED로 거부된다")
+    void getDiscountPreviewRejectsOutOfRangeOrderAmount() throws Exception {
+        UUID ownerId = registerMember();
+        UUID issuedId = issuedCouponAppender.issue(createCoupon(), ownerId);
+
+        mvc.perform(get("/api/v1/issued-coupons/{issuedCouponId}/discount-preview", issuedId)
+                        .param("orderAmount", "-1")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(ownerId)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+
+        mvc.perform(get("/api/v1/issued-coupons/{issuedCouponId}/discount-preview", issuedId)
+                        .param("orderAmount", "1000000000000001")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(ownerId)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+    }
+
+    @Test
     @DisplayName("미인증 발급 쿠폰 목록 조회는 401 UNAUTHENTICATED로 거부된다")
     void getIssuedCouponsRejectsUnauthenticated() throws Exception {
         mvc.perform(get("/api/v1/issued-coupons"))
