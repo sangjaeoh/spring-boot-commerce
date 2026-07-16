@@ -96,7 +96,7 @@
   | ------------------ | ------------------------------------------------------------------------------ |
   | `common-core`      | 프레임워크 의존 제로의 순수 코드 — UUIDv7 생성기·시간·벤더 중립 애노테이션·`BaseException`·`ErrorCode` |
   | `common-jpa`       | JPA 공통 지원 — Auditing·`SchemaFlywayFactory`                                 |
-  | `common-messaging` | 발행 포트(`MessagePublisher`)·아웃박스·멱등 소비 지원(transport 구현은 infra)  |
+  | `common-messaging` | 발행 포트(`MessagePublisher`)·도메인 이벤트 마커(`DomainEvent`)(transport 구현은 infra) |
   | `common-auth`      | 토큰(JWT) 검증 원자재(웹 필터는 common-web 소유)                               |
   | `common-web`       | 웹 공통 — 인증·멱등·시큐리티 헤더·로그인 레이트리밋 필터·`AuthUser`·ProblemDetail 핸들러·공용 validator 승격처 |
 
@@ -165,6 +165,6 @@
 
 - 아래는 리뷰가 아니라 빌드가 막는 경계다. 에이전트는 코드 생성 후 이 목록으로 자기검증하고, 채택 팀은 이 목록으로 강제 장치 구현 완료를 대조한다(각 항목에 강제 장치를 매핑). 강제 장치(컨벤션 플러그인·아키텍처 테스트) 자체는 빌드 하네스가 소유한다.
   - 계층 의존 방향(모듈 지도) — 컨벤션 플러그인(컴파일 시점).
-  - JPA 매핑 클래스(`@Entity`·`@MappedSuperclass`)의 모듈 밖 시그니처 등장 금지·타입 위치·apps의 리포지토리 직접 접근 금지·base `JpaRepository` finder 직접 호출 금지(소프트삭제 엔티티에 한함) — 아키텍처 테스트(테스트 시점).
+  - JPA 매핑 클래스(`@Entity`·`@MappedSuperclass`)의 모듈 밖 시그니처 등장 금지·apps의 리포지토리 직접 접근 금지·base `JpaRepository` finder 직접 호출 금지(소프트삭제 엔티티에 한함) — 아키텍처 테스트(테스트 시점).
   - 각 모듈 베이스 패키지 `@NullMarked`·null 계약·포맷·정적분석 — Spotless·NullAway·Error Prone(→ [code-quality](code-quality.md)).
   - 금지 의존성(Lombok·H2) — 컨벤션 플러그인.
