@@ -119,7 +119,7 @@ public class CheckoutFacade {
                 orderAppender.place(memberId, snapshots, shippingAddress, discountAmount, shippingFee, issuedCouponId);
         deductStockOrCompensate(orderId, snapshots);
         if (issuedCouponId != null) {
-            useCouponOrCompensate(orderId, issuedCouponId, snapshots);
+            useCouponOrCompensate(orderId, memberId, issuedCouponId, snapshots);
         }
         approvePaymentOrCompensate(orderId, snapshots, issuedCouponId, payAmount, resolvedMethod);
         orderModifier.markPaid(orderId);
@@ -240,9 +240,10 @@ public class CheckoutFacade {
         }
     }
 
-    private void useCouponOrCompensate(UUID orderId, UUID issuedCouponId, List<OrderLineSnapshot> snapshots) {
+    private void useCouponOrCompensate(
+            UUID orderId, UUID memberId, UUID issuedCouponId, List<OrderLineSnapshot> snapshots) {
         try {
-            issuedCouponModifier.use(issuedCouponId, orderId);
+            issuedCouponModifier.use(issuedCouponId, memberId, orderId);
         } catch (RuntimeException e) {
             orderModifier.cancel(orderId, CancellationReason.COUPON_CONFLICT);
             restoreStock(snapshots);

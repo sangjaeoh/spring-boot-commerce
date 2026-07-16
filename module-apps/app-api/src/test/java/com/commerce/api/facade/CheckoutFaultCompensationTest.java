@@ -122,7 +122,7 @@ class CheckoutFaultCompensationTest extends FacadeIntegrationTest {
         UUID issuedId = issuedCouponAppender.issue(couponId, memberId);
         doThrow(new CouponStatusException(CouponErrorCode.ISSUED_COUPON_NOT_USABLE))
                 .when(issuedCouponModifier)
-                .use(eq(issuedId), any(UUID.class));
+                .use(eq(issuedId), eq(memberId), any(UUID.class));
 
         assertThatThrownBy(() -> checkoutFacade.checkout(memberId, address(), Money.ZERO, issuedId, PaymentMethod.CARD))
                 .isInstanceOf(CouponStatusException.class);

@@ -193,7 +193,7 @@ class IssuedCouponControllerTest extends WebIntegrationTest {
     void revokeRejectsUsedCoupon() throws Exception {
         UUID ownerId = registerMember();
         UUID issuedId = issuedCouponAppender.issue(createCoupon(), ownerId);
-        issuedCouponModifier.use(issuedId, UUID.randomUUID());
+        issuedCouponModifier.use(issuedId, ownerId, UUID.randomUUID());
 
         mvc.perform(post("/api/v1/issued-coupons/{issuedCouponId}/revoke", issuedId)
                         .header(HttpHeaders.AUTHORIZATION, adminBearer())

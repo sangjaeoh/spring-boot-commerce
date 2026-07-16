@@ -341,7 +341,7 @@ class PendingOrderSweepTest extends FacadeIntegrationTest {
         stockModifier.deduct(variantId, quantity);
         orderModifier.markStockDeducted(orderId);
         if (issuedCouponId != null) {
-            issuedCouponModifier.use(issuedCouponId, orderId);
+            issuedCouponModifier.use(issuedCouponId, memberId, orderId);
         }
         return orderId;
     }

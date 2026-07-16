@@ -24,15 +24,16 @@ public class IssuedCouponModifier {
     }
 
     /**
-     * 발급분을 사용 처리한다. 동시 사용은 낙관락으로 직렬화된다.
+     * 발급분을 사용 처리한다. 본인({@code memberId}) 소유가 아니면 미존재로 취급해 거부한다. 동시 사용은
+     * 낙관락으로 직렬화된다.
      *
-     * @throws IssuedCouponNotFoundException 발급분이 없으면
+     * @throws IssuedCouponNotFoundException 발급분이 없거나 본인 소유가 아니면
      * @throws CouponStatusException 이미 사용된 발급분이면
      * @throws CouponExpiredException 사용 기한이 지났으면
      */
     @Transactional
-    public void use(UUID issuedCouponId, UUID orderId) {
-        find(issuedCouponId).use(orderId, clock.instant());
+    public void use(UUID issuedCouponId, UUID memberId, UUID orderId) {
+        findOwned(issuedCouponId, memberId).use(orderId, clock.instant());
     }
 
     /** 해당 주문에 대한 사용을 복원한다. 사용 상태가 아니거나 사용 주문이 다르면 아무 일도 하지 않는다. */
@@ -55,6 +56,12 @@ public class IssuedCouponModifier {
     private IssuedCoupon find(UUID issuedCouponId) {
         return issuedCouponRepository
                 .findById(issuedCouponId)
+                .orElseThrow(() -> new IssuedCouponNotFoundException(CouponErrorCode.ISSUED_COUPON_NOT_FOUND));
+    }
+
+    private IssuedCoupon findOwned(UUID issuedCouponId, UUID memberId) {
+        return issuedCouponRepository
+                .findByIdAndMemberId(issuedCouponId, memberId)
                 .orElseThrow(() -> new IssuedCouponNotFoundException(CouponErrorCode.ISSUED_COUPON_NOT_FOUND));
     }
 }

@@ -236,7 +236,7 @@ class PaymentReconciliationTest extends FacadeIntegrationTest {
         stockModifier.deduct(variantId, quantity);
         orderModifier.markStockDeducted(orderId);
         if (issuedCouponId != null) {
-            issuedCouponModifier.use(issuedCouponId, orderId);
+            issuedCouponModifier.use(issuedCouponId, memberId, orderId);
         }
         UUID paymentId = paymentAppender.request(orderId, payAmount, PaymentMethod.CARD);
         return new InterruptedCheckout(orderId, paymentId);

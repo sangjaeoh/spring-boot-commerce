@@ -401,7 +401,7 @@
 - 할인 계산: `calculateDiscount`는 `discount.applyTo(주문금액)`에 위임한다(정액/정률 규칙·상한·주문금액 clamp은 Discount 값 객체가 소유).
 - 적용 조건: (할인 전) 주문금액 ≥ minOrderAmount 이고 발급분이 ISSUED, 본인(memberId) 소유, 사용 기한 내(`now ≤ expiresAt`)이며, 산출 할인이 0보다 클 때만 적용한다(0 할인이면 1회 발급을 헛되이 소진하지 않도록 적용을 거부).
 - 소유: 본인(memberId) 소유가 아닌 발급분은 존재 누출 방지로 미존재로 취급한다.
-- 사용(use): 주문 생성 이후 `use(issuedCouponId, orderId)`로 USED 전이하고 usedAt·orderId 세팅. 동시 두 주문이 같은 쿠폰을 사용하면 낙관락으로 한쪽만 성공하고 다른 쪽은 충돌로 보상된다(직렬화 메커니즘은 `docs/entity-persistence.md` 소유).
+- 사용(use): 주문 생성 이후 `use(issuedCouponId, memberId, orderId)`로 USED 전이하고 usedAt·orderId 세팅. 소유는 도메인이 `findByIdAndMemberId`로 강제해 본인 발급분이 아니면 미존재로 거부한다. 동시 두 주문이 같은 쿠폰을 사용하면 낙관락으로 한쪽만 성공하고 다른 쪽은 충돌로 보상된다(직렬화 메커니즘은 `docs/entity-persistence.md` 소유).
 - 만료: 발급분 사용 기한(`expiresAt`) 경과분은 사용 시점 검증에서 거부한다(별도 만료 상태·배치 없음). 정책 `validUntil`은 발급 가능 기간의 종료이지 사용 만료가 아니며, 정책 변경이 기발급분 사용 기한을 소급 바꾸지 않는다(`expiresAt` 스냅샷).
 - 취소 복원(restoreUse): 주문 취소·결제 실패로 주문이 무효가 되면 `restoreUse(issuedCouponId, orderId)`로 USED → ISSUED로 복원하고 usedAt·orderId를 clear한다. 가드 전이라 USED가 아니거나 사용 주문(orderId)이 일치하지 않으면 no-op이다(중복 보상 무해, 다른 주문에 재사용된 발급분을 풀지 않는다).
 
@@ -414,7 +414,7 @@
 | enable | couponId | DISABLED→ACTIVE | 미존재; 잘못된 전이 |
 | issue | couponId, memberId | ACTIVE, 발급기간 내, 회원 자격 활성, `(couponId, memberId)` 유니크, 한도 미소진(원자 선점), 최초 ISSUED | 쿠폰 미존재; 발급 중지(DISABLED); 발급기간 밖; 회원 자격 비활성(정지·탈퇴); 중복 발급; 한도 소진 |
 | calculateDiscount | issuedCouponId, orderAmount | `discount.applyTo(orderAmount)`에 위임 | 미존재 |
-| use | issuedCouponId, orderId | ISSUED·본인·사용 기한(`expiresAt`)·산출 할인 > 0 일 때만 USED 전이 | 미존재(미소유 포함); 상태·자격 위반; 만료; 낙관락 충돌 |
+| use | issuedCouponId, memberId, orderId | ISSUED·본인·사용 기한(`expiresAt`)·산출 할인 > 0 일 때만 USED 전이(본인·상태·기한은 도메인 강제, 산출 할인 > 0은 체크아웃 검증 계층 소유) | 미존재(미소유 포함); 상태·자격 위반; 만료; 낙관락 충돌 |
 | restoreUse | issuedCouponId, orderId | 가드 USED ∧ 사용 주문 일치 → ISSUED(아니면 no-op), usedAt·orderId clear | — |
 | revoke | issuedCouponId, reason | 가드 ISSUED→REVOKED, revokedAt·revokeReason 세팅 | 미존재; 사용됨(USED)·이미 무효화(REVOKED); 낙관락 충돌 |
 | getIssuedCoupon | issuedCouponId | 본인 발급분 1행 | 미존재(미소유 포함) |

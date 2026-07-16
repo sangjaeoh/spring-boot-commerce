@@ -10,6 +10,7 @@ import com.commerce.coupon.entity.IssuedCouponStatus;
 import com.commerce.coupon.entity.ValidityPeriod;
 import com.commerce.coupon.exception.CouponExpiredException;
 import com.commerce.coupon.exception.DuplicateIssuanceException;
+import com.commerce.coupon.exception.IssuedCouponNotFoundException;
 import com.commerce.coupon.info.DiscountPreviewInfo;
 import com.commerce.coupon.info.IssuedCouponInfo;
 import com.commerce.coupon.service.CouponAppender;
@@ -173,9 +174,10 @@ class CouponPersistenceTest {
                 UUID.randomUUID(), UUID.randomUUID(), PersistenceTestConfig.FIXED_NOW.minusMillis(1)));
         em.flush();
 
-        issuedCouponModifier.use(atBoundary.getId(), UUID.randomUUID());
+        issuedCouponModifier.use(atBoundary.getId(), atBoundary.getMemberId(), UUID.randomUUID());
         assertThat(atBoundary.getStatus()).isEqualTo(IssuedCouponStatus.USED);
-        assertThatThrownBy(() -> issuedCouponModifier.use(justExpired.getId(), UUID.randomUUID()))
+        assertThatThrownBy(() ->
+                        issuedCouponModifier.use(justExpired.getId(), justExpired.getMemberId(), UUID.randomUUID()))
                 .isInstanceOf(CouponExpiredException.class);
     }
 
@@ -251,7 +253,7 @@ class CouponPersistenceTest {
     void previewUsedNotApplicable() {
         UUID memberId = UUID.randomUUID();
         UUID issuedId = issueRateCouponTo(memberId);
-        issuedCouponModifier.use(issuedId, UUID.randomUUID());
+        issuedCouponModifier.use(issuedId, memberId, UUID.randomUUID());
         em.flush();
         em.clear();
 
@@ -315,12 +317,29 @@ class CouponPersistenceTest {
         UUID issuedId = issuedCouponAppender.issue(couponId, memberId);
         em.flush();
 
-        issuedCouponModifier.use(issuedId, UUID.randomUUID());
+        issuedCouponModifier.use(issuedId, memberId, UUID.randomUUID());
         em.flush();
         em.clear();
 
         IssuedCouponInfo info = issuedCouponReader.getIssuedCoupon(issuedId, memberId);
         assertThat(info.status()).isEqualTo(IssuedCouponStatus.USED);
         assertThat(info.orderId()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("타인 발급분 사용은 미존재로 거부되고 발급분은 ISSUED로 남는다")
+    void useRejectsOtherMemberAsNotFound() {
+        UUID couponId = createRateCoupon();
+        em.flush();
+        UUID ownerId = UUID.randomUUID();
+        UUID issuedId = issuedCouponAppender.issue(couponId, ownerId);
+        em.flush();
+        em.clear();
+
+        assertThatThrownBy(() -> issuedCouponModifier.use(issuedId, UUID.randomUUID(), UUID.randomUUID()))
+                .isInstanceOf(IssuedCouponNotFoundException.class);
+
+        assertThat(issuedCouponReader.getIssuedCoupon(issuedId, ownerId).status())
+                .isEqualTo(IssuedCouponStatus.ISSUED);
     }
 }
