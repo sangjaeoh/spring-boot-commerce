@@ -35,7 +35,7 @@ import org.springframework.stereotype.Component;
  * REQUESTED만 선별해 이를 영영 보지 못하므로 이 스윕이 발견해 결제 리컨실 확정 경로에 위임한다(APPROVED ×
  * PENDING → 결제완료 완결, FAILED × PENDING → 보상 종결). 생성 후 유예
  * ({@code order.reconciliation.stale-after})가 지난 주문만 손대 진행 중 체크아웃과 경합하지 않는다 — 유예를
- * 결제 리컨실 유예 이상으로 두어, payment 행 있는 PENDING이 결제 리컨실에 먼저 잡히고 유예 지난
+ * 결제 리컨실 유예 이상으로 두어, REQUESTED 행 있는 PENDING이 결제 리컨실에 먼저 잡히고 유예 지난
  * 무-payment PENDING엔 새 payment 행이 생기지 않는다(payment 행을 쓰는 유일 경로가 그 주문의 체크아웃이다).
  *
  * <p>보상은 취소·리컨실 흐름과 같은 순서다: 주문 CANCELLED 1회성 전이 선행 → 쿠폰 복원(멱등) → 재고 복원
