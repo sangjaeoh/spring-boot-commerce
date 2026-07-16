@@ -173,7 +173,8 @@
 - 범위: 소.
 
 ### 19. 입력 검증·표시 정합 번들
-- 상태: 대기
+- 상태: 완료
+- 완료 메모(2026-07-17): options 목록에도 `@Size(max=10)`을 추가했다 — 조합 길이는 목록 상한 없이는 보장 불가(시그니처 819≤1000·라벨 427≤500). 잔여 — (i) 병리적 NFKC 팽창 문자(합자 등)는 여전히 DB 백스톱에 걸려 409로 오보고될 수 있음(도메인 측 정규화 후 길이 검사로 완전 봉합 가능, 현실 위협 아님), (ii) 표시 라벨은 trim() 유지라 가장자리 NBSP 잔류(표시 전용, 유니크 무관).
 - 문제(Low): (a) 옵션 정규화가 `trim()` 후 NFKC라 NBSP(U+00A0) 등이 시그니처에 잔류해 유니크를 우회할 수 있다(`NormalizedOptions.java:45-47`). (b) `ProductVariantAppender.java:58-61`이 모든 `DataIntegrityViolationException`을 DUPLICATE로 매핑해 `option_signature` 길이 초과가 "중복"으로 오보고(요청 DTO에 `@Size` 부재, `OptionRequest.java:7`). (c) `CartItem.java:57-60`의 수량 합산 int 오버플로 무가드.
 - 완료 기준: NFKC 정규화 후 `strip()` 순서로 변경, 옵션 필드에 `@Size` 추가(경계 검증 원칙 정합), 수량 합산 상한 가드. 각 케이스 단위 테스트.
 - 범위: 소.
