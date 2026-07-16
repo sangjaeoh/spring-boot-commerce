@@ -87,6 +87,17 @@ class CouponTest {
     }
 
     @Test
+    @DisplayName("발급 기간 경계 정각에는 발급 가능하고 직전·직후에는 불가하다")
+    void issuablePeriodBoundaries() {
+        assertThatCode(() -> activeCoupon().checkIssuable(FROM)).doesNotThrowAnyException();
+        assertThatCode(() -> activeCoupon().checkIssuable(UNTIL)).doesNotThrowAnyException();
+        assertThatThrownBy(() -> activeCoupon().checkIssuable(FROM.minusMillis(1)))
+                .isInstanceOf(CouponStatusException.class);
+        assertThatThrownBy(() -> activeCoupon().checkIssuable(UNTIL.plusMillis(1)))
+                .isInstanceOf(CouponStatusException.class);
+    }
+
+    @Test
     @DisplayName("주문금액이 최소주문금액 이상이면 할인 정책에 위임하고, 미달이면 0")
     void calculateDiscountFloorsAtMinOrderAmount() {
         assertThat(activeCoupon().calculateDiscount(Money.of(50000L))).isEqualTo(Money.of(5000L));

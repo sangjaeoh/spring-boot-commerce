@@ -79,16 +79,15 @@ public class IssuedCoupon extends BaseTimeEntity<UUID> {
     }
 
     /**
-     * 발급분을 사용 처리한다.
+     * 발급분을 {@code now} 기준으로 사용 처리한다.
      *
      * @throws CouponStatusException 이미 사용됐으면
      * @throws CouponExpiredException 사용 기한이 지났으면
      */
-    public void use(UUID orderId) {
+    public void use(UUID orderId, Instant now) {
         if (status != IssuedCouponStatus.ISSUED) {
             throw new CouponStatusException(CouponErrorCode.ISSUED_COUPON_NOT_USABLE);
         }
-        Instant now = Instant.now();
         if (now.isAfter(expiresAt)) {
             throw new CouponExpiredException(CouponErrorCode.COUPON_EXPIRED);
         }

@@ -9,6 +9,7 @@ import com.commerce.coupon.exception.CouponStatusException;
 import com.commerce.coupon.exception.DuplicateIssuanceException;
 import com.commerce.coupon.repository.CouponRepository;
 import com.commerce.coupon.repository.IssuedCouponRepository;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
@@ -22,10 +23,13 @@ public class IssuedCouponAppender {
 
     private final CouponRepository couponRepository;
     private final IssuedCouponRepository issuedCouponRepository;
+    private final Clock clock;
 
-    public IssuedCouponAppender(CouponRepository couponRepository, IssuedCouponRepository issuedCouponRepository) {
+    public IssuedCouponAppender(
+            CouponRepository couponRepository, IssuedCouponRepository issuedCouponRepository, Clock clock) {
         this.couponRepository = couponRepository;
         this.issuedCouponRepository = issuedCouponRepository;
+        this.clock = clock;
     }
 
     /**
@@ -50,7 +54,7 @@ public class IssuedCouponAppender {
         Coupon coupon = couponRepository
                 .findById(couponId)
                 .orElseThrow(() -> new CouponNotFoundException(CouponErrorCode.COUPON_NOT_FOUND));
-        Instant now = Instant.now();
+        Instant now = clock.instant();
         coupon.checkIssuable(now);
         if (issuedCouponRepository.existsByCouponIdAndMemberId(couponId, memberId)) {
             throw new DuplicateIssuanceException(CouponErrorCode.DUPLICATE_ISSUANCE);
