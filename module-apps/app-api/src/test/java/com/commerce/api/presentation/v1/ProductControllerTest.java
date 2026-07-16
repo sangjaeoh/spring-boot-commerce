@@ -342,6 +342,22 @@ class ProductControllerTest extends WebIntegrationTest {
     }
 
     @Test
+    @DisplayName("숨긴 상품의 공개 상세 조회는 404 PRODUCT_NOT_FOUND로 은닉된다")
+    void getProductHidesHiddenProduct() throws Exception {
+        UUID productId = registerProductViaHttp("은닉셔츠", 10000L, 5);
+
+        mvc.perform(get("/api/v1/products/{productId}", productId)).andExpect(status().isOk());
+
+        mvc.perform(post("/api/v1/products/{productId}/hide", productId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
+                .andExpect(status().isNoContent());
+
+        mvc.perform(get("/api/v1/products/{productId}", productId))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("PRODUCT_NOT_FOUND"));
+    }
+
+    @Test
     @DisplayName("논리삭제가 204로 성공하고 이후 상세 조회는 404 PRODUCT_NOT_FOUND로 거부된다")
     void deleteRemovesProductFromDetail() throws Exception {
         UUID productId = registerProductViaHttp("삭제셔츠", 10000L, 5);

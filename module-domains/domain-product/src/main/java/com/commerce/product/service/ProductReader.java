@@ -38,6 +38,22 @@ public class ProductReader {
         return ProductInfo.from(product);
     }
 
+    /**
+     * 카탈로그 노출 상품을 조회한다. 노출은 판매중({@code ON_SALE})·미삭제 상품이다.
+     *
+     * <p>공개 상세 표면이 소비한다(카탈로그와 같은 상품 게이트). 존재하되 숨김({@code HIDDEN})·삭제인 상품은
+     * 미존재와 같은 예외로 은닉해 존재를 누출하지 않는다.
+     *
+     * @throws ProductNotFoundException 노출 상품이 없으면(미존재·숨김·삭제 포함)
+     */
+    @Transactional(readOnly = true)
+    public ProductInfo getExposedProduct(UUID productId) {
+        Product product = productRepository
+                .findByIdAndStatusAndDeletedAtIsNull(productId, ProductStatus.ON_SALE)
+                .orElseThrow(() -> new ProductNotFoundException(ProductErrorCode.PRODUCT_NOT_FOUND));
+        return ProductInfo.from(product);
+    }
+
     /** 주어진 ID들 중 활성 상품을 조회한다. */
     @Transactional(readOnly = true)
     public List<ProductInfo> getProducts(Collection<UUID> productIds) {

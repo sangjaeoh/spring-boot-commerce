@@ -1,10 +1,12 @@
 package com.commerce.api.facade;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.commerce.core.money.Money;
 import com.commerce.product.entity.ProductOption;
 import com.commerce.product.entity.ProductStatus;
+import com.commerce.product.exception.ProductNotFoundException;
 import com.commerce.product.service.ProductModifier;
 import com.commerce.product.service.ProductVariantAppender;
 import com.commerce.product.service.ProductVariantModifier;
@@ -103,17 +105,13 @@ class ProductDetailFacadeTest extends FacadeIntegrationTest {
     }
 
     @Test
-    @DisplayName("HIDDEN 상품 상세는 status를 HIDDEN으로 싣되 변형 주문가능은 재고 기준으로 파생한다")
-    void showsHiddenProductWithStockOrderability() {
+    @DisplayName("HIDDEN 상품 상세는 미존재와 같은 404(ProductNotFoundException)로 은닉한다")
+    void hidesHiddenProductAsNotFound() {
         UUID productId = productRegistrationFacade.registerProduct("셔츠", null, Money.of(10000L), List.of(), 5);
         productModifier.hide(productId);
 
-        ProductView detail = productDetailFacade.getProductDetail(productId);
-
-        assertThat(detail.status()).isEqualTo(ProductStatus.HIDDEN);
-        assertThat(detail.variants()).hasSize(1);
-        assertThat(detail.variants().get(0).orderable()).isTrue();
-        assertThat(detail.soldOut()).isFalse();
+        assertThatThrownBy(() -> productDetailFacade.getProductDetail(productId))
+                .isInstanceOf(ProductNotFoundException.class);
     }
 
     private void addActiveVariant(UUID productId, long price, String colorValue, int quantity) {
