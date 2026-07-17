@@ -1,6 +1,7 @@
 package com.commerce.api.web.v1.product.request;
 
 import com.commerce.product.entity.ProductOption;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -16,12 +17,21 @@ import org.jspecify.annotations.Nullable;
  * <p>가격은 1원 이상, 초기 수량은 0 이상이다. 옵션 목록은 비어 있을 수 있고(옵션 없는 단일 변형),
  * 비어 있지 않으면 각 옵션의 이름·값이 필수다.
  */
+@Schema(description = "상품 등록 요청(첫 변형·초기 재고 시딩 포함)")
 public record ProductRegistrationRequest(
-        @NotBlank String name,
-        @Nullable String description,
-        @NotNull @Positive Long price,
-        @NotNull @Valid @Size(max = 10) List<@NotNull OptionRequest> options,
-        @NotNull @PositiveOrZero Integer initialQuantity) {
+        @Schema(description = "상품명") @NotBlank String name,
+
+        @Schema(description = "상품 상세 설명", nullable = true) @Nullable
+        String description,
+
+        @Schema(description = "판매가(원 단위, 1 이상)") @NotNull @Positive
+        Long price,
+
+        @Schema(description = "변형 옵션 목록(비어 있으면 옵션 없는 단일 변형, 최대 10개)") @NotNull @Valid @Size(max = 10)
+        List<@NotNull OptionRequest> options,
+
+        @Schema(description = "초기 재고 수량(0 이상)") @NotNull @PositiveOrZero
+        Integer initialQuantity) {
 
     /** 옵션 요청 목록을 도메인 옵션 입력 목록으로 변환한다. */
     public List<ProductOption> toProductOptions() {

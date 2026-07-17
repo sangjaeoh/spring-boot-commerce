@@ -72,6 +72,9 @@
 - 앱 모듈은 아래 서브 패키지로 구성한다.
   - `web` — 컨트롤러·DTO. API 버전별 `web/v{n}` 분리, 그 아래는 리소스별 슬라이스로 나눠 각 슬라이스가 컨트롤러와 `request`·`response`를 소유한다.
     - 버전을 바깥 축, 리소스를 안쪽 축에 둬 `/api/v{n}/{리소스}` URL 경로를 패키지로 미러링한다. `web`은 HTTP 계열 전송(REST·WebSocket·SSE)을 담고, 비-web 진입점은 형제 패키지로 둔다.
+- 컨트롤러 핸들러와 request/response는 클라이언트 명세를 어노테이션으로 명시한다 — 핸들러에 `@Operation`·성공/적용 에러 `@ApiResponse`, request/response 타입·컴포넌트에 `@Schema`. 자동 생성이 못 만드는 의미·에러 계약을 코드에 둔다.
+  - 에러 응답은 도달 가능한 상태만 적는다 — 인증 표면(`AuthUser`·`AdminOnly`)은 401·403, 검증(`@Valid`)은 400, 타 회원 리소스는 404, 도메인·파사드 `ErrorCode.status()`는 그 상태. 전역 핸들러가 problem+json으로 매핑한다(같은 상태의 여러 원인은 한 응답으로 묶는다).
+  - 인증 강제 표면의 bearer 요구와 토큰 주입 파라미터(`AuthUser`) 숨김은 `OpenApiConfig`가 코드에서 도출한다. 이 둘은 어노테이션으로 반복하지 않는다.
   - `facade` — 도메인 조립·크로스 도메인 조율.
   - `event/listener` — 크로스 도메인 이벤트 소비.
   - `infrastructure/query`(admin) · `infrastructure/reader`(batch) — 엔티티 의존을 허용하는 격리 구역. canonical 경로는 `app.admin.infrastructure.query` · `app.batch.infrastructure.reader`다.
@@ -177,5 +180,6 @@
 - 아래는 리뷰가 아니라 빌드가 막는 경계다. 에이전트는 코드 생성 후 이 목록으로 자기검증하고, 채택 팀은 이 목록으로 강제 장치 구현 완료를 대조한다(각 항목에 강제 장치를 매핑). 강제 장치(컨벤션 플러그인·아키텍처 테스트) 자체는 빌드 하네스가 소유한다.
   - 계층 의존 방향(모듈 지도) — 컨벤션 플러그인(컴파일 시점).
   - JPA 매핑 클래스(`@Entity`·`@MappedSuperclass`)의 모듈 밖 시그니처 등장 금지·apps의 리포지토리 직접 접근 금지·base `JpaRepository` finder 직접 호출 금지(소프트삭제 엔티티에 한함) — 아키텍처 테스트(테스트 시점, → 아키텍처 테스트 모듈).
+  - web 컨트롤러 핸들러의 `@Operation`·`@ApiResponse` 선언, request/response 타입·컴포넌트의 `@Schema` 선언(존재만 검사, 에러 상태 집합의 정확성은 리뷰) — 아키텍처 테스트(테스트 시점, → 아키텍처 테스트 모듈).
   - 각 모듈 베이스 패키지 `@NullMarked`·null 계약·포맷·정적분석 — Spotless·NullAway·Error Prone(→ [code-quality](code-quality.md)).
   - 금지 의존성(Lombok·H2) — 컨벤션 플러그인.

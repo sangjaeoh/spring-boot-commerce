@@ -1,12 +1,20 @@
 package com.commerce.api.web.v1.product.response;
 
 import com.commerce.api.facade.ProductSummaryView;
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
 /** 카탈로그 목록의 상품별 응답이다. 대표가·품절을 싣는다. */
+@Schema(description = "카탈로그 목록의 상품별 응답")
 public record ProductSummaryResponse(
-        UUID id, String name, @Nullable Long fromPrice, boolean soldOut) {
+        @Schema(description = "상품 ID") UUID id,
+        @Schema(description = "상품명") String name,
+
+        @Schema(description = "대표가(원 단위, 변형 최저가)", nullable = true) @Nullable
+        Long fromPrice,
+
+        @Schema(description = "품절 여부") boolean soldOut) {
 
     public static ProductSummaryResponse from(ProductSummaryView product) {
         return new ProductSummaryResponse(

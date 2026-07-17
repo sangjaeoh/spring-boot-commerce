@@ -2,19 +2,27 @@ package com.commerce.api.web.v1.product.response;
 
 import com.commerce.api.facade.ProductView;
 import com.commerce.product.entity.ProductStatus;
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
 /** 상품 상세 응답이다. ACTIVE 변형·주문가능·품절·대표가를 싣는다. */
+@Schema(description = "상품 상세 응답")
 public record ProductDetailResponse(
-        UUID id,
-        String name,
-        @Nullable String description,
-        ProductStatus status,
-        @Nullable Long fromPrice,
-        boolean soldOut,
-        List<VariantResponse> variants) {
+        @Schema(description = "상품 ID") UUID id,
+        @Schema(description = "상품명") String name,
+
+        @Schema(description = "상세 설명", nullable = true) @Nullable
+        String description,
+
+        @Schema(description = "노출 상태") ProductStatus status,
+
+        @Schema(description = "대표가(원 단위, 변형 최저가)", nullable = true) @Nullable
+        Long fromPrice,
+
+        @Schema(description = "품절 여부") boolean soldOut,
+        @Schema(description = "ACTIVE 변형 목록") List<VariantResponse> variants) {
 
     public ProductDetailResponse {
         variants = List.copyOf(variants);

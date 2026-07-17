@@ -13,7 +13,10 @@ import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.Dependency;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaClasses;
+import com.tngtech.archunit.core.domain.JavaField;
+import com.tngtech.archunit.core.domain.JavaMethod;
 import com.tngtech.archunit.core.domain.JavaMethodCall;
+import com.tngtech.archunit.core.domain.JavaModifier;
 import com.tngtech.archunit.core.domain.JavaParameterizedType;
 import com.tngtech.archunit.core.domain.JavaType;
 import com.tngtech.archunit.core.domain.properties.CanBeAnnotated;
@@ -27,6 +30,7 @@ import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -37,6 +41,8 @@ import org.junit.jupiter.api.Test;
  * 도메인 리포지토리에 의존하면 실패한다. 세 번째 규칙은 패키지와 무관하게, 어떤 클래스든 소프트삭제 엔티티
  * 리포지토리의 base finder를 직접 호출하면 실패한다. 네 번째 규칙은 web 컨트롤러가 서로 다른 도메인의
  * service를 2개 이상 직접 의존하면 실패한다 — 크로스 도메인 조율은 facade가 소유한다(architecture.md 앱 모듈 구조).
+ * 다섯째·여섯째 규칙은 web 컨트롤러 핸들러에 {@code @Operation}·{@code @ApiResponse}가, request/response 타입·컴포넌트에
+ * {@code @Schema}가 없으면 실패한다 — 클라이언트 명세를 코드에 명시한다(architecture.md 표현 계층 OpenAPI 규칙).
  */
 class ArchitectureTest {
 
@@ -180,6 +186,16 @@ class ArchitectureTest {
     }
 
     @Test
+    void controllerHandlerMethodsDeclareOpenApiDocs() {
+        controllerHandlerMethodsDocumented().check(CLASSES);
+    }
+
+    @Test
+    void requestAndResponseTypesDeclareSchema() {
+        requestAndResponseTypesDocumented().check(CLASSES);
+    }
+
+    @Test
     void domainServiceRootParsingIsCorrect() {
         // 규칙의 변별력은 도메인 service 패키지 판정의 정확성에 달렸다 — facade·info·common을 service로 오인하면
         // 규칙이 공허해지거나(도메인 0개로 항상 통과) 오탐한다. 파싱 회귀를 여기서 고정한다.
@@ -219,6 +235,83 @@ class ArchitectureTest {
                 }
             }
         };
+    }
+
+    // web 컨트롤러(@RestController)의 각 핸들러 메서드(@RequestMapping 계열 매핑)가 @Operation과 @ApiResponse(s)를
+    // 선언하지 않으면 실패한다 — 클라이언트 명세를 컨트롤러에 명시한다(architecture.md 표현 계층 OpenAPI 규칙). 매칭 대상이
+    // 없으면 failOnEmptyShould(기본 on)가 규칙 자체를 실패시켜 공허 통과를 막으므로 별도 감지 테스트를 두지 않는다.
+    private static ArchRule controllerHandlerMethodsDocumented() {
+        return classes()
+                .that()
+                .resideInAnyPackage(appSubtreePatterns(".web.."))
+                .and()
+                .areAnnotatedWith("org.springframework.web.bind.annotation.RestController")
+                .should(declareOpenApiDocsOnHandlers())
+                .because("컨트롤러 핸들러는 @Operation·@ApiResponse로 클라이언트 명세를 명시한다 — architecture.md 표현 계층 OpenAPI 규칙");
+    }
+
+    private static ArchCondition<JavaClass> declareOpenApiDocsOnHandlers() {
+        return new ArchCondition<>("핸들러 메서드마다 @Operation과 @ApiResponse(s)를 선언") {
+            @Override
+            public void check(JavaClass controller, ConditionEvents events) {
+                for (JavaMethod method : controller.getMethods()) {
+                    if (!isHandlerMethod(method)) {
+                        continue;
+                    }
+                    boolean hasOperation = method.isAnnotatedWith("io.swagger.v3.oas.annotations.Operation");
+                    boolean hasResponses =
+                            method.isAnnotatedWith("io.swagger.v3.oas.annotations.responses.ApiResponses")
+                                    || method.isAnnotatedWith("io.swagger.v3.oas.annotations.responses.ApiResponse");
+                    if (!hasOperation || !hasResponses) {
+                        events.add(SimpleConditionEvent.violated(
+                                method, method.getFullName() + " 핸들러에 @Operation·@ApiResponse(s)가 없다"));
+                    }
+                }
+            }
+        };
+    }
+
+    // @GetMapping·@PostMapping 등은 @RequestMapping을 메타어노테이션으로 달고, @RequestMapping 직접 사용도 매핑이다.
+    private static boolean isHandlerMethod(JavaMethod method) {
+        String requestMapping = "org.springframework.web.bind.annotation.RequestMapping";
+        return method.isAnnotatedWith(requestMapping) || method.isMetaAnnotatedWith(requestMapping);
+    }
+
+    // request/response 타입과 그 인스턴스 컴포넌트에 @Schema가 없으면 실패한다 — 필드 의미를 클라이언트 명세에 명시한다
+    // (architecture.md 표현 계층 OpenAPI 규칙). 매칭 대상이 없으면 failOnEmptyShould(기본 on)가 규칙 자체를 실패시킨다.
+    private static ArchRule requestAndResponseTypesDocumented() {
+        return classes()
+                .that()
+                .resideInAnyPackage(dtoPackagePatterns())
+                .should(declareSchemaOnTypeAndComponents())
+                .because("request/response의 타입·컴포넌트는 @Schema로 클라이언트 명세를 명시한다 — architecture.md 표현 계층 OpenAPI 규칙");
+    }
+
+    private static ArchCondition<JavaClass> declareSchemaOnTypeAndComponents() {
+        return new ArchCondition<>("타입과 모든 인스턴스 필드에 @Schema를 선언") {
+            @Override
+            public void check(JavaClass dto, ConditionEvents events) {
+                String schema = "io.swagger.v3.oas.annotations.media.Schema";
+                if (!dto.isAnnotatedWith(schema)) {
+                    events.add(SimpleConditionEvent.violated(dto, dto.getName() + " 타입에 @Schema가 없다"));
+                }
+                for (JavaField field : dto.getFields()) {
+                    if (field.getModifiers().contains(JavaModifier.STATIC)) {
+                        continue;
+                    }
+                    if (!field.isAnnotatedWith(schema)) {
+                        events.add(SimpleConditionEvent.violated(field, field.getFullName() + " 필드에 @Schema가 없다"));
+                    }
+                }
+            }
+        };
+    }
+
+    // 각 앱 베이스의 web request·response 패키지 패턴. 앱 하드코딩 없이 전 앱의 request/response DTO를 대상화한다.
+    private static String[] dtoPackagePatterns() {
+        return APP_BASE_PACKAGES.stream()
+                .flatMap(base -> Stream.of(base + ".web..request..", base + ".web..response.."))
+                .toArray(String[]::new);
     }
 
     // com.commerce.{root}.service[.*] 패키지면 도메인 루트를 반환한다. 도메인 모듈만 .service 서브 패키지를 두므로

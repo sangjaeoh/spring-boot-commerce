@@ -8,12 +8,19 @@ import com.commerce.coupon.service.IssuedCouponModifier;
 import com.commerce.coupon.service.IssuedCouponReader;
 import com.commerce.web.auth.AdminOnly;
 import com.commerce.web.auth.AuthUser;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -32,6 +39,7 @@ import org.springframework.web.bind.annotation.RestController;
  * 계산만 하고 상태를 바꾸지 않는다. 무효화는 관리자 표면이라 관리자 토큰만
  * 허용하고({@link AdminOnly}) 단일 도메인 쓰기라 파사드 없이 발급 쿠폰 도메인 Modifier에 얇게 위임한다.
  */
+@Tag(name = "발급 쿠폰", description = "발급 쿠폰 조회·할인 미리보기·무효화")
 @RestController
 @RequestMapping("/api/v1/issued-coupons")
 public class IssuedCouponController {
@@ -48,6 +56,18 @@ public class IssuedCouponController {
     }
 
     /** 본인 발급분을 조회한다. */
+    @Operation(summary = "발급분 조회", description = "본인 발급분을 조회한다.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "조회됨"),
+        @ApiResponse(
+                responseCode = "401",
+                description = "미인증",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+        @ApiResponse(
+                responseCode = "404",
+                description = "발급 쿠폰 없음(미소유 포함)",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+    })
     @GetMapping("/{issuedCouponId}")
     public IssuedCouponResponse getIssuedCoupon(AuthUser authUser, @PathVariable UUID issuedCouponId) {
         return IssuedCouponResponse.from(issuedCouponReader.getIssuedCoupon(issuedCouponId, authUser.memberId()));
@@ -57,6 +77,24 @@ public class IssuedCouponController {
      * 본인 발급분의 주문 금액 기준 예상 할인을 조회한다. 계산만 하고 상태를 바꾸지 않으며, 적용 불가는 오류가
      * 아니라 사유와 0원으로 싣는다. 결과는 보증이 아니며 체크아웃 시점 재검증이 진실이다.
      */
+    @Operation(
+            summary = "할인 미리보기",
+            description = "본인 발급분의 주문 금액 기준 예상 할인을 조회한다. 계산만 하고 상태를 바꾸지 않으며, 적용 불가는 오류가 아니라 사유와 0원으로 싣는다.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "조회됨"),
+        @ApiResponse(
+                responseCode = "400",
+                description = "주문 금액 파라미터가 유효하지 않음",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+        @ApiResponse(
+                responseCode = "401",
+                description = "미인증",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+        @ApiResponse(
+                responseCode = "404",
+                description = "발급 쿠폰 없음(미소유 포함)",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+    })
     @GetMapping("/{issuedCouponId}/discount-preview")
     public DiscountPreviewResponse getDiscountPreview(
             AuthUser authUser,
@@ -67,6 +105,14 @@ public class IssuedCouponController {
     }
 
     /** 본인 발급 쿠폰 목록을 최신순으로 조회한다. 없으면 빈 목록이다. */
+    @Operation(summary = "발급 쿠폰 목록 조회", description = "본인 발급 쿠폰 목록을 최신순으로 조회한다. 없으면 빈 목록이다.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "조회됨"),
+        @ApiResponse(
+                responseCode = "401",
+                description = "미인증",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+    })
     @GetMapping
     public List<IssuedCouponResponse> getIssuedCoupons(AuthUser authUser) {
         return issuedCouponReader.getIssuedCouponsByMember(authUser.memberId()).stream()
@@ -75,6 +121,30 @@ public class IssuedCouponController {
     }
 
     /** 발급분을 무효화한다. 무효화된 발급분은 사용이 거부되고, 사용된 발급분은 무효화가 거부된다. */
+    @Operation(summary = "발급분 무효화", description = "발급분을 무효화한다. 무효화된 발급분은 사용이 거부되고, 사용된 발급분은 무효화가 거부된다.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "204", description = "무효화됨"),
+        @ApiResponse(
+                responseCode = "400",
+                description = "요청 값이 유효하지 않음",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+        @ApiResponse(
+                responseCode = "401",
+                description = "미인증",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+        @ApiResponse(
+                responseCode = "403",
+                description = "관리자 권한 없음",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+        @ApiResponse(
+                responseCode = "404",
+                description = "발급 쿠폰 없음",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+        @ApiResponse(
+                responseCode = "409",
+                description = "무효화할 수 없는 발급 쿠폰 상태",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+    })
     @AdminOnly
     @PostMapping("/{issuedCouponId}/revoke")
     @ResponseStatus(HttpStatus.NO_CONTENT)

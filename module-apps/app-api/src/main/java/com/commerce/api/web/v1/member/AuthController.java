@@ -7,7 +7,14 @@ import com.commerce.auth.token.JwtTokenCodec;
 import com.commerce.member.entity.MemberRole;
 import com.commerce.member.info.MemberInfo;
 import com.commerce.member.service.MemberCredentialValidator;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -21,6 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
  * 발급된 토큰의 엔드포인트 강제는 토큰 검증 필터와 인증 주체 리졸버·관리자 가드 인터셉터가 담당한다
  * (REQUIREMENTS.md 인증).
  */
+@Tag(name = "인증", description = "로그인·토큰 발급")
 @RestController
 @RequestMapping("/api/v1/auth")
 public class AuthController {
@@ -34,6 +42,18 @@ public class AuthController {
     }
 
     /** 이메일+패스워드를 검증하고 JWT 액세스 토큰을 발급한다. */
+    @Operation(summary = "로그인", description = "이메일·비밀번호로 인증하고 액세스 토큰을 발급한다.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "인증됨"),
+        @ApiResponse(
+                responseCode = "400",
+                description = "요청 값 무효",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+        @ApiResponse(
+                responseCode = "401",
+                description = "자격 증명 불일치",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+    })
     @PostMapping("/login")
     public LoginResponse login(@Valid @RequestBody LoginRequest request) {
         MemberInfo member = memberCredentialValidator.authenticate(request.email(), request.password());

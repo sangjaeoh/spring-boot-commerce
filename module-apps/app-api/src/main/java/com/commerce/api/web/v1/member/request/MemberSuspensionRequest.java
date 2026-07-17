@@ -1,7 +1,10 @@
 package com.commerce.api.web.v1.member.request;
 
 import com.commerce.member.entity.SuspensionReason;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 
 /** 회원 정지 요청이다. 사유가 필수다. */
-public record MemberSuspensionRequest(@NotNull SuspensionReason reason) {}
+@Schema(description = "회원 정지 요청")
+public record MemberSuspensionRequest(
+        @Schema(description = "정지 사유") @NotNull SuspensionReason reason) {}

@@ -4,6 +4,12 @@ import com.commerce.api.exception.ApiErrorCode;
 import com.commerce.api.exception.ApiException;
 import com.commerce.api.facade.PaymentConfirmationFacade;
 import com.commerce.api.web.v1.payment.request.PaymentWebhookRequest;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
 import java.security.MessageDigest;
@@ -13,6 +19,7 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -30,6 +37,7 @@ import tools.jackson.databind.ObjectMapper;
  * 조회로 하므로, 서명을 통과한 페이로드도 상태를 직접 쓰지 못한다. 같은 통지의 중복 전달은 무해하다(이미
  * 종결된 결제는 파사드가 무시).
  */
+@Tag(name = "결제 웹훅", description = "PG 결제 확정 통지 수신")
 @RestController
 @RequestMapping("/api/v1/payments/webhook")
 public class PaymentWebhookController {
@@ -51,6 +59,22 @@ public class PaymentWebhookController {
     }
 
     /** 통지가 지목한 결제를 PG 상태 조회로 확정한다. 서명이 유효하지 않으면 거부한다. */
+    @Operation(summary = "결제 웹훅 수신", description = "통지가 지목한 결제를 PG 상태 조회로 확정한다. 서명이 유효하지 않으면 거부한다.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "처리됨"),
+        @ApiResponse(
+                responseCode = "400",
+                description = "웹훅 페이로드 해석 불가",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+        @ApiResponse(
+                responseCode = "401",
+                description = "웹훅 서명 무효",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+        @ApiResponse(
+                responseCode = "404",
+                description = "지목한 결제 없음",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+    })
     @PostMapping
     public void receive(
             @RequestHeader(name = SIGNATURE_HEADER, required = false) @Nullable String signature,

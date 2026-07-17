@@ -14,12 +14,13 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * OpenAPI 문서(/v3/api-docs·swagger-ui)의 최소 보정 설정이다.
+ * OpenAPI 문서(/v3/api-docs·swagger-ui)의 공통 설정이다.
  *
- * <p>자동 생성을 우선하고 컨트롤러에 문서 어노테이션을 두지 않는다. 보정은 자동 생성이 명백히 틀리는
- * 지점만 한다 — (1) 커스텀 리졸버가 토큰에서 주입하는 {@link AuthUser} 파라미터가 요청 파라미터로
- * 오인 문서화되는 것, (2) 인증 강제 표면({@link AuthUser} 파라미터 선언·{@link AdminOnly})이 공개
- * 엔드포인트로 보이는 것. 둘 다 코드에서 기계적으로 도출하므로 엔드포인트가 늘어도 보정이 따라간다.
+ * <p>엔드포인트·필드 설명은 컨트롤러·request/response에 명시하는 {@code @Operation}·{@code @ApiResponse}·
+ * {@code @Schema}가 소유하고 빌드가 강제한다(architecture.md 빌드가 강제하는 불변식). 이 설정은 문서 어노테이션으로는
+ * 표현하지 않는 두 공통 축만 코드에서 기계적으로 보정한다 — (1) 커스텀 리졸버가 토큰에서 주입하는 {@link AuthUser}
+ * 파라미터가 요청 파라미터로 오인 문서화되는 것, (2) 인증 강제 표면({@link AuthUser} 파라미터 선언·{@link AdminOnly})의
+ * bearer 요구 표기. 둘 다 코드에서 도출하므로 엔드포인트가 늘어도 보정이 따라간다.
  */
 @Configuration
 public class OpenApiConfig {
