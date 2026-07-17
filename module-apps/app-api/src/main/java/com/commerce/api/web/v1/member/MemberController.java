@@ -13,6 +13,7 @@ import com.commerce.member.service.MemberReader;
 import com.commerce.web.auth.AdminOnly;
 import com.commerce.web.auth.AuthUser;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -121,7 +122,7 @@ public class MemberController {
     })
     @AdminOnly
     @GetMapping("/{memberId}")
-    public MemberResponse getMember(@PathVariable UUID memberId) {
+    public MemberResponse getMember(@Parameter(description = "회원 ID") @PathVariable UUID memberId) {
         return MemberResponse.from(memberReader.getMember(memberId));
     }
 
@@ -144,7 +145,7 @@ public class MemberController {
     })
     @AdminOnly
     @GetMapping(params = "email")
-    public MemberResponse searchByEmail(@RequestParam String email) {
+    public MemberResponse searchByEmail(@Parameter(description = "검색할 이메일(정확 일치)") @RequestParam String email) {
         return MemberResponse.from(memberReader.getMemberByEmail(email));
     }
 
@@ -176,7 +177,9 @@ public class MemberController {
     @AdminOnly
     @PostMapping("/{memberId}/suspend")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void suspend(@PathVariable UUID memberId, @Valid @RequestBody MemberSuspensionRequest request) {
+    public void suspend(
+            @Parameter(description = "회원 ID") @PathVariable UUID memberId,
+            @Valid @RequestBody MemberSuspensionRequest request) {
         memberModifier.suspend(memberId, request.reason());
     }
 
@@ -204,7 +207,7 @@ public class MemberController {
     @AdminOnly
     @PostMapping("/{memberId}/reinstate")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void reinstate(@PathVariable UUID memberId) {
+    public void reinstate(@Parameter(description = "회원 ID") @PathVariable UUID memberId) {
         memberModifier.reinstate(memberId);
     }
 

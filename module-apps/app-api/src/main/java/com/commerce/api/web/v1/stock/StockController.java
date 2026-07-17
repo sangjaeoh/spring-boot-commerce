@@ -6,6 +6,7 @@ import com.commerce.stock.service.StockModifier;
 import com.commerce.stock.service.StockReader;
 import com.commerce.web.auth.AdminOnly;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -64,7 +65,7 @@ public class StockController {
                 content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
     })
     @GetMapping
-    public List<StockResponse> getStocks(@RequestParam List<UUID> variantIds) {
+    public List<StockResponse> getStocks(@Parameter(description = "조회할 변형 ID 목록") @RequestParam List<UUID> variantIds) {
         return stockReader.getByVariantIds(variantIds).stream()
                 .map(StockResponse::from)
                 .toList();
@@ -97,7 +98,9 @@ public class StockController {
     })
     @PostMapping("/{variantId}/increase")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void increase(@PathVariable UUID variantId, @Valid @RequestBody StockIncreaseRequest request) {
+    public void increase(
+            @Parameter(description = "변형 ID") @PathVariable UUID variantId,
+            @Valid @RequestBody StockIncreaseRequest request) {
         stockModifier.increase(variantId, request.quantity());
     }
 
@@ -124,7 +127,7 @@ public class StockController {
     })
     @PostMapping("/{variantId}/mark-sold-out")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void markSoldOut(@PathVariable UUID variantId) {
+    public void markSoldOut(@Parameter(description = "변형 ID") @PathVariable UUID variantId) {
         stockModifier.markSoldOut(variantId);
     }
 
@@ -151,7 +154,7 @@ public class StockController {
     })
     @PostMapping("/{variantId}/mark-sellable")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void markSellable(@PathVariable UUID variantId) {
+    public void markSellable(@Parameter(description = "변형 ID") @PathVariable UUID variantId) {
         stockModifier.markSellable(variantId);
     }
 
@@ -178,7 +181,7 @@ public class StockController {
     })
     @PostMapping("/{variantId}/discontinue")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void discontinue(@PathVariable UUID variantId) {
+    public void discontinue(@Parameter(description = "변형 ID") @PathVariable UUID variantId) {
         stockModifier.discontinue(variantId);
     }
 }
