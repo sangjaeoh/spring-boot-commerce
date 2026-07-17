@@ -1,4 +1,4 @@
-package com.commerce.api.architecture;
+package com.commerce.architecture;
 
 import static com.tngtech.archunit.base.DescribedPredicate.not;
 import static com.tngtech.archunit.core.domain.properties.CanBeAnnotated.Predicates.annotatedWith;
@@ -7,7 +7,7 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import com.commerce.api.architecture.bypass.service.EntityReferencingFixture;
+import com.commerce.architecture.bypass.service.EntityReferencingFixture;
 import com.commerce.member.entity.Member;
 import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.Dependency;
@@ -31,7 +31,8 @@ import org.junit.jupiter.api.Test;
 
 /**
  * docs/architecture.md의 "빌드가 강제하는 불변식" 중 컨벤션 플러그인(컴파일 시점)이 잡지 못하는 항목을
- * 컴파일된 클래스 그래프에서 검증한다. 앞 두 규칙은 app-api가 도메인을 의존하는 P2부터 비공허하게 활성화돼,
+ * 컴파일된 클래스 그래프에서 검증한다. 이 모듈(module-tests/test-architecture)은 전 모듈을 의존해
+ * {@code com.commerce} 전체를 임포트하므로 규칙이 모든 앱·도메인에 활성화된다. 앞 두 규칙은
  * {@code ..facade..}·{@code ..event.listener..}가 생 엔티티({@code @Entity}·{@code @MappedSuperclass})나
  * 도메인 리포지토리에 의존하면 실패한다. 세 번째 규칙은 패키지와 무관하게, 어떤 클래스든 소프트삭제 엔티티
  * 리포지토리의 base finder를 직접 호출하면 실패한다. 네 번째 규칙은 web 컨트롤러가 서로 다른 도메인의
@@ -42,6 +43,10 @@ class ArchitectureTest {
     private static final JavaClasses CLASSES = new ClassFileImporter()
             .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
             .importPackages("com.commerce");
+
+    // @SpringBootApplication 메인 클래스가 사는 패키지 = 앱 베이스 패키지(앱마다 하나). 앱 하드코딩
+    // (com.commerce.api) 대신 여기서 파생해 새 앱이 자동으로 규칙 대상이 된다. CLASSES를 순회하므로 CLASSES 뒤에 둔다.
+    private static final Set<String> APP_BASE_PACKAGES = appBasePackages();
 
     // 삭제 여부를 거르지 않아 소프트삭제 엔티티 리포지토리에 금지되는 base JpaRepository finder(findAll·count의
     // QueryByExampleExecutor 오버로드도 이름으로 함께 잡힌다). deprecated 별칭 getOne·getById는 대체 API
@@ -121,7 +126,7 @@ class ArchitectureTest {
     void appsDoNotAccessRepositoriesDirectly() {
         ArchRule rule = noClasses()
                 .that()
-                .resideInAPackage("com.commerce.api..")
+                .resideInAnyPackage(appSubtreePatterns(".."))
                 .should()
                 .dependOnClassesThat()
                 // 도메인 리포지토리(com.commerce..repository..)만 대상이다. 프레임워크의
@@ -131,6 +136,13 @@ class ArchitectureTest {
                 .because("apps는 도메인 리포지토리에 직접 접근하지 않는다 — architecture.md 리포지토리 접근 범위");
 
         rule.check(CLASSES);
+    }
+
+    @Test
+    void appBasePackagesAreDetected() {
+        // 앱 대상 규칙(리포지토리 직접 접근·컨트롤러 단일 도메인)의 변별력은 이 집합이 채워져 있음에 달렸다 —
+        // 비면 검사할 앱이 없어 규칙이 공허해진다. @SpringBootApplication 감지 회귀를 여기서 고정한다.
+        assertEquals(Set.of("com.commerce.api", "com.commerce.migration"), APP_BASE_PACKAGES);
     }
 
     @Test
@@ -181,11 +193,11 @@ class ArchitectureTest {
 
     // web 컨트롤러가 서로 다른 도메인의 service 패키지에 2개 이상 직접 의존하면 실패한다. 컨트롤러는 단일 도메인
     // service(또는 facade)에만 얇게 위임하고, 크로스 도메인 조율은 facade가 소유한다 — architecture.md 앱 모듈 구조.
-    // 여러 도메인 service를 엮는 facade 자신(com.commerce.api.facade)은 web 패키지 밖이라 대상이 아니다.
+    // 여러 도메인 service를 엮는 facade 자신({app}.facade)은 web 패키지 밖이라 대상이 아니다.
     private static ArchRule controllersDependOnAtMostOneDomainService() {
         return classes()
                 .that()
-                .resideInAPackage("com.commerce.api.web..")
+                .resideInAnyPackage(appSubtreePatterns(".web.."))
                 .should(dependOnAtMostOneDomainService())
                 .because("컨트롤러가 여러 도메인을 조율하면 facade로 옮긴다 — 크로스 도메인 조율은 facade가 소유한다." + " architecture.md 앱 모듈 구조");
     }
@@ -223,6 +235,11 @@ class ArchitectureTest {
         return Optional.empty();
     }
 
+    // 각 앱 베이스 패키지에 접미를 붙인 ArchUnit 패키지 패턴 배열({base}{suffix}). 앱 하드코딩 없이 전 앱을 대상화한다.
+    private static String[] appSubtreePatterns(String suffix) {
+        return APP_BASE_PACKAGES.stream().map(base -> base + suffix).toArray(String[]::new);
+    }
+
     // 클래스가 매핑 클래스 소유 모듈의 면제 서브 패키지({base}.{entity|info|service|repository} 이하)에 있으면 참이다.
     private static boolean isEntityOwningModuleInternal(String packageName) {
         for (String basePackage : ENTITY_OWNING_BASE_PACKAGES) {
@@ -236,6 +253,16 @@ class ArchitectureTest {
             }
         }
         return false;
+    }
+
+    private static Set<String> appBasePackages() {
+        Set<String> packages = new HashSet<>();
+        for (JavaClass candidate : CLASSES) {
+            if (candidate.isAnnotatedWith("org.springframework.boot.autoconfigure.SpringBootApplication")) {
+                packages.add(candidate.getPackageName());
+            }
+        }
+        return Set.copyOf(packages);
     }
 
     private static Set<String> entityOwningBasePackages() {

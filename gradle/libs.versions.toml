@@ -79,3 +79,5 @@ postgresql = { module = "org.postgresql:postgresql" }
 
 # architecture test
 archunit-junit5 = { module = "com.tngtech.archunit:archunit-junit5", version.ref = "archunit" }
+# module-tests/test-architecture — 순수 JUnit5(스프링 미사용). 버전은 Spring Boot BOM
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }

@@ -1,4 +1,4 @@
-package com.commerce.api.architecture.bypass.service;
+package com.commerce.architecture.bypass.service;
 
 import com.commerce.member.entity.Member;
 

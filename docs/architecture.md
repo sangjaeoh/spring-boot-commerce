@@ -28,7 +28,7 @@
 - 새 모듈은 `module-{layer}/{prefix}-{name}` 디렉터리에 `build.gradle.kts` 하나(해당 유형 컨벤션 플러그인만 적용)로 만들고 settings에 등록한다.
   - 예: `module-domains/domain-order/build.gradle.kts`(`convention.domain-module`만 적용). 래퍼·CI·플러그인 구현 등 빌드 하네스 자체는 이미 구성된 것으로 전제한다.
 
-### 모듈 지도 (5계층)
+### 모듈 지도 (6계층)
 
 - 모듈은 아래 계층 경계와 의존 방향을 지킨다. 의존은 항상 한 방향으로만 흐른다(앱 → 도메인·인프라 → 공용).
   - 경계를 컴파일 의존성 자체로 강제한다 — 단일 모듈 패키지 분리는 리뷰로만 지켜져 타 도메인 참조가 조용히 새므로 기각한다. 도메인이 비대해지면 내부 코드 수정 없이 독립 MSA로 빌드·배포하는 것이 목표다.
@@ -40,8 +40,10 @@
   | `module-infra/`    | 기술 구현체(Redis, 메시징 transport)                                  | common                                                     |
   | `module-external/` | 외부 시스템 어댑터(PG·알림) — 도메인 소유 포트를 구현                 | 구현 대상 domain, common                                   |
   | `module-common/`   | 공용 계층 — core(순수)·jpa·messaging·auth·web                         | core는 제로 의존, 나머지는 core 방향 단방향(web→auth 허용) |
+  | `module-tests/`    | 아키텍처 테스트 등 크로스 모듈 검증                                    | 전 모듈(테스트 전용, 아무도 의존 안 함)                     |
 
 - 모듈 경계는 빌드가 컴파일·테스트 시점에 강제한다(강제 대상 전체 목록은 아래 빌드가 강제하는 불변식).
+- `module-tests/`는 이 의존 흐름 밖의 테스트 전용 계층이다.
 
 ### infra vs external 판정
 
@@ -104,6 +106,15 @@
 - 배치가 애매하면 더 좁은 의존의 모듈을 택한다(core에 갈 수 있으면 core로).
   - 역할별 분할의 목적이 의존 가능 범위 축소라서다. 단일 util 모듈은 도메인이 web 타입에 의존하는 오염을 막지 못해 기각한다.
 
+### 아키텍처 테스트 모듈
+
+- 아키텍처 테스트는 `module-tests/test-architecture` 모듈이 소유한다. 앱이나 애플리케이션 모듈 안에 두지 않는다.
+  - 컴파일된 클래스 그래프로 경계를 검증하려면 검사 대상 전 모듈이 그 classpath에 있어야 한다. test-architecture는 전 모듈을 `testImplementation`으로 의존해 그래프를 집약한다.
+  - 앱 안에 두면 커버리지가 그 앱의 의존으로 좁혀져 그 앱이 안 쓰는 모듈이 조용히 검사에서 빠진다. 앱이 여럿이면 어느 앱도 전 모듈을 의존한다고 보장되지 않는다.
+- test-architecture는 계층 플러그인이 아니라 품질 게이트 플러그인(`convention.java-base`·`convention.java-common`)만 적용한다.
+  - 전 계층을 가로질러 의존하므로 계층 화이트리스트를 걸 수 없다.
+- 새 모듈이 검사에서 누락되지 않도록 test-architecture의 의존을 모듈 목록에서 파생시킨다.
+
 ### 패키지 네이밍·배치
 
 - 패키지명은 소문자 단수(`entity`·`info`·`repository`)로 쓴다.
@@ -165,6 +176,6 @@
 
 - 아래는 리뷰가 아니라 빌드가 막는 경계다. 에이전트는 코드 생성 후 이 목록으로 자기검증하고, 채택 팀은 이 목록으로 강제 장치 구현 완료를 대조한다(각 항목에 강제 장치를 매핑). 강제 장치(컨벤션 플러그인·아키텍처 테스트) 자체는 빌드 하네스가 소유한다.
   - 계층 의존 방향(모듈 지도) — 컨벤션 플러그인(컴파일 시점).
-  - JPA 매핑 클래스(`@Entity`·`@MappedSuperclass`)의 모듈 밖 시그니처 등장 금지·apps의 리포지토리 직접 접근 금지·base `JpaRepository` finder 직접 호출 금지(소프트삭제 엔티티에 한함) — 아키텍처 테스트(테스트 시점).
+  - JPA 매핑 클래스(`@Entity`·`@MappedSuperclass`)의 모듈 밖 시그니처 등장 금지·apps의 리포지토리 직접 접근 금지·base `JpaRepository` finder 직접 호출 금지(소프트삭제 엔티티에 한함) — 아키텍처 테스트(테스트 시점, → 아키텍처 테스트 모듈).
   - 각 모듈 베이스 패키지 `@NullMarked`·null 계약·포맷·정적분석 — Spotless·NullAway·Error Prone(→ [code-quality](code-quality.md)).
   - 금지 의존성(Lombok·H2) — 컨벤션 플러그인.
