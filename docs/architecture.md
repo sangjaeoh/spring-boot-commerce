@@ -72,6 +72,11 @@
 - 앱 모듈은 아래 서브 패키지로 구성한다.
   - `web` — 컨트롤러·DTO. API 버전별 `web/v{n}` 분리, 그 아래는 리소스별 슬라이스로 나눠 각 슬라이스가 컨트롤러와 `request`·`response`를 소유한다.
     - 버전을 바깥 축, 리소스를 안쪽 축에 둬 `/api/v{n}/{리소스}` URL 경로를 패키지로 미러링한다. `web`은 HTTP 계열 전송(REST·WebSocket·SSE)을 담고, 비-web 진입점은 형제 패키지로 둔다.
+  - 어드민 표면은 `web/v{n}/admin/{리소스}` 슬라이스의 `{Domain}AdminController`가 소유한다 — 클래스 레벨 `@AdminOnly`, URL 프리픽스 `/api/v{n}/admin/`.
+    - 클래스 레벨 기본 잠금이라 새 어드민 핸들러가 어노테이션 누락으로 일반 노출되는 실수가 구조적으로 차단되고, 어드민 URL 네임스페이스는 게이트웨이·방화벽 차단 축이 된다.
+  - 본인·공개 표면 컨트롤러에는 `@AdminOnly`를 두지 않으며 메서드 레벨 `@AdminOnly`는 금지다.
+    - 관객(구매자·관리자)이 리소스보다 강한 분리 축이라 메서드 레벨 `@AdminOnly` 혼합 컨트롤러는 기각했다.
+  - 두 표면이 공유하는 응답 DTO는 본인·공개 슬라이스가 소유하고 어드민 슬라이스가 참조한다.
 - 컨트롤러 핸들러와 request/response는 클라이언트 명세를 어노테이션으로 명시한다 — 핸들러에 `@Operation`·성공/적용 에러 `@ApiResponse`, 핸들러의 `@RequestParam`·`@PathVariable` 파라미터에 `@Parameter(description)`, request/response 타입·컴포넌트에 `@Schema`. 자동 생성이 못 만드는 의미·에러 계약을 코드에 둔다.
   - 에러 응답은 도달 가능한 상태만 적는다 — 인증 표면(`AuthUser`·`AdminOnly`)은 401·403, 검증(`@Valid`)은 400, 타 회원 리소스는 404, 도메인·파사드 `ErrorCode.status()`는 그 상태. 전역 핸들러가 problem+json으로 매핑한다(같은 상태의 여러 원인은 한 응답으로 묶는다).
   - 인증 강제 표면의 bearer 요구와 토큰 주입 파라미터(`AuthUser`) 숨김은 `OpenApiConfig`가 코드에서 도출한다. 이 둘은 어노테이션으로 반복하지 않는다.
@@ -184,5 +189,6 @@
   - JPA 매핑 클래스(`@Entity`·`@MappedSuperclass`)의 모듈 밖 시그니처 등장 금지·apps의 리포지토리 직접 접근 금지·base `JpaRepository` finder 직접 호출 금지(소프트삭제 엔티티에 한함) — 아키텍처 테스트(테스트 시점, → 아키텍처 테스트 모듈).
   - web 컨트롤러 핸들러의 `@Operation`·`@ApiResponse` 선언, 핸들러 `@RequestParam`·`@PathVariable` 파라미터의 `@Parameter(description)` 선언, request/response 타입·컴포넌트의 `@Schema` 선언(존재만 검사, 에러 상태 집합의 정확성은 리뷰) — 아키텍처 테스트(테스트 시점, → 아키텍처 테스트 모듈).
   - web 컨트롤러 핸들러의 int·Integer `@RequestParam` 직접 선언 금지(페이징 파라미터는 common-web `PaginationRequest`) — 아키텍처 테스트(테스트 시점, → 아키텍처 테스트 모듈).
+  - 어드민 표면 정렬 — admin 패키지 소속·`*AdminController` 네이밍·클래스 레벨 `@AdminOnly`·`/api/v{n}/admin/` URL 프리픽스 네 마커의 동시 충족, 메서드 레벨 `@AdminOnly` 금지 — 아키텍처 테스트(테스트 시점, → 아키텍처 테스트 모듈).
   - 각 모듈 베이스 패키지 `@NullMarked`·null 계약·포맷·정적분석 — Spotless·NullAway·Error Prone(→ [code-quality](code-quality.md)).
   - 금지 의존성(Lombok·H2) — 컨벤션 플러그인.

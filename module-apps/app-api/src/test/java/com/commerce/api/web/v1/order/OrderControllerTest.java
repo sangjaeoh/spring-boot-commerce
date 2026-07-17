@@ -8,11 +8,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.commerce.api.facade.ProductRegistrationFacade;
 import com.commerce.api.web.v1.WebIntegrationTest;
+import com.commerce.api.web.v1.admin.order.request.OrderShipRequest;
 import com.commerce.api.web.v1.order.request.AddressRequest;
 import com.commerce.api.web.v1.order.request.CheckoutRequest;
-import com.commerce.api.web.v1.order.request.FulfillmentHoldRequest;
-import com.commerce.api.web.v1.order.request.OrderRefundRequest;
-import com.commerce.api.web.v1.order.request.OrderShipRequest;
 import com.commerce.api.web.v1.order.response.CheckoutResponse;
 import com.commerce.api.web.v1.payment.response.PaymentResponse;
 import com.commerce.cart.service.CartAppender;
@@ -24,10 +22,8 @@ import com.commerce.coupon.service.IssuedCouponAppender;
 import com.commerce.member.service.MemberAppender;
 import com.commerce.order.entity.Address;
 import com.commerce.order.entity.FulfillmentStatus;
-import com.commerce.order.entity.HoldReason;
 import com.commerce.order.entity.OrderLineSnapshot;
 import com.commerce.order.entity.OrderStatus;
-import com.commerce.order.entity.RefundReason;
 import com.commerce.order.info.OrderInfo;
 import com.commerce.order.service.OrderAppender;
 import com.commerce.order.service.OrderModifier;
@@ -205,7 +201,7 @@ class OrderControllerTest extends WebIntegrationTest {
     void cancelRejectsShippedOrderViaHttp() throws Exception {
         UUID memberId = registerMember();
         UUID orderId = checkoutForMember(memberId);
-        mvc.perform(post("/api/v1/orders/{orderId}/ship", orderId)
+        mvc.perform(post("/api/v1/admin/orders/{orderId}/ship", orderId)
                         .header(HttpHeaders.AUTHORIZATION, adminBearer())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(shipRequestBody()))
@@ -269,239 +265,6 @@ class OrderControllerTest extends WebIntegrationTest {
         mvc.perform(get("/api/v1/orders").header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.orders.length()").value(1));
-    }
-
-    @Test
-    @DisplayName("출고·배송완료 전이가 각각 204로 성공하고 이행 축 상태·시각·운송장 기록을 전진시킨다")
-    void shipThenConfirmDeliveryProgressesFulfillment() throws Exception {
-        UUID memberId = registerMember();
-        UUID orderId = checkoutForMember(memberId);
-
-        mvc.perform(post("/api/v1/orders/{orderId}/ship", orderId)
-                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(shipRequestBody()))
-                .andExpect(status().isNoContent());
-        mvc.perform(get("/api/v1/orders/{orderId}", orderId).header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("PAID"))
-                .andExpect(jsonPath("$.fulfillmentStatus").value("SHIPPED"))
-                .andExpect(jsonPath("$.shippedAt").exists())
-                .andExpect(jsonPath("$.carrier").value("CJ대한통운"))
-                .andExpect(jsonPath("$.trackingNumber").value("688900123456"));
-
-        mvc.perform(post("/api/v1/orders/{orderId}/delivery-confirmation", orderId)
-                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
-                .andExpect(status().isNoContent());
-        mvc.perform(get("/api/v1/orders/{orderId}", orderId).header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("PAID"))
-                .andExpect(jsonPath("$.fulfillmentStatus").value("DELIVERED"))
-                .andExpect(jsonPath("$.deliveredAt").exists());
-    }
-
-    @Test
-    @DisplayName("보류·해제 왕복이 각각 204로 사유를 세팅·클리어하고 해제 후 출고가 가능하다")
-    void holdAndReleaseRoundTripRestoresShippability() throws Exception {
-        UUID memberId = registerMember();
-        UUID orderId = checkoutForMember(memberId);
-
-        mvc.perform(post("/api/v1/orders/{orderId}/fulfillment-hold", orderId)
-                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(new FulfillmentHoldRequest(HoldReason.FRAUD_REVIEW))))
-                .andExpect(status().isNoContent());
-        mvc.perform(get("/api/v1/orders/{orderId}", orderId).header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.fulfillmentStatus").value("ON_HOLD"))
-                .andExpect(jsonPath("$.holdReason").value("FRAUD_REVIEW"));
-
-        mvc.perform(post("/api/v1/orders/{orderId}/fulfillment-release", orderId)
-                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
-                .andExpect(status().isNoContent());
-        mvc.perform(get("/api/v1/orders/{orderId}", orderId).header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.fulfillmentStatus").value("PREPARING"))
-                .andExpect(jsonPath("$.holdReason").doesNotExist());
-
-        mvc.perform(post("/api/v1/orders/{orderId}/ship", orderId)
-                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(shipRequestBody()))
-                .andExpect(status().isNoContent());
-    }
-
-    @Test
-    @DisplayName("미결제(PENDING) 주문 출고는 409 ORDER_NOT_PAID로 거부된다")
-    void shipRejectsPendingOrder() throws Exception {
-        UUID orderId = placePendingOrder(registerMember());
-
-        mvc.perform(post("/api/v1/orders/{orderId}/ship", orderId)
-                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(shipRequestBody()))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("ORDER_NOT_PAID"));
-    }
-
-    @Test
-    @DisplayName("취소된 주문 출고는 409 ORDER_NOT_PAID로 거부된다")
-    void shipRejectsCancelledOrder() throws Exception {
-        UUID memberId = registerMember();
-        UUID orderId = checkoutForMember(memberId);
-        mvc.perform(post("/api/v1/orders/{orderId}/cancel", orderId)
-                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
-                .andExpect(status().isNoContent());
-
-        mvc.perform(post("/api/v1/orders/{orderId}/ship", orderId)
-                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(shipRequestBody()))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("ORDER_NOT_PAID"));
-    }
-
-    @Test
-    @DisplayName("출고 전 배송완료는 409 ORDER_INVALID_FULFILLMENT_TRANSITION으로 거부된다")
-    void confirmDeliveryRejectsUnshippedOrder() throws Exception {
-        UUID orderId = checkoutForMember(registerMember());
-
-        mvc.perform(post("/api/v1/orders/{orderId}/delivery-confirmation", orderId)
-                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("ORDER_INVALID_FULFILLMENT_TRANSITION"));
-    }
-
-    @Test
-    @DisplayName("없는 주문 출고는 404 ORDER_NOT_FOUND로 거부된다")
-    void shipReturns404ForMissingOrder() throws Exception {
-        mvc.perform(post("/api/v1/orders/{orderId}/ship", UUID.randomUUID())
-                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(shipRequestBody()))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("ORDER_NOT_FOUND"));
-    }
-
-    @Test
-    @DisplayName("택배사·운송장 번호가 없거나 공백인 출고 요청은 400 VALIDATION_FAILED로 거부된다")
-    void shipRejectsMissingTrackingInfo() throws Exception {
-        UUID orderId = checkoutForMember(registerMember());
-
-        mvc.perform(post("/api/v1/orders/{orderId}/ship", orderId)
-                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{}"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
-                .andExpect(jsonPath("$.errors").isNotEmpty());
-
-        mvc.perform(post("/api/v1/orders/{orderId}/ship", orderId)
-                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(new OrderShipRequest(" ", " "))))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
-    }
-
-    @Test
-    @DisplayName("구매자 토큰의 본인 주문 출고는 403 FORBIDDEN으로 거부되고 이행 상태를 바꾸지 않는다")
-    void shipRejectsBuyerToken() throws Exception {
-        UUID memberId = registerMember();
-        UUID orderId = checkoutForMember(memberId);
-
-        mvc.perform(post("/api/v1/orders/{orderId}/ship", orderId)
-                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(shipRequestBody()))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
-
-        assertThat(orderReader.getOrder(orderId, memberId).fulfillmentStatus()).isEqualTo(FulfillmentStatus.PREPARING);
-    }
-
-    @Test
-    @DisplayName("사유가 없는 보류 요청은 400 VALIDATION_FAILED로 거부된다")
-    void holdRejectsMissingReason() throws Exception {
-        UUID orderId = checkoutForMember(registerMember());
-
-        mvc.perform(post("/api/v1/orders/{orderId}/fulfillment-hold", orderId)
-                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{}"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
-    }
-
-    @Test
-    @DisplayName("배송 완료 주문의 관리자 환불은 204로 주문을 REFUNDED로 전이하고 환불 거래를 남긴다")
-    void adminRefundSucceedsForDeliveredOrder() throws Exception {
-        UUID memberId = registerMember();
-        UUID orderId = checkoutForMember(memberId);
-        orderModifier.ship(orderId, "CJ대한통운", "688900123456");
-        orderModifier.confirmDelivery(orderId);
-
-        mvc.perform(post("/api/v1/orders/{orderId}/refund", orderId)
-                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(new OrderRefundRequest(RefundReason.PRODUCT_DEFECT))))
-                .andExpect(status().isNoContent());
-
-        mvc.perform(get("/api/v1/orders/{orderId}", orderId).header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("REFUNDED"))
-                .andExpect(jsonPath("$.fulfillmentStatus").value("DELIVERED"))
-                .andExpect(jsonPath("$.refundedAt").exists())
-                .andExpect(jsonPath("$.refundReason").value("PRODUCT_DEFECT"));
-        mvc.perform(get("/api/v1/orders/{orderId}/payment", orderId)
-                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("CANCELLED"))
-                .andExpect(jsonPath("$.pgCancelTransactionId").exists());
-    }
-
-    @Test
-    @DisplayName("구매자 토큰의 본인 주문 환불은 403 FORBIDDEN으로 거부되고 상태를 바꾸지 않는다")
-    void refundRejectsBuyerToken() throws Exception {
-        UUID memberId = registerMember();
-        UUID orderId = checkoutForMember(memberId);
-        orderModifier.ship(orderId, "CJ대한통운", "688900123456");
-        orderModifier.confirmDelivery(orderId);
-
-        mvc.perform(post("/api/v1/orders/{orderId}/refund", orderId)
-                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(new OrderRefundRequest(RefundReason.PRODUCT_DEFECT))))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
-
-        assertThat(orderReader.getOrder(orderId, memberId).status()).isEqualTo(OrderStatus.PAID);
-    }
-
-    @Test
-    @DisplayName("배송 완료 전 주문의 관리자 환불은 409 API_ORDER_NOT_REFUNDABLE로 거부된다")
-    void refundRejectsUndeliveredOrderViaHttp() throws Exception {
-        UUID orderId = checkoutForMember(registerMember());
-
-        mvc.perform(post("/api/v1/orders/{orderId}/refund", orderId)
-                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(new OrderRefundRequest(RefundReason.PRODUCT_DEFECT))))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("API_ORDER_NOT_REFUNDABLE"));
-    }
-
-    @Test
-    @DisplayName("사유가 없는 환불 요청은 400 VALIDATION_FAILED로 거부된다")
-    void refundRejectsMissingReason() throws Exception {
-        UUID orderId = checkoutForMember(registerMember());
-
-        mvc.perform(post("/api/v1/orders/{orderId}/refund", orderId)
-                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{}"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
     }
 
     @Test
@@ -745,68 +508,6 @@ class OrderControllerTest extends WebIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.orders.length()").value(1))
                 .andExpect(jsonPath("$.orders[0].lines.length()").value(2));
-    }
-
-    @Test
-    @DisplayName("관리자 주문 목록은 200으로 결제완료·준비중 주문을 최신순 페이지로 싣고 이행 축 상태를 따른다")
-    void adminOrderListReturnsPaidPreparingOrdersAndFollowsFulfillment() throws Exception {
-        UUID orderId = checkoutForMember(registerMember());
-
-        mvc.perform(get("/api/v1/orders/admin")
-                        .param("status", "PAID")
-                        .param("fulfillmentStatus", "PREPARING")
-                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.orders[0].id").value(orderId.toString()))
-                .andExpect(jsonPath("$.orders[0].status").value("PAID"))
-                .andExpect(jsonPath("$.orders[0].fulfillmentStatus").value("PREPARING"))
-                .andExpect(jsonPath("$.page.number").value(1))
-                .andExpect(jsonPath("$.page.size").value(20))
-                .andExpect(jsonPath("$.page.totalElements").isNumber())
-                .andExpect(jsonPath("$.page.totalPages").isNumber());
-
-        orderModifier.ship(orderId, "CJ대한통운", "688900123456");
-
-        mvc.perform(get("/api/v1/orders/admin")
-                        .param("status", "PAID")
-                        .param("fulfillmentStatus", "SHIPPED")
-                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.orders[0].id").value(orderId.toString()))
-                .andExpect(jsonPath("$.orders[0].fulfillmentStatus").value("SHIPPED"));
-    }
-
-    @Test
-    @DisplayName("관리자 주문 목록은 결제 축 상태로 미결제(PENDING) 주문을 구분해 싣는다")
-    void adminOrderListFiltersByPaymentStatus() throws Exception {
-        UUID pendingOrderId = placePendingOrder(registerMember());
-
-        mvc.perform(get("/api/v1/orders/admin")
-                        .param("status", "PENDING")
-                        .param("fulfillmentStatus", "NOT_STARTED")
-                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.orders[0].id").value(pendingOrderId.toString()))
-                .andExpect(jsonPath("$.orders[0].status").value("PENDING"));
-    }
-
-    @Test
-    @DisplayName("구매자 토큰의 관리자 주문 목록 조회는 403 FORBIDDEN으로 거부된다")
-    void adminOrderListRejectsBuyerToken() throws Exception {
-        mvc.perform(get("/api/v1/orders/admin")
-                        .param("status", "PAID")
-                        .param("fulfillmentStatus", "PREPARING")
-                        .header(HttpHeaders.AUTHORIZATION, bearer(registerMember())))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
-    }
-
-    @Test
-    @DisplayName("미인증 관리자 주문 목록 조회는 401 UNAUTHENTICATED로 거부된다")
-    void adminOrderListRejectsUnauthenticated() throws Exception {
-        mvc.perform(get("/api/v1/orders/admin").param("status", "PAID").param("fulfillmentStatus", "PREPARING"))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
     }
 
     private String shipRequestBody() {
