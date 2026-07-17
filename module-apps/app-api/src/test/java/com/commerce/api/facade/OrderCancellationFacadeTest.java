@@ -188,7 +188,8 @@ class OrderCancellationFacadeTest extends FacadeIntegrationTest {
 
         // 종전 고아 인터리빙을 결정론적으로 재현한다: 취소 가드 통과 → PG 환불·결제 CANCELLED 커밋 → 주문
         // 취소 전이 직전에 출고가 선점을 시도. 마커가 환불 앞에 커밋돼 있어 출고는 거부되고 취소가 완결된다.
-        // 훅이 취소 트랜잭션 안에서 돌므로 출고 시도는 별도 스레드(자기 트랜잭션)로 내고 완료까지 기다린다.
+        // 출고 시도는 별도 스레드(자기 트랜잭션)로 내고 완료까지 기다린다 — 호출 스레드에서 내면 진행 중
+        // 취소 흐름의 트랜잭션에 합류할 수 있어 실경합(독립 커밋 경쟁) 형상이 되지 않는다.
         AtomicReference<Throwable> shipAttempt = new AtomicReference<>();
         doAnswer(invocation -> {
                     Thread shipper = new Thread(() -> shipAttempt.set(
