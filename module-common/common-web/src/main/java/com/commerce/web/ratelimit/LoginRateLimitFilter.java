@@ -37,8 +37,8 @@ public final class LoginRateLimitFilter extends OncePerRequestFilter {
         this.window = window;
     }
 
-    // 스로틀 근거인 "시도"(자격증명 추측·가입 열거)는 전부 POST다. 같은 경로의 다른 메서드
-    // (관리자 GET /api/v1/members 이메일 검색 등)는 시도가 아니므로 버킷을 소모하지 않고 통과한다.
+    // 스로틀 근거인 "시도"(자격증명 추측·가입 열거)는 전부 POST다. 같은 경로의 다른 메서드는
+    // 시도가 아니므로 버킷을 소모하지 않고 통과한다.
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         return !"POST".equals(request.getMethod());
