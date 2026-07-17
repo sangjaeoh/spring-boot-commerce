@@ -2,6 +2,7 @@ package com.commerce.api.web.v1.order;
 
 import com.commerce.api.facade.CheckoutFacade;
 import com.commerce.api.facade.OrderCancellationFacade;
+import com.commerce.api.facade.OrderPaymentFacade;
 import com.commerce.api.facade.OrderRefundFacade;
 import com.commerce.api.web.v1.order.request.CheckoutRequest;
 import com.commerce.api.web.v1.order.request.FulfillmentHoldRequest;
@@ -16,7 +17,6 @@ import com.commerce.order.entity.FulfillmentStatus;
 import com.commerce.order.entity.OrderStatus;
 import com.commerce.order.service.OrderModifier;
 import com.commerce.order.service.OrderReader;
-import com.commerce.payment.service.PaymentReader;
 import com.commerce.web.auth.AdminOnly;
 import com.commerce.web.auth.AuthUser;
 import jakarta.validation.Valid;
@@ -39,8 +39,8 @@ import org.springframework.web.bind.annotation.RestController;
  * <p>본인용 표면(체크아웃·취소·조회)은 회원을 토큰 주체({@link AuthUser})에서 도출하고 미인증 요청은
  * 401로 거부된다. 타인 주문은 존재 누출 방지로 미존재(404) 취급한다(발급 쿠폰 관례와 동일). 이행 전이·반품
  * 환불은 관리자 표면이라 관리자 토큰만 허용한다({@link AdminOnly}). 크로스 도메인 쓰기(체크아웃·취소·반품
- * 환불)는 파사드에, 단일 도메인 쓰기인 이행 전이는 주문 도메인 Modifier에 얇게 위임하고, 조회는 주문·결제 각 도메인 Reader에
- * 위임해 결과를 응답 DTO로 변환한다. 정책 거부·전이 위반·미존재는 도메인/파사드가 던지는 예외를 전역
+ * 환불)와 크로스 도메인 조회(결제 조회)는 파사드에, 단일 도메인 쓰기인 이행 전이는 주문 도메인 Modifier에, 단일 도메인 조회는
+ * 주문 도메인 Reader에 얇게 위임해 결과를 응답 DTO로 변환한다. 정책 거부·전이 위반·미존재는 도메인/파사드가 던지는 예외를 전역
  * 핸들러가 problem+json으로 매핑한다.
  */
 @RestController
@@ -50,23 +50,23 @@ public class OrderController {
     private final CheckoutFacade checkoutFacade;
     private final OrderCancellationFacade orderCancellationFacade;
     private final OrderRefundFacade orderRefundFacade;
+    private final OrderPaymentFacade orderPaymentFacade;
     private final OrderModifier orderModifier;
     private final OrderReader orderReader;
-    private final PaymentReader paymentReader;
 
     public OrderController(
             CheckoutFacade checkoutFacade,
             OrderCancellationFacade orderCancellationFacade,
             OrderRefundFacade orderRefundFacade,
+            OrderPaymentFacade orderPaymentFacade,
             OrderModifier orderModifier,
-            OrderReader orderReader,
-            PaymentReader paymentReader) {
+            OrderReader orderReader) {
         this.checkoutFacade = checkoutFacade;
         this.orderCancellationFacade = orderCancellationFacade;
         this.orderRefundFacade = orderRefundFacade;
+        this.orderPaymentFacade = orderPaymentFacade;
         this.orderModifier = orderModifier;
         this.orderReader = orderReader;
-        this.paymentReader = paymentReader;
     }
 
     /** 본인 장바구니를 주문·결제로 전환하고 결제 완료된 주문 ID를 반환한다. */
@@ -159,8 +159,6 @@ public class OrderController {
     /** 본인 주문의 결제 정보(승인·환불 거래)를 조회한다. */
     @GetMapping("/{orderId}/payment")
     public PaymentResponse getPayment(AuthUser authUser, @PathVariable UUID orderId) {
-        // 소유권 게이트 — 본인 주문이 아니면 미존재(404)로 끝난다.
-        orderReader.getOrder(orderId, authUser.memberId());
-        return PaymentResponse.from(paymentReader.getByOrderId(orderId));
+        return PaymentResponse.from(orderPaymentFacade.getPayment(orderId, authUser.memberId()));
     }
 }

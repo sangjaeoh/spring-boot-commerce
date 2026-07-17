@@ -2,6 +2,7 @@ package com.commerce.api.architecture;
 
 import static com.tngtech.archunit.base.DescribedPredicate.not;
 import static com.tngtech.archunit.core.domain.properties.CanBeAnnotated.Predicates.annotatedWith;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -9,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import com.commerce.api.architecture.bypass.service.EntityReferencingFixture;
 import com.commerce.member.entity.Member;
 import com.tngtech.archunit.base.DescribedPredicate;
+import com.tngtech.archunit.core.domain.Dependency;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.domain.JavaMethodCall;
@@ -17,9 +19,14 @@ import com.tngtech.archunit.core.domain.JavaType;
 import com.tngtech.archunit.core.domain.properties.CanBeAnnotated;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
+import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ArchRule;
+import com.tngtech.archunit.lang.ConditionEvents;
+import com.tngtech.archunit.lang.SimpleConditionEvent;
 import java.util.HashSet;
+import java.util.Optional;
 import java.util.Set;
+import java.util.TreeSet;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -27,7 +34,8 @@ import org.junit.jupiter.api.Test;
  * 컴파일된 클래스 그래프에서 검증한다. 앞 두 규칙은 app-api가 도메인을 의존하는 P2부터 비공허하게 활성화돼,
  * {@code ..facade..}·{@code ..event.listener..}가 생 엔티티({@code @Entity}·{@code @MappedSuperclass})나
  * 도메인 리포지토리에 의존하면 실패한다. 세 번째 규칙은 패키지와 무관하게, 어떤 클래스든 소프트삭제 엔티티
- * 리포지토리의 base finder를 직접 호출하면 실패한다.
+ * 리포지토리의 base finder를 직접 호출하면 실패한다. 네 번째 규칙은 web 컨트롤러가 서로 다른 도메인의
+ * service를 2개 이상 직접 의존하면 실패한다 — 크로스 도메인 조율은 facade가 소유한다(architecture.md 앱 모듈 구조).
  */
 class ArchitectureTest {
 
@@ -152,6 +160,67 @@ class ArchitectureTest {
         assertEquals(
                 Set.of("com.commerce.member.entity.Member", "com.commerce.product.entity.Product"),
                 SOFT_DELETE_ENTITY_NAMES);
+    }
+
+    @Test
+    void controllersDependOnAtMostOneDomainServiceDirectly() {
+        controllersDependOnAtMostOneDomainService().check(CLASSES);
+    }
+
+    @Test
+    void domainServiceRootParsingIsCorrect() {
+        // 규칙의 변별력은 도메인 service 패키지 판정의 정확성에 달렸다 — facade·info·common을 service로 오인하면
+        // 규칙이 공허해지거나(도메인 0개로 항상 통과) 오탐한다. 파싱 회귀를 여기서 고정한다.
+        assertEquals(Optional.of("order"), domainServiceRoot("com.commerce.order.service"));
+        assertEquals(Optional.of("payment"), domainServiceRoot("com.commerce.payment.service.support"));
+        assertEquals(Optional.empty(), domainServiceRoot("com.commerce.api.facade"));
+        assertEquals(Optional.empty(), domainServiceRoot("com.commerce.order.info"));
+        assertEquals(Optional.empty(), domainServiceRoot("com.commerce.auth.token"));
+        assertEquals(Optional.empty(), domainServiceRoot("com.commerce.web.auth"));
+    }
+
+    // web 컨트롤러가 서로 다른 도메인의 service 패키지에 2개 이상 직접 의존하면 실패한다. 컨트롤러는 단일 도메인
+    // service(또는 facade)에만 얇게 위임하고, 크로스 도메인 조율은 facade가 소유한다 — architecture.md 앱 모듈 구조.
+    // 여러 도메인 service를 엮는 facade 자신(com.commerce.api.facade)은 web 패키지 밖이라 대상이 아니다.
+    private static ArchRule controllersDependOnAtMostOneDomainService() {
+        return classes()
+                .that()
+                .resideInAPackage("com.commerce.api.web..")
+                .should(dependOnAtMostOneDomainService())
+                .because("컨트롤러가 여러 도메인을 조율하면 facade로 옮긴다 — 크로스 도메인 조율은 facade가 소유한다." + " architecture.md 앱 모듈 구조");
+    }
+
+    private static ArchCondition<JavaClass> dependOnAtMostOneDomainService() {
+        return new ArchCondition<>("최대 한 도메인의 service에만 직접 의존") {
+            @Override
+            public void check(JavaClass controller, ConditionEvents events) {
+                Set<String> domains = new TreeSet<>();
+                for (Dependency dependency : controller.getDirectDependenciesFromSelf()) {
+                    domainServiceRoot(dependency.getTargetClass().getPackageName())
+                            .ifPresent(domains::add);
+                }
+                if (domains.size() > 1) {
+                    events.add(SimpleConditionEvent.violated(
+                            controller,
+                            controller.getName() + " 가 여러 도메인 service에 직접 의존한다: " + domains
+                                    + " — 크로스 도메인 조율은 facade로 옮긴다"));
+                }
+            }
+        };
+    }
+
+    // com.commerce.{root}.service[.*] 패키지면 도메인 루트를 반환한다. 도메인 모듈만 .service 서브 패키지를 두므로
+    // (facade·info·entity·common엔 없다) 이 접미 판정으로 도메인 service 의존을 가른다.
+    private static Optional<String> domainServiceRoot(String packageName) {
+        String prefix = "com.commerce.";
+        if (!packageName.startsWith(prefix)) {
+            return Optional.empty();
+        }
+        String[] segments = packageName.substring(prefix.length()).split("\\.");
+        if (segments.length >= 2 && segments[1].equals("service")) {
+            return Optional.of(segments[0]);
+        }
+        return Optional.empty();
     }
 
     // 클래스가 매핑 클래스 소유 모듈의 면제 서브 패키지({base}.{entity|info|service|repository} 이하)에 있으면 참이다.
