@@ -5,6 +5,7 @@ import com.commerce.core.money.Money;
 import com.commerce.product.service.ProductVariantModifier;
 import com.commerce.web.auth.AdminOnly;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -67,7 +68,9 @@ public class ProductVariantController {
     })
     @PostMapping("/{variantId}/price-change")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void changePrice(@PathVariable UUID variantId, @Valid @RequestBody VariantPriceChangeRequest request) {
+    public void changePrice(
+            @Parameter(description = "변형 ID") @PathVariable UUID variantId,
+            @Valid @RequestBody VariantPriceChangeRequest request) {
         variantModifier.changePrice(variantId, Money.of(request.price()));
     }
 
@@ -94,7 +97,7 @@ public class ProductVariantController {
     })
     @PostMapping("/{variantId}/enable")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void enable(@PathVariable UUID variantId) {
+    public void enable(@Parameter(description = "변형 ID") @PathVariable UUID variantId) {
         variantModifier.enable(variantId);
     }
 
@@ -121,7 +124,7 @@ public class ProductVariantController {
     })
     @PostMapping("/{variantId}/disable")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void disable(@PathVariable UUID variantId) {
+    public void disable(@Parameter(description = "변형 ID") @PathVariable UUID variantId) {
         variantModifier.disable(variantId);
     }
 
@@ -148,7 +151,7 @@ public class ProductVariantController {
     })
     @PostMapping("/{variantId}/retire")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void retire(@PathVariable UUID variantId) {
+    public void retire(@Parameter(description = "변형 ID") @PathVariable UUID variantId) {
         variantModifier.retire(variantId);
     }
 }

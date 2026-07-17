@@ -7,6 +7,7 @@ import com.commerce.api.web.v1.cart.request.ChangeCartItemQuantityRequest;
 import com.commerce.api.web.v1.cart.response.CartResponse;
 import com.commerce.web.auth.AuthUser;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -109,7 +110,7 @@ public class CartController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void changeItemQuantity(
             AuthUser authUser,
-            @PathVariable UUID variantId,
+            @Parameter(description = "장바구니 라인의 변형 ID") @PathVariable UUID variantId,
             @Valid @RequestBody ChangeCartItemQuantityRequest request) {
         cartCommandFacade.changeItemQuantity(authUser.memberId(), variantId, request.quantity());
     }
@@ -129,7 +130,7 @@ public class CartController {
     })
     @DeleteMapping("/items/{variantId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void removeItem(AuthUser authUser, @PathVariable UUID variantId) {
+    public void removeItem(AuthUser authUser, @Parameter(description = "장바구니 라인의 변형 ID") @PathVariable UUID variantId) {
         cartCommandFacade.removeItem(authUser.memberId(), variantId);
     }
 

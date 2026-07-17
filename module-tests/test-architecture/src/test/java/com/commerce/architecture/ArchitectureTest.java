@@ -44,7 +44,9 @@ import org.junit.jupiter.api.Test;
  * service를 2개 이상 직접 의존하면 실패한다 — 크로스 도메인 조율은 facade가 소유한다(architecture.md 앱 모듈 구조).
  * 다섯째·여섯째 규칙은 web 컨트롤러 핸들러에 {@code @Operation}·{@code @ApiResponse}가, request/response 타입·컴포넌트에
  * {@code @Schema}가 없으면 실패한다 — 클라이언트 명세를 코드에 명시한다(architecture.md 표현 계층 OpenAPI 규칙).
- * 일곱째 규칙은 web 컨트롤러 핸들러가 int·Integer {@code @RequestParam}을 직접 선언하면 실패한다 — 페이징
+ * 일곱째 규칙은 핸들러의 {@code @RequestParam}·{@code @PathVariable} 파라미터에 description이 비어 있지 않은
+ * {@code @Parameter}가 없으면 실패한다 — 같은 OpenAPI 규칙의 파라미터 축이다.
+ * 여덟째 규칙은 web 컨트롤러 핸들러가 int·Integer {@code @RequestParam}을 직접 선언하면 실패한다 — 페이징
  * 파라미터는 common-web {@code PaginationRequest}로 받는다(architecture.md 앱 모듈 구조 페이징 규칙).
  */
 class ArchitectureTest {
@@ -199,6 +201,11 @@ class ArchitectureTest {
     }
 
     @Test
+    void controllerHandlerParametersDeclareParameterDocs() {
+        controllerHandlerParametersDocumented().check(CLASSES);
+    }
+
+    @Test
     void controllerHandlersDoNotDeclareRawPagingParams() {
         controllerHandlersUsePaginationRequest().check(CLASSES);
     }
@@ -313,6 +320,55 @@ class ArchitectureTest {
                 }
             }
         };
+    }
+
+    // web 컨트롤러 핸들러의 @RequestParam·@PathVariable 파라미터에 description이 비어 있지 않은 @Parameter가 없으면
+    // 실패한다 — 이름·타입·필수 여부는 springdoc이 자동 생성하지만 의미는 코드에 명시한다(architecture.md 표현 계층
+    // OpenAPI 규칙). @ParameterObject DTO 파라미터는 필드 @Schema 규칙이 커버하므로 대상이 아니다.
+    private static ArchRule controllerHandlerParametersDocumented() {
+        return classes()
+                .that()
+                .resideInAnyPackage(appSubtreePatterns(".web.."))
+                .and()
+                .areAnnotatedWith("org.springframework.web.bind.annotation.RestController")
+                .should(declareParameterDocsOnHandlerParameters())
+                .because("핸들러의 @RequestParam·@PathVariable은 @Parameter(description)로 클라이언트 명세를 명시한다"
+                        + " — architecture.md 표현 계층 OpenAPI 규칙");
+    }
+
+    private static ArchCondition<JavaClass> declareParameterDocsOnHandlerParameters() {
+        return new ArchCondition<>("@RequestParam·@PathVariable 파라미터마다 description 있는 @Parameter를 선언") {
+            @Override
+            public void check(JavaClass controller, ConditionEvents events) {
+                for (JavaMethod method : controller.getMethods()) {
+                    if (!isHandlerMethod(method)) {
+                        continue;
+                    }
+                    for (JavaParameter parameter : method.getParameters()) {
+                        boolean bindsInlineValue = parameter.isAnnotatedWith(
+                                        "org.springframework.web.bind.annotation.RequestParam")
+                                || parameter.isAnnotatedWith("org.springframework.web.bind.annotation.PathVariable");
+                        if (bindsInlineValue && !hasParameterDescription(parameter)) {
+                            events.add(SimpleConditionEvent.violated(
+                                    method,
+                                    method.getFullName() + " 의 " + parameter.getIndex()
+                                            + "번 파라미터에 description 있는 @Parameter가 없다"));
+                        }
+                    }
+                }
+            }
+        };
+    }
+
+    private static boolean hasParameterDescription(JavaParameter parameter) {
+        return parameter.getAnnotations().stream()
+                .filter(annotation ->
+                        annotation.getRawType().getName().equals("io.swagger.v3.oas.annotations.Parameter"))
+                .findFirst()
+                .flatMap(annotation -> annotation.get("description"))
+                .map(Object::toString)
+                .filter(description -> !description.isBlank())
+                .isPresent();
     }
 
     // web 컨트롤러 핸들러가 int·Integer @RequestParam을 직접 선언하면 실패한다 — 페이징 파라미터는 common-web

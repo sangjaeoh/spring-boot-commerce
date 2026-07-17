@@ -15,6 +15,7 @@ import com.commerce.web.auth.AdminOnly;
 import com.commerce.web.auth.AuthUser;
 import com.commerce.web.paging.PaginationRequest;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -143,7 +144,8 @@ public class CouponController {
     @AdminOnly
     @GetMapping("/{couponId}/issues")
     public IssuedCouponPageResponse getIssues(
-            @PathVariable UUID couponId, @Valid @ParameterObject PaginationRequest pagination) {
+            @Parameter(description = "쿠폰 ID") @PathVariable UUID couponId,
+            @Valid @ParameterObject PaginationRequest pagination) {
         return IssuedCouponPageResponse.from(issuedCouponReader.getIssuedCouponsByCoupon(
                 couponId, PageRequest.of(pagination.zeroBasedPage(), pagination.size())));
     }
@@ -167,7 +169,8 @@ public class CouponController {
     })
     @PostMapping("/{couponId}/issues")
     @ResponseStatus(HttpStatus.CREATED)
-    public CouponIssuanceResponse issue(AuthUser authUser, @PathVariable UUID couponId) {
+    public CouponIssuanceResponse issue(
+            AuthUser authUser, @Parameter(description = "쿠폰 ID") @PathVariable UUID couponId) {
         UUID issuedCouponId = couponIssuanceFacade.issue(couponId, authUser.memberId());
         return CouponIssuanceResponse.from(issuedCouponId);
     }
@@ -196,7 +199,7 @@ public class CouponController {
     @AdminOnly
     @PostMapping("/{couponId}/disable")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void disable(@PathVariable UUID couponId) {
+    public void disable(@Parameter(description = "쿠폰 ID") @PathVariable UUID couponId) {
         couponModifier.disable(couponId);
     }
 
@@ -224,7 +227,7 @@ public class CouponController {
     @AdminOnly
     @PostMapping("/{couponId}/enable")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void enable(@PathVariable UUID couponId) {
+    public void enable(@Parameter(description = "쿠폰 ID") @PathVariable UUID couponId) {
         couponModifier.enable(couponId);
     }
 }

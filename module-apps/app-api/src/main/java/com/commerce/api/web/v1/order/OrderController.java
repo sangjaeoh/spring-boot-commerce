@@ -21,6 +21,7 @@ import com.commerce.web.auth.AdminOnly;
 import com.commerce.web.auth.AuthUser;
 import com.commerce.web.paging.PaginationRequest;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -130,7 +131,7 @@ public class OrderController {
     })
     @PostMapping("/{orderId}/cancel")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void cancel(AuthUser authUser, @PathVariable UUID orderId) {
+    public void cancel(AuthUser authUser, @Parameter(description = "주문 ID") @PathVariable UUID orderId) {
         orderCancellationFacade.cancel(orderId, authUser.memberId());
     }
 
@@ -162,7 +163,9 @@ public class OrderController {
     @AdminOnly
     @PostMapping("/{orderId}/refund")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void refund(@PathVariable UUID orderId, @Valid @RequestBody OrderRefundRequest request) {
+    public void refund(
+            @Parameter(description = "주문 ID") @PathVariable UUID orderId,
+            @Valid @RequestBody OrderRefundRequest request) {
         orderRefundFacade.refund(orderId, request.reason());
     }
 
@@ -194,7 +197,9 @@ public class OrderController {
     @AdminOnly
     @PostMapping("/{orderId}/ship")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void ship(@PathVariable UUID orderId, @Valid @RequestBody OrderShipRequest request) {
+    public void ship(
+            @Parameter(description = "주문 ID") @PathVariable UUID orderId,
+            @Valid @RequestBody OrderShipRequest request) {
         orderModifier.ship(orderId, request.carrier(), request.trackingNumber());
     }
 
@@ -222,7 +227,7 @@ public class OrderController {
     @AdminOnly
     @PostMapping("/{orderId}/delivery-confirmation")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void confirmDelivery(@PathVariable UUID orderId) {
+    public void confirmDelivery(@Parameter(description = "주문 ID") @PathVariable UUID orderId) {
         orderModifier.confirmDelivery(orderId);
     }
 
@@ -254,7 +259,9 @@ public class OrderController {
     @AdminOnly
     @PostMapping("/{orderId}/fulfillment-hold")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void holdFulfillment(@PathVariable UUID orderId, @Valid @RequestBody FulfillmentHoldRequest request) {
+    public void holdFulfillment(
+            @Parameter(description = "주문 ID") @PathVariable UUID orderId,
+            @Valid @RequestBody FulfillmentHoldRequest request) {
         orderModifier.holdFulfillment(orderId, request.reason());
     }
 
@@ -282,7 +289,7 @@ public class OrderController {
     @AdminOnly
     @PostMapping("/{orderId}/fulfillment-release")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void releaseFulfillment(@PathVariable UUID orderId) {
+    public void releaseFulfillment(@Parameter(description = "주문 ID") @PathVariable UUID orderId) {
         orderModifier.releaseFulfillment(orderId);
     }
 
@@ -300,7 +307,7 @@ public class OrderController {
                 content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
     })
     @GetMapping("/{orderId}")
-    public OrderResponse getOrder(AuthUser authUser, @PathVariable UUID orderId) {
+    public OrderResponse getOrder(AuthUser authUser, @Parameter(description = "주문 ID") @PathVariable UUID orderId) {
         return OrderResponse.from(orderReader.getOrder(orderId, authUser.memberId()));
     }
 
@@ -343,8 +350,8 @@ public class OrderController {
     @AdminOnly
     @GetMapping("/admin")
     public OrderPageResponse getOrdersByStatus(
-            @RequestParam OrderStatus status,
-            @RequestParam FulfillmentStatus fulfillmentStatus,
+            @Parameter(description = "결제 축 주문 상태 필터") @RequestParam OrderStatus status,
+            @Parameter(description = "이행 축 상태 필터") @RequestParam FulfillmentStatus fulfillmentStatus,
             @Valid @ParameterObject PaginationRequest pagination) {
         return OrderPageResponse.from(orderReader.getOrdersByStatus(
                 status, fulfillmentStatus, PageRequest.of(pagination.zeroBasedPage(), pagination.size())));
@@ -364,7 +371,7 @@ public class OrderController {
                 content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
     })
     @GetMapping("/{orderId}/payment")
-    public PaymentResponse getPayment(AuthUser authUser, @PathVariable UUID orderId) {
+    public PaymentResponse getPayment(AuthUser authUser, @Parameter(description = "주문 ID") @PathVariable UUID orderId) {
         return PaymentResponse.from(orderPaymentFacade.getPayment(orderId, authUser.memberId()));
     }
 }

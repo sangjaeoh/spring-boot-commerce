@@ -18,6 +18,7 @@ import com.commerce.product.service.ProductRemover;
 import com.commerce.web.auth.AdminOnly;
 import com.commerce.web.paging.PaginationRequest;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -135,7 +136,8 @@ public class ProductController {
     @PostMapping("/{productId}/variants")
     @ResponseStatus(HttpStatus.CREATED)
     public VariantRegistrationResponse addVariant(
-            @PathVariable UUID productId, @Valid @RequestBody VariantRegistrationRequest request) {
+            @Parameter(description = "상품 ID") @PathVariable UUID productId,
+            @Valid @RequestBody VariantRegistrationRequest request) {
         UUID variantId = productRegistrationFacade.addVariant(
                 productId, Money.of(request.price()), request.toProductOptions(), request.initialQuantity());
         return VariantRegistrationResponse.from(variantId);
@@ -190,7 +192,7 @@ public class ProductController {
                 content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
     })
     @GetMapping("/{productId}")
-    public ProductDetailResponse getProduct(@PathVariable UUID productId) {
+    public ProductDetailResponse getProduct(@Parameter(description = "상품 ID") @PathVariable UUID productId) {
         return ProductDetailResponse.from(productDetailFacade.getProductDetail(productId));
     }
 
@@ -218,7 +220,7 @@ public class ProductController {
     @AdminOnly
     @PostMapping("/{productId}/show")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void show(@PathVariable UUID productId) {
+    public void show(@Parameter(description = "상품 ID") @PathVariable UUID productId) {
         productModifier.show(productId);
     }
 
@@ -246,7 +248,7 @@ public class ProductController {
     @AdminOnly
     @PostMapping("/{productId}/hide")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void hide(@PathVariable UUID productId) {
+    public void hide(@Parameter(description = "상품 ID") @PathVariable UUID productId) {
         productModifier.hide(productId);
     }
 
@@ -274,7 +276,9 @@ public class ProductController {
     @AdminOnly
     @PatchMapping("/{productId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void edit(@PathVariable UUID productId, @Valid @RequestBody ProductEditRequest request) {
+    public void edit(
+            @Parameter(description = "상품 ID") @PathVariable UUID productId,
+            @Valid @RequestBody ProductEditRequest request) {
         productModifier.rename(productId, request.name());
         productModifier.changeDescription(productId, request.description());
     }
@@ -299,7 +303,7 @@ public class ProductController {
     @AdminOnly
     @DeleteMapping("/{productId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void delete(@PathVariable UUID productId) {
+    public void delete(@Parameter(description = "상품 ID") @PathVariable UUID productId) {
         productRemover.delete(productId);
     }
 }

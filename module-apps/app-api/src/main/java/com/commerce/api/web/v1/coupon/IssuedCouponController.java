@@ -9,6 +9,7 @@ import com.commerce.coupon.service.IssuedCouponReader;
 import com.commerce.web.auth.AdminOnly;
 import com.commerce.web.auth.AuthUser;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -69,7 +70,8 @@ public class IssuedCouponController {
                 content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
     })
     @GetMapping("/{issuedCouponId}")
-    public IssuedCouponResponse getIssuedCoupon(AuthUser authUser, @PathVariable UUID issuedCouponId) {
+    public IssuedCouponResponse getIssuedCoupon(
+            AuthUser authUser, @Parameter(description = "발급 쿠폰 ID") @PathVariable UUID issuedCouponId) {
         return IssuedCouponResponse.from(issuedCouponReader.getIssuedCoupon(issuedCouponId, authUser.memberId()));
     }
 
@@ -98,8 +100,9 @@ public class IssuedCouponController {
     @GetMapping("/{issuedCouponId}/discount-preview")
     public DiscountPreviewResponse getDiscountPreview(
             AuthUser authUser,
-            @PathVariable UUID issuedCouponId,
-            @RequestParam @Min(0) @Max(MAX_ORDER_AMOUNT) long orderAmount) {
+            @Parameter(description = "발급 쿠폰 ID") @PathVariable UUID issuedCouponId,
+            @Parameter(description = "할인 계산 기준 주문 금액(원)") @RequestParam @Min(0) @Max(MAX_ORDER_AMOUNT)
+                    long orderAmount) {
         return DiscountPreviewResponse.from(
                 issuedCouponReader.getDiscountPreview(issuedCouponId, authUser.memberId(), Money.of(orderAmount)));
     }
@@ -148,7 +151,9 @@ public class IssuedCouponController {
     @AdminOnly
     @PostMapping("/{issuedCouponId}/revoke")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void revoke(@PathVariable UUID issuedCouponId, @Valid @RequestBody IssuedCouponRevocationRequest request) {
+    public void revoke(
+            @Parameter(description = "발급 쿠폰 ID") @PathVariable UUID issuedCouponId,
+            @Valid @RequestBody IssuedCouponRevocationRequest request) {
         issuedCouponModifier.revoke(issuedCouponId, request.reason());
     }
 }
