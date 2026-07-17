@@ -68,7 +68,8 @@
 ### 앱 모듈 구조 (`app-{name}/`)
 
 - 앱 모듈은 아래 서브 패키지로 구성한다.
-  - `presentation` — 컨트롤러·DTO. API 버전별 `presentation/v{n}` 분리.
+  - `web` — 컨트롤러·DTO. API 버전별 `web/v{n}` 분리, 그 아래는 리소스별 슬라이스로 나눠 각 슬라이스가 컨트롤러와 `request`·`response`를 소유한다.
+    - 버전을 바깥 축, 리소스를 안쪽 축에 둬 `/api/v{n}/{리소스}` URL 경로를 패키지로 미러링한다. `web`은 HTTP 계열 전송(REST·WebSocket·SSE)을 담고, 비-web 진입점은 형제 패키지로 둔다.
   - `facade` — 도메인 조립·크로스 도메인 조율.
   - `event/listener` — 크로스 도메인 이벤트 소비.
   - `infrastructure/query`(admin) · `infrastructure/reader`(batch) — 엔티티 의존을 허용하는 격리 구역. canonical 경로는 `app.admin.infrastructure.query` · `app.batch.infrastructure.reader`다.
