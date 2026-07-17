@@ -36,7 +36,8 @@ import org.jspecify.annotations.Nullable;
  * {@code status == PAID}에서만 유효하다. 최초 상태는 {@code PENDING}·{@code NOT_STARTED}다.
  *
  * <p>취소·환불 전이가 재고·쿠폰 복원을 게이트하므로 동시 중복 전이를 낙관락({@code @Version})으로
- * 직렬화한다 — 겹친 취소 2건이 모두 가드를 통과해도 한쪽만 커밋되어 복원이 정확히 한 번이다.
+ * 직렬화한다 — 겹친 취소 2건이 모두 가드를 통과해도 한쪽만 커밋되어 복원이 정확히 한 번이다. 취소 개시
+ * 마커({@code cancelRequestedAt})도 같은 낙관락으로 출고와 직렬화되어 취소 진행 중 출고를 거부한다.
  */
 @Entity
 @Table(schema = "ordering", name = "orders")
@@ -105,6 +106,10 @@ public class Order extends BaseTimeEntity<UUID> {
     @Column(name = "paid_at")
     @Nullable
     private Instant paidAt;
+
+    @Column(name = "cancel_requested_at")
+    @Nullable
+    private Instant cancelRequestedAt;
 
     @Column(name = "cancelled_at")
     @Nullable
@@ -213,6 +218,24 @@ public class Order extends BaseTimeEntity<UUID> {
     }
 
     /**
+     * 취소 개시를 기록한다. 마커가 있는 동안 출고가 거부된다. 이미 개시된 주문에는 아무것도 하지 않는다.
+     *
+     * @throws OrderStatusException 결제 완료 주문이 아니거나 출고 이후면
+     */
+    public void requestCancellation(Instant now) {
+        if (cancelRequestedAt != null) {
+            return;
+        }
+        if (status != OrderStatus.PAID) {
+            throw new OrderStatusException(OrderErrorCode.INVALID_ORDER_STATE_TRANSITION);
+        }
+        if (isShippedOrDelivered()) {
+            throw new OrderStatusException(OrderErrorCode.CANCEL_NOT_ALLOWED);
+        }
+        this.cancelRequestedAt = now;
+    }
+
+    /**
      * 배송 완료된 주문을 전체 반품 환불 처리한다. 이행 축은 DELIVERED로 남는다.
      *
      * @throws OrderStatusException 결제 완료·배송 완료 주문이 아니거나 이미 환불됐으면
@@ -229,10 +252,17 @@ public class Order extends BaseTimeEntity<UUID> {
         this.refundReason = reason;
     }
 
-    /** 출고한다. 택배사·운송장 번호를 기록한다. */
+    /**
+     * 출고한다. 택배사·운송장 번호를 기록한다.
+     *
+     * @throws FulfillmentStatusException 결제 완료 주문이 아니거나, 준비 중이 아니거나, 취소가 진행 중이면
+     */
     public void ship(String carrier, String trackingNumber, Instant now) {
         requirePaid();
         requireFulfillment(FulfillmentStatus.PREPARING);
+        if (cancelRequestedAt != null) {
+            throw new FulfillmentStatusException(OrderErrorCode.CANCEL_IN_PROGRESS);
+        }
         this.fulfillmentStatus = FulfillmentStatus.SHIPPED;
         this.shippedAt = now;
         this.carrier = carrier;
@@ -375,6 +405,10 @@ public class Order extends BaseTimeEntity<UUID> {
 
     public @Nullable Instant getDeliveredAt() {
         return deliveredAt;
+    }
+
+    public @Nullable Instant getCancelRequestedAt() {
+        return cancelRequestedAt;
     }
 
     public @Nullable Instant getCancelledAt() {

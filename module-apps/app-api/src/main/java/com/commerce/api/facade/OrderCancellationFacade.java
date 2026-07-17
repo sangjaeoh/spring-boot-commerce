@@ -23,6 +23,12 @@ import org.springframework.stereotype.Component;
  * <p>이중 가드다. 결제 취소(환불)를 먼저 하고, 성공 시 주문 취소의 1회성 전이가 재고·쿠폰 복원을
  * 게이트한다. 환불이 복원의 선행조건이라 환불 실패 시 주문은 PAID로 남고 복원하지 않는다.
  *
+ * <p>이중 가드에 앞서 취소 개시 마커({@code Order.requestCancellation})를 PG 환불 앞에 커밋해 취소 진행 중
+ * 주문의 출고를 거부한다. 마커 커밋은 주문 낙관락으로 {@code ship}과 직렬화되므로 출고가 먼저 커밋되면
+ * 취소가 환불 전에 중단되고, 마커가 먼저 커밋되면 출고가 거부된다 — 환불 커밋과 주문 전이 사이에 출고가
+ * 끼어들어 남던 환불 고아(결제 CANCELLED × 주문 PAID+SHIPPED)가 없다. 마커 커밋 후 중단된 취소는 이
+ * 파사드의 재시도가 완결한다(마커 재개시는 no-op, 출고가 차단돼 재시도가 SHIPPED에 막히지 않는다).
+ *
  * <p>복원은 주문 취소 전이가 이 호출에서 실제 일어났을 때만 탄다. 이미 CANCELLED인 주문은 복원 재실행 없이
  * 관용 통과시켜 재호출이 재고를 가산 증식시키거나 다른 주문에 재사용된 쿠폰을 풀지 못한다. 환불 커밋 후 주문
  * 취소가 실패한 재시도는 이미 CANCELLED인 결제를 관용해 취소·복원을 완결한다. 취소 커밋과 복원 사이 중단의
@@ -68,6 +74,8 @@ public class OrderCancellationFacade {
             return;
         }
         requireCancellable(order);
+
+        orderModifier.requestCancellation(orderId);
 
         PaymentInfo payment = paymentReader.getByOrderId(orderId);
         paymentProcessor.cancel(payment.id());

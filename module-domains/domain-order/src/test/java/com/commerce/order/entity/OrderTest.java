@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.commerce.core.money.Money;
 import com.commerce.order.exception.FulfillmentStatusException;
 import com.commerce.order.exception.InvalidOrderException;
+import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderStatusException;
 import java.time.Instant;
 import java.util.List;
@@ -147,6 +148,56 @@ class OrderTest {
         onHold.holdFulfillment(HoldReason.STOCK_DELAY);
         onHold.cancel(CancellationReason.STOCK_SHORTAGE, NOW);
         assertThat(onHold.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+    }
+
+    @Test
+    @DisplayName("취소 개시는 마커를 남기고 재개시는 아무것도 하지 않는다")
+    void requestCancellationSetsMarkerOnce() {
+        Order order = paidOrder();
+        order.requestCancellation(NOW);
+        assertThat(order.getCancelRequestedAt()).isEqualTo(NOW);
+
+        order.requestCancellation(NOW.plusSeconds(60));
+        assertThat(order.getCancelRequestedAt()).isEqualTo(NOW);
+    }
+
+    @Test
+    @DisplayName("보류 중 주문도 취소를 개시할 수 있다")
+    void requestCancellationAllowsOnHold() {
+        Order order = paidOrder();
+        order.holdFulfillment(HoldReason.STOCK_DELAY);
+        order.requestCancellation(NOW);
+        assertThat(order.getCancelRequestedAt()).isEqualTo(NOW);
+    }
+
+    @Test
+    @DisplayName("미결제·취소된·출고된 주문은 취소를 개시할 수 없다")
+    void requestCancellationRejectsIneligibleStates() {
+        Order pending = place(Money.ZERO, Money.ZERO, null);
+        assertThatThrownBy(() -> pending.requestCancellation(NOW)).isInstanceOf(OrderStatusException.class);
+
+        Order cancelled = paidOrder();
+        cancelled.cancel(CancellationReason.CUSTOMER_REQUEST, NOW);
+        assertThatThrownBy(() -> cancelled.requestCancellation(NOW)).isInstanceOf(OrderStatusException.class);
+
+        Order shipped = paidOrder();
+        shipped.ship(CARRIER, TRACKING_NUMBER, NOW);
+        assertThatThrownBy(() -> shipped.requestCancellation(NOW)).isInstanceOf(OrderStatusException.class);
+    }
+
+    @Test
+    @DisplayName("취소 개시된 주문은 출고할 수 없고 취소는 완결할 수 있다")
+    void shipRejectedWhileCancellationInProgress() {
+        Order order = paidOrder();
+        order.requestCancellation(NOW);
+
+        assertThatThrownBy(() -> order.ship(CARRIER, TRACKING_NUMBER, NOW))
+                .isInstanceOfSatisfying(
+                        FulfillmentStatusException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(OrderErrorCode.CANCEL_IN_PROGRESS));
+
+        order.cancel(CancellationReason.CUSTOMER_REQUEST, NOW);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
     }
 
     private Order deliveredOrder() {

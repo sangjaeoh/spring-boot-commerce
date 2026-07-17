@@ -2,6 +2,7 @@ package com.commerce.api.facade;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
@@ -26,7 +27,9 @@ import com.commerce.coupon.service.IssuedCouponModifier;
 import com.commerce.coupon.service.IssuedCouponReader;
 import com.commerce.member.service.MemberAppender;
 import com.commerce.order.entity.Address;
+import com.commerce.order.entity.FulfillmentStatus;
 import com.commerce.order.entity.OrderStatus;
+import com.commerce.order.exception.FulfillmentStatusException;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderStatusException;
 import com.commerce.order.info.OrderInfo;
@@ -34,6 +37,7 @@ import com.commerce.order.service.OrderModifier;
 import com.commerce.order.service.OrderReader;
 import com.commerce.payment.entity.PaymentMethod;
 import com.commerce.payment.entity.PaymentStatus;
+import com.commerce.payment.info.PaymentInfo;
 import com.commerce.payment.port.PaymentGateway;
 import com.commerce.payment.service.PaymentReader;
 import com.commerce.product.service.ProductVariantReader;
@@ -52,6 +56,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -154,6 +159,182 @@ class OrderCancellationFacadeTest extends FacadeIntegrationTest {
                         ApiException.class,
                         ex -> assertThat(ex.getErrorCode()).isEqualTo(ApiErrorCode.ORDER_NOT_CANCELLABLE));
         assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(49);
+    }
+
+    @Test
+    @DisplayName("취소 개시 마커가 커밋된 주문의 출고는 거부된다")
+    void shipRejectedAfterCancellationInitiated() {
+        UUID memberId = registerMember();
+        UUID variantId = seedProduct(Money.of(10000L), 50);
+        cartAppender.addItem(memberId, variantId, 1);
+        UUID orderId = checkoutFacade.checkout(memberId, address(), Money.ZERO, null, PaymentMethod.CARD);
+
+        orderModifier.requestCancellation(orderId);
+
+        assertThatThrownBy(() -> orderModifier.ship(orderId, "CJ대한통운", "688900123456"))
+                .isInstanceOfSatisfying(
+                        FulfillmentStatusException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(OrderErrorCode.CANCEL_IN_PROGRESS));
+        assertThat(orderReader.getOrder(orderId).fulfillmentStatus()).isEqualTo(FulfillmentStatus.PREPARING);
+    }
+
+    @Test
+    @DisplayName("환불 커밋 후 주문 전이 직전에 끼어든 출고가 거부되어 환불 고아가 남지 않는다")
+    void interleavedShipAfterRefundIsRejectedLeavingNoOrphan() {
+        UUID memberId = registerMember();
+        UUID variantId = seedProduct(Money.of(10000L), 50);
+        cartAppender.addItem(memberId, variantId, 4);
+        UUID orderId = checkoutFacade.checkout(memberId, address(), Money.ZERO, null, PaymentMethod.CARD);
+
+        // 종전 고아 인터리빙을 결정론적으로 재현한다: 취소 가드 통과 → PG 환불·결제 CANCELLED 커밋 → 주문
+        // 취소 전이 직전에 출고가 선점을 시도. 마커가 환불 앞에 커밋돼 있어 출고는 거부되고 취소가 완결된다.
+        // 훅이 취소 트랜잭션 안에서 돌므로 출고 시도는 별도 스레드(자기 트랜잭션)로 내고 완료까지 기다린다.
+        AtomicReference<Throwable> shipAttempt = new AtomicReference<>();
+        doAnswer(invocation -> {
+                    Thread shipper = new Thread(() -> shipAttempt.set(
+                            catchThrowable(() -> orderModifier.ship(orderId, "CJ대한통운", "688900123456"))));
+                    shipper.start();
+                    shipper.join();
+                    return invocation.callRealMethod();
+                })
+                .when(orderModifier)
+                .cancel(eq(orderId), any());
+
+        orderCancellationFacade.cancel(orderId, memberId);
+
+        assertThat(shipAttempt.get())
+                .isInstanceOfSatisfying(
+                        FulfillmentStatusException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(OrderErrorCode.CANCEL_IN_PROGRESS));
+        assertThat(orderReader.getOrder(orderId).status()).isEqualTo(OrderStatus.CANCELLED);
+        assertThat(orderReader.getOrder(orderId).fulfillmentStatus()).isEqualTo(FulfillmentStatus.PREPARING);
+        assertThat(paymentReader.getByOrderId(orderId).status()).isEqualTo(PaymentStatus.CANCELLED);
+        assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(50);
+    }
+
+    @Test
+    @DisplayName("마커 커밋 후 환불 전 중단 잔여는 출고가 차단된 채 재시도가 취소를 완결한다")
+    void markerResidueBeforeRefundBlocksShipUntilRetryCompletes() {
+        UUID memberId = registerMember();
+        UUID variantId = seedProduct(Money.of(10000L), 50);
+        cartAppender.addItem(memberId, variantId, 4);
+        UUID orderId = checkoutFacade.checkout(memberId, address(), Money.ZERO, null, PaymentMethod.CARD);
+
+        // 마커 커밋 직후·PG 환불 전 중단을 재현한다 — 돈은 아직 움직이지 않았다.
+        doThrow(new IllegalStateException("PG 환불 전 중단 주입")).when(paymentGateway).cancel(any(), any());
+        assertThatThrownBy(() -> orderCancellationFacade.cancel(orderId, memberId))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(orderReader.getOrder(orderId).status()).isEqualTo(OrderStatus.PAID);
+        assertThat(paymentReader.getByOrderId(orderId).status()).isEqualTo(PaymentStatus.APPROVED);
+
+        // 잔여 동안 출고는 거부된다 — 환불이 재개돼도 출고 선점이 고아를 만들 수 없다.
+        assertThatThrownBy(() -> orderModifier.ship(orderId, "CJ대한통운", "688900123456"))
+                .isInstanceOfSatisfying(
+                        FulfillmentStatusException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(OrderErrorCode.CANCEL_IN_PROGRESS));
+
+        // 재시도가 마커를 관용(no-op)하고 환불·취소·복원을 완결한다.
+        Mockito.reset(paymentGateway);
+        orderCancellationFacade.cancel(orderId, memberId);
+        assertThat(orderReader.getOrder(orderId).status()).isEqualTo(OrderStatus.CANCELLED);
+        assertThat(paymentReader.getByOrderId(orderId).status()).isEqualTo(PaymentStatus.CANCELLED);
+        assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(50);
+    }
+
+    @Test
+    @DisplayName("환불 커밋 후 주문 전이 실패 잔여(CANCELLED 결제 × PAID 주문)는 출고가 차단된 채 재시도가 완결한다")
+    void refundCommittedResidueBlocksShipUntilRetryCompletes() {
+        UUID memberId = registerMember();
+        UUID variantId = seedProduct(Money.of(10000L), 50);
+        cartAppender.addItem(memberId, variantId, 4);
+        UUID orderId = checkoutFacade.checkout(memberId, address(), Money.ZERO, null, PaymentMethod.CARD);
+
+        doThrow(new OrderStatusException(OrderErrorCode.INVALID_ORDER_STATE_TRANSITION))
+                .when(orderModifier)
+                .cancel(eq(orderId), any());
+        assertThatThrownBy(() -> orderCancellationFacade.cancel(orderId, memberId))
+                .isInstanceOf(OrderStatusException.class);
+        assertThat(paymentReader.getByOrderId(orderId).status()).isEqualTo(PaymentStatus.CANCELLED);
+        assertThat(orderReader.getOrder(orderId).status()).isEqualTo(OrderStatus.PAID);
+        Mockito.reset(orderModifier);
+
+        // 종전에는 이 창에서 출고가 성공해 환불 고아가 남았다 — 이제 마커가 거부한다.
+        assertThatThrownBy(() -> orderModifier.ship(orderId, "CJ대한통운", "688900123456"))
+                .isInstanceOfSatisfying(
+                        FulfillmentStatusException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(OrderErrorCode.CANCEL_IN_PROGRESS));
+
+        orderCancellationFacade.cancel(orderId, memberId);
+        assertThat(orderReader.getOrder(orderId).status()).isEqualTo(OrderStatus.CANCELLED);
+        assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(50);
+        verify(paymentGateway, times(1)).cancel(any(), any());
+    }
+
+    @Test
+    @DisplayName("취소와 출고가 동시에 겹쳐도 환불 고아(결제 CANCELLED × 주문 SHIPPED)는 어떤 인터리빙에서도 남지 않는다")
+    void concurrentCancelAndShipNeverLeaveRefundedShippedOrphan() throws InterruptedException {
+        UUID memberId = registerMember();
+        UUID variantId = seedProduct(Money.of(10000L), 50);
+        cartAppender.addItem(memberId, variantId, 4);
+        UUID orderId = checkoutFacade.checkout(memberId, address(), Money.ZERO, null, PaymentMethod.CARD);
+        assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(46);
+
+        // 두 스레드를 취소 개시(마커 커밋)·출고 전이 직전에 정렬해 같은 주문 버전을 두고 경합하는 최악
+        // 인터리빙을 강제한다. 진 쪽은 낙관락 충돌 또는 상태 가드로 거부된다.
+        CyclicBarrier raceGate = new CyclicBarrier(2);
+        doAnswer(invocation -> {
+                    awaitQuietly(raceGate);
+                    return invocation.callRealMethod();
+                })
+                .when(orderModifier)
+                .requestCancellation(orderId);
+        doAnswer(invocation -> {
+                    awaitQuietly(raceGate);
+                    return invocation.callRealMethod();
+                })
+                .when(orderModifier)
+                .ship(eq(orderId), any(), any());
+
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        CountDownLatch start = new CountDownLatch(1);
+        executor.execute(() -> {
+            try {
+                start.await();
+                orderCancellationFacade.cancel(orderId, memberId);
+            } catch (RuntimeException raceLoss) {
+                // 출고가 선점하면 취소는 환불 전(마커 커밋)에 거부·충돌로 끝난다.
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        });
+        executor.execute(() -> {
+            try {
+                start.await();
+                orderModifier.ship(orderId, "CJ대한통운", "688900123456");
+            } catch (RuntimeException raceLoss) {
+                // 취소 개시가 선점하면 출고는 마커·충돌로 거부된다.
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        });
+        start.countDown();
+        executor.shutdown();
+        assertThat(executor.awaitTermination(60, TimeUnit.SECONDS)).isTrue();
+
+        // 어느 인터리빙이든 돈과 상품이 함께 나가지 않는다 — 출고가 이기면 환불·복원이 없고, 취소가 이기면
+        // 출고 없이 환불·복원이 완결된다.
+        OrderInfo order = orderReader.getOrder(orderId);
+        PaymentInfo payment = paymentReader.getByOrderId(orderId);
+        if (order.fulfillmentStatus() == FulfillmentStatus.SHIPPED) {
+            assertThat(order.status()).isEqualTo(OrderStatus.PAID);
+            assertThat(payment.status()).isEqualTo(PaymentStatus.APPROVED);
+            assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(46);
+        } else {
+            assertThat(order.status()).isEqualTo(OrderStatus.CANCELLED);
+            assertThat(order.fulfillmentStatus()).isEqualTo(FulfillmentStatus.PREPARING);
+            assertThat(payment.status()).isEqualTo(PaymentStatus.CANCELLED);
+            assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(50);
+        }
     }
 
     @Test
@@ -378,6 +559,17 @@ class OrderCancellationFacadeTest extends FacadeIntegrationTest {
         assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(50);
         assertThat(issuedCouponReader.getIssuedCoupon(issuedId, memberId).status())
                 .isEqualTo(IssuedCouponStatus.ISSUED);
+    }
+
+    /** 두 스레드를 경합 지점에 정렬한다. 상대가 도달하지 못하면(경합이 이미 결판) 짧게 기다리고 단독 진행한다. */
+    private static void awaitQuietly(CyclicBarrier barrier) {
+        try {
+            barrier.await(2, TimeUnit.SECONDS);
+        } catch (TimeoutException | BrokenBarrierException raceAlreadyDecided) {
+            // 상대 스레드가 정렬 지점에 도달하지 못했다 — 단독 진행.
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     private UUID registerMember() {

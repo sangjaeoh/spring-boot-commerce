@@ -62,6 +62,17 @@ public class OrderModifier {
     }
 
     /**
+     * 결제 완료 주문의 취소 개시를 기록한다. 마커가 있는 동안 출고가 거부된다. 이미 개시된 주문에는
+     * 아무것도 하지 않는다.
+     *
+     * @throws OrderStatusException 결제 완료 주문이 아니거나 출고 이후면
+     */
+    @Transactional
+    public void requestCancellation(UUID orderId) {
+        find(orderId).requestCancellation(clock.instant());
+    }
+
+    /**
      * 배송 완료 주문을 전체 반품 환불 처리한다.
      *
      * @throws OrderStatusException 결제 완료·배송 완료 주문이 아니거나 이미 환불됐으면
