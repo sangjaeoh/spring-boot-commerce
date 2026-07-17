@@ -75,6 +75,8 @@
 - 컨트롤러 핸들러와 request/response는 클라이언트 명세를 어노테이션으로 명시한다 — 핸들러에 `@Operation`·성공/적용 에러 `@ApiResponse`, request/response 타입·컴포넌트에 `@Schema`. 자동 생성이 못 만드는 의미·에러 계약을 코드에 둔다.
   - 에러 응답은 도달 가능한 상태만 적는다 — 인증 표면(`AuthUser`·`AdminOnly`)은 401·403, 검증(`@Valid`)은 400, 타 회원 리소스는 404, 도메인·파사드 `ErrorCode.status()`는 그 상태. 전역 핸들러가 problem+json으로 매핑한다(같은 상태의 여러 원인은 한 응답으로 묶는다).
   - 인증 강제 표면의 bearer 요구와 토큰 주입 파라미터(`AuthUser`) 숨김은 `OpenApiConfig`가 코드에서 도출한다. 이 둘은 어노테이션으로 반복하지 않는다.
+- 페이징 GET은 파라미터를 common-web `PaginationRequest`(`@Valid @ParameterObject`)로 받고, 페이지 응답 DTO는 목록 옆에 common-web `PaginationResponse`를 `page` 컴포넌트로 싣는다. 도메인 `Pageable`은 0-based를 유지하며 요청 변환은 `zeroBasedPage()`, 응답 +1 보정은 `PaginationResponse.from(Page)`가 소유한다.
+  - 페이지 번호 계약이 요청·응답 대칭으로 1부터 시작하고, 0/1-based 변환·페이지 메타 필드가 web 경계의 두 타입에만 갇힌다.
   - `facade` — 도메인 조립·크로스 도메인 조율.
   - `event/listener` — 크로스 도메인 이벤트 소비.
   - `infrastructure/query`(admin) · `infrastructure/reader`(batch) — 엔티티 의존을 허용하는 격리 구역. canonical 경로는 `app.admin.infrastructure.query` · `app.batch.infrastructure.reader`다.
@@ -104,7 +106,7 @@
   | `common-jpa`       | JPA 공통 지원 — Auditing·`SchemaFlywayFactory`                                 |
   | `common-messaging` | 발행 포트(`MessagePublisher`)·도메인 이벤트 마커(`DomainEvent`)(transport 구현은 infra) |
   | `common-auth`      | 토큰(JWT) 검증 원자재(웹 필터는 common-web 소유)                               |
-  | `common-web`       | 웹 공통 — 인증·멱등·시큐리티 헤더·로그인 레이트리밋 필터·`AuthUser`·ProblemDetail 핸들러·공용 validator 승격처 |
+  | `common-web`       | 웹 공통 — 인증·멱등·시큐리티 헤더·로그인 레이트리밋 필터·`AuthUser`·`PaginationRequest`·`PaginationResponse`·ProblemDetail 핸들러·공용 validator 승격처 |
 
 - 배치가 애매하면 더 좁은 의존의 모듈을 택한다(core에 갈 수 있으면 core로).
   - 역할별 분할의 목적이 의존 가능 범위 축소라서다. 단일 util 모듈은 도메인이 web 타입에 의존하는 오염을 막지 못해 기각한다.
@@ -181,5 +183,6 @@
   - 계층 의존 방향(모듈 지도) — 컨벤션 플러그인(컴파일 시점).
   - JPA 매핑 클래스(`@Entity`·`@MappedSuperclass`)의 모듈 밖 시그니처 등장 금지·apps의 리포지토리 직접 접근 금지·base `JpaRepository` finder 직접 호출 금지(소프트삭제 엔티티에 한함) — 아키텍처 테스트(테스트 시점, → 아키텍처 테스트 모듈).
   - web 컨트롤러 핸들러의 `@Operation`·`@ApiResponse` 선언, request/response 타입·컴포넌트의 `@Schema` 선언(존재만 검사, 에러 상태 집합의 정확성은 리뷰) — 아키텍처 테스트(테스트 시점, → 아키텍처 테스트 모듈).
+  - web 컨트롤러 핸들러의 int·Integer `@RequestParam` 직접 선언 금지(페이징 파라미터는 common-web `PaginationRequest`) — 아키텍처 테스트(테스트 시점, → 아키텍처 테스트 모듈).
   - 각 모듈 베이스 패키지 `@NullMarked`·null 계약·포맷·정적분석 — Spotless·NullAway·Error Prone(→ [code-quality](code-quality.md)).
   - 금지 의존성(Lombok·H2) — 컨벤션 플러그인.

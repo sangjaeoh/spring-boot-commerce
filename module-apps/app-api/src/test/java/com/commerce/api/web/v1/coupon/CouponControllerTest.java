@@ -439,10 +439,10 @@ class CouponControllerTest extends WebIntegrationTest {
                 .andExpect(jsonPath("$.coupons[0].discountType").value("FIXED"))
                 .andExpect(jsonPath("$.coupons[0].discountAmount").value(1000))
                 .andExpect(jsonPath("$.coupons[0].status").value("ACTIVE"))
-                .andExpect(jsonPath("$.page").value(0))
-                .andExpect(jsonPath("$.size").value(20))
-                .andExpect(jsonPath("$.totalElements").isNumber())
-                .andExpect(jsonPath("$.totalPages").isNumber());
+                .andExpect(jsonPath("$.page.number").value(1))
+                .andExpect(jsonPath("$.page.size").value(20))
+                .andExpect(jsonPath("$.page.totalElements").isNumber())
+                .andExpect(jsonPath("$.page.totalPages").isNumber());
     }
 
     @Test
@@ -476,9 +476,9 @@ class CouponControllerTest extends WebIntegrationTest {
                 .andExpect(jsonPath("$.issuedCoupons[0].id").value(issuedB.toString()))
                 .andExpect(jsonPath("$.issuedCoupons[1].id").value(issuedA.toString()))
                 .andExpect(jsonPath("$.issuedCoupons[0].couponId").value(couponId.toString()))
-                .andExpect(jsonPath("$.totalElements").value(2))
-                .andExpect(jsonPath("$.page").value(0))
-                .andExpect(jsonPath("$.size").value(20));
+                .andExpect(jsonPath("$.page.totalElements").value(2))
+                .andExpect(jsonPath("$.page.number").value(1))
+                .andExpect(jsonPath("$.page.size").value(20));
     }
 
     @Test

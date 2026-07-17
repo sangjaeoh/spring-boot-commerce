@@ -17,6 +17,7 @@ import com.tngtech.archunit.core.domain.JavaField;
 import com.tngtech.archunit.core.domain.JavaMethod;
 import com.tngtech.archunit.core.domain.JavaMethodCall;
 import com.tngtech.archunit.core.domain.JavaModifier;
+import com.tngtech.archunit.core.domain.JavaParameter;
 import com.tngtech.archunit.core.domain.JavaParameterizedType;
 import com.tngtech.archunit.core.domain.JavaType;
 import com.tngtech.archunit.core.domain.properties.CanBeAnnotated;
@@ -43,6 +44,8 @@ import org.junit.jupiter.api.Test;
  * service를 2개 이상 직접 의존하면 실패한다 — 크로스 도메인 조율은 facade가 소유한다(architecture.md 앱 모듈 구조).
  * 다섯째·여섯째 규칙은 web 컨트롤러 핸들러에 {@code @Operation}·{@code @ApiResponse}가, request/response 타입·컴포넌트에
  * {@code @Schema}가 없으면 실패한다 — 클라이언트 명세를 코드에 명시한다(architecture.md 표현 계층 OpenAPI 규칙).
+ * 일곱째 규칙은 web 컨트롤러 핸들러가 int·Integer {@code @RequestParam}을 직접 선언하면 실패한다 — 페이징
+ * 파라미터는 common-web {@code PaginationRequest}로 받는다(architecture.md 앱 모듈 구조 페이징 규칙).
  */
 class ArchitectureTest {
 
@@ -196,6 +199,11 @@ class ArchitectureTest {
     }
 
     @Test
+    void controllerHandlersDoNotDeclareRawPagingParams() {
+        controllerHandlersUsePaginationRequest().check(CLASSES);
+    }
+
+    @Test
     void domainServiceRootParsingIsCorrect() {
         // 규칙의 변별력은 도메인 service 패키지 판정의 정확성에 달렸다 — facade·info·common을 service로 오인하면
         // 규칙이 공허해지거나(도메인 0개로 항상 통과) 오탐한다. 파싱 회귀를 여기서 고정한다.
@@ -301,6 +309,44 @@ class ArchitectureTest {
                     }
                     if (!field.isAnnotatedWith(schema)) {
                         events.add(SimpleConditionEvent.violated(field, field.getFullName() + " 필드에 @Schema가 없다"));
+                    }
+                }
+            }
+        };
+    }
+
+    // web 컨트롤러 핸들러가 int·Integer @RequestParam을 직접 선언하면 실패한다 — 페이징 파라미터는 common-web
+    // PaginationRequest로 받는다(architecture.md 앱 모듈 구조 페이징 규칙). -parameters 컴파일이 보장되지 않아
+    // 파라미터명("page"·"size") 대신 타입으로 판정한다. 페이징 아닌 정수 쿼리 파라미터가 필요해지면 long 등
+    // 다른 타입을 쓰거나 이 규칙의 예외 처리를 결정한다.
+    private static ArchRule controllerHandlersUsePaginationRequest() {
+        return classes()
+                .that()
+                .resideInAnyPackage(appSubtreePatterns(".web.."))
+                .and()
+                .areAnnotatedWith("org.springframework.web.bind.annotation.RestController")
+                .should(notDeclareIntRequestParams())
+                .because("페이징 파라미터는 common-web PaginationRequest로 받는다 — architecture.md 앱 모듈 구조 페이징 규칙");
+    }
+
+    private static ArchCondition<JavaClass> notDeclareIntRequestParams() {
+        return new ArchCondition<>("핸들러에 int·Integer @RequestParam을 선언하지 않음") {
+            @Override
+            public void check(JavaClass controller, ConditionEvents events) {
+                for (JavaMethod method : controller.getMethods()) {
+                    if (!isHandlerMethod(method)) {
+                        continue;
+                    }
+                    for (JavaParameter parameter : method.getParameters()) {
+                        String type = parameter.getRawType().getName();
+                        boolean intType = type.equals("int") || type.equals("java.lang.Integer");
+                        if (intType
+                                && parameter.isAnnotatedWith("org.springframework.web.bind.annotation.RequestParam")) {
+                            events.add(SimpleConditionEvent.violated(
+                                    method,
+                                    method.getFullName() + " 가 int·Integer @RequestParam을 직접 받는다 — 페이징은"
+                                            + " PaginationRequest로 받는다"));
+                        }
                     }
                 }
             }
