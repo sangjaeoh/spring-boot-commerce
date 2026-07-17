@@ -16,6 +16,7 @@ import com.commerce.product.service.ProductModifier;
 import com.commerce.product.service.ProductReader;
 import com.commerce.product.service.ProductRemover;
 import com.commerce.web.auth.AdminOnly;
+import com.commerce.web.paging.PaginationRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -23,8 +24,8 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.Min;
 import java.util.UUID;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -35,7 +36,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -151,9 +151,9 @@ public class ProductController {
                 content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
     })
     @GetMapping
-    public ProductPageResponse getProducts(
-            @RequestParam(defaultValue = "0") @Min(0) int page, @RequestParam(defaultValue = "20") @Min(1) int size) {
-        return ProductPageResponse.from(productCatalogFacade.getCatalogPage(PageRequest.of(page, size)));
+    public ProductPageResponse getProducts(@Valid @ParameterObject PaginationRequest pagination) {
+        return ProductPageResponse.from(
+                productCatalogFacade.getCatalogPage(PageRequest.of(pagination.zeroBasedPage(), pagination.size())));
     }
 
     /** 미삭제 상품 목록을 숨김 포함 최신 등록순 페이지로 조회한다(관리 대상 발견). */
@@ -175,9 +175,9 @@ public class ProductController {
     })
     @AdminOnly
     @GetMapping("/admin")
-    public ProductAdminPageResponse getProductsForAdmin(
-            @RequestParam(defaultValue = "0") @Min(0) int page, @RequestParam(defaultValue = "20") @Min(1) int size) {
-        return ProductAdminPageResponse.from(productReader.getPage(PageRequest.of(page, size)));
+    public ProductAdminPageResponse getProductsForAdmin(@Valid @ParameterObject PaginationRequest pagination) {
+        return ProductAdminPageResponse.from(
+                productReader.getPage(PageRequest.of(pagination.zeroBasedPage(), pagination.size())));
     }
 
     /** 상품 상세를 ACTIVE 변형·주문가능·품절·대표가와 함께 조회한다. */

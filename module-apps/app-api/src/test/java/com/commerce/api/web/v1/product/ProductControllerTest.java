@@ -153,15 +153,15 @@ class ProductControllerTest extends WebIntegrationTest {
     void listReturnsExposedProductsWithPagination() throws Exception {
         UUID productId = registerProductViaHttp("목록셔츠", 15000L, 5);
 
-        mvc.perform(get("/api/v1/products").param("page", "0").param("size", "20"))
+        mvc.perform(get("/api/v1/products").param("page", "1").param("size", "20"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.products[0].id").value(productId.toString()))
                 .andExpect(jsonPath("$.products[0].fromPrice").value(15000))
                 .andExpect(jsonPath("$.products[0].soldOut").value(false))
-                .andExpect(jsonPath("$.page").value(0))
-                .andExpect(jsonPath("$.size").value(20))
-                .andExpect(jsonPath("$.totalElements").isNumber())
-                .andExpect(jsonPath("$.totalPages").isNumber());
+                .andExpect(jsonPath("$.page.number").value(1))
+                .andExpect(jsonPath("$.page.size").value(20))
+                .andExpect(jsonPath("$.page.totalElements").isNumber())
+                .andExpect(jsonPath("$.page.totalPages").isNumber());
     }
 
     @Test
@@ -176,9 +176,9 @@ class ProductControllerTest extends WebIntegrationTest {
     }
 
     @Test
-    @DisplayName("음수 page·1 미만 size는 400 VALIDATION_FAILED로 거부된다")
+    @DisplayName("1 미만 page·size는 400 VALIDATION_FAILED로 거부된다")
     void listRejectsInvalidPageParams() throws Exception {
-        mvc.perform(get("/api/v1/products").param("page", "-1"))
+        mvc.perform(get("/api/v1/products").param("page", "0"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
                 .andExpect(jsonPath("$.errors[0].field").value("page"));
@@ -415,16 +415,16 @@ class ProductControllerTest extends WebIntegrationTest {
         UUID productId = registerProductViaHttp("관리목록셔츠", 10000L, 5);
 
         mvc.perform(get("/api/v1/products/admin")
-                        .param("page", "0")
+                        .param("page", "1")
                         .param("size", "20")
                         .header(HttpHeaders.AUTHORIZATION, adminBearer()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.products[0].id").value(productId.toString()))
                 .andExpect(jsonPath("$.products[0].status").value("ON_SALE"))
-                .andExpect(jsonPath("$.page").value(0))
-                .andExpect(jsonPath("$.size").value(20))
-                .andExpect(jsonPath("$.totalElements").isNumber())
-                .andExpect(jsonPath("$.totalPages").isNumber());
+                .andExpect(jsonPath("$.page.number").value(1))
+                .andExpect(jsonPath("$.page.size").value(20))
+                .andExpect(jsonPath("$.page.totalElements").isNumber())
+                .andExpect(jsonPath("$.page.totalPages").isNumber());
 
         mvc.perform(post("/api/v1/products/{productId}/hide", productId)
                         .header(HttpHeaders.AUTHORIZATION, adminBearer()))

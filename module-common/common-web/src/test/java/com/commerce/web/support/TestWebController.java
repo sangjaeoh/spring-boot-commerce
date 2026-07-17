@@ -2,6 +2,7 @@ package com.commerce.web.support;
 
 import com.commerce.web.auth.AdminOnly;
 import com.commerce.web.auth.AuthUser;
+import com.commerce.web.paging.PaginationRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import org.jspecify.annotations.Nullable;
@@ -38,6 +39,11 @@ public class TestWebController {
 
     @GetMapping("/test/param")
     public void param(@RequestParam("page") @Min(0) int page) {}
+
+    @GetMapping("/test/pagination")
+    public ResponseEntity<String> pagination(@Valid PaginationRequest request) {
+        return ResponseEntity.ok(request.zeroBasedPage() + ":" + request.size());
+    }
 
     @PostMapping("/test/echo")
     public ResponseEntity<String> echo() {

@@ -19,6 +19,7 @@ import com.commerce.order.service.OrderModifier;
 import com.commerce.order.service.OrderReader;
 import com.commerce.web.auth.AdminOnly;
 import com.commerce.web.auth.AuthUser;
+import com.commerce.web.paging.PaginationRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -26,8 +27,8 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.Min;
 import java.util.UUID;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -317,11 +318,9 @@ public class OrderController {
                 content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
     })
     @GetMapping
-    public OrderPageResponse getOrders(
-            AuthUser authUser,
-            @RequestParam(defaultValue = "0") @Min(0) int page,
-            @RequestParam(defaultValue = "20") @Min(1) int size) {
-        return OrderPageResponse.from(orderReader.getOrdersByMember(authUser.memberId(), PageRequest.of(page, size)));
+    public OrderPageResponse getOrders(AuthUser authUser, @Valid @ParameterObject PaginationRequest pagination) {
+        return OrderPageResponse.from(orderReader.getOrdersByMember(
+                authUser.memberId(), PageRequest.of(pagination.zeroBasedPage(), pagination.size())));
     }
 
     /** 결제·이행 축 상태로 주문 목록을 최신순 페이지로 조회한다(출고·환불 대상 발견). */
@@ -346,10 +345,9 @@ public class OrderController {
     public OrderPageResponse getOrdersByStatus(
             @RequestParam OrderStatus status,
             @RequestParam FulfillmentStatus fulfillmentStatus,
-            @RequestParam(defaultValue = "0") @Min(0) int page,
-            @RequestParam(defaultValue = "20") @Min(1) int size) {
-        return OrderPageResponse.from(
-                orderReader.getOrdersByStatus(status, fulfillmentStatus, PageRequest.of(page, size)));
+            @Valid @ParameterObject PaginationRequest pagination) {
+        return OrderPageResponse.from(orderReader.getOrdersByStatus(
+                status, fulfillmentStatus, PageRequest.of(pagination.zeroBasedPage(), pagination.size())));
     }
 
     /** 본인 주문의 결제 정보(승인·환불 거래)를 조회한다. */

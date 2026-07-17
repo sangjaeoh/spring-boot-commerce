@@ -669,10 +669,10 @@ class OrderControllerTest extends WebIntegrationTest {
                 .andExpect(jsonPath("$.orders.length()").value(2))
                 .andExpect(jsonPath("$.orders[0].id").value(second.toString()))
                 .andExpect(jsonPath("$.orders[1].id").value(first.toString()))
-                .andExpect(jsonPath("$.page").value(0))
-                .andExpect(jsonPath("$.size").value(20))
-                .andExpect(jsonPath("$.totalElements").value(2))
-                .andExpect(jsonPath("$.totalPages").value(1));
+                .andExpect(jsonPath("$.page.number").value(1))
+                .andExpect(jsonPath("$.page.size").value(20))
+                .andExpect(jsonPath("$.page.totalElements").value(2))
+                .andExpect(jsonPath("$.page.totalPages").value(1));
     }
 
     @Test
@@ -684,41 +684,41 @@ class OrderControllerTest extends WebIntegrationTest {
         UUID third = checkoutForMember(memberId);
 
         mvc.perform(get("/api/v1/orders")
-                        .param("page", "0")
+                        .param("page", "1")
                         .param("size", "2")
                         .header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.orders.length()").value(2))
                 .andExpect(jsonPath("$.orders[0].id").value(third.toString()))
                 .andExpect(jsonPath("$.orders[1].id").value(second.toString()))
-                .andExpect(jsonPath("$.totalElements").value(3))
-                .andExpect(jsonPath("$.totalPages").value(2));
-
-        mvc.perform(get("/api/v1/orders")
-                        .param("page", "1")
-                        .param("size", "2")
-                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.orders.length()").value(1))
-                .andExpect(jsonPath("$.orders[0].id").value(first.toString()))
-                .andExpect(jsonPath("$.page").value(1));
+                .andExpect(jsonPath("$.page.totalElements").value(3))
+                .andExpect(jsonPath("$.page.totalPages").value(2));
 
         mvc.perform(get("/api/v1/orders")
                         .param("page", "2")
                         .param("size", "2")
                         .header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.orders.length()").value(1))
+                .andExpect(jsonPath("$.orders[0].id").value(first.toString()))
+                .andExpect(jsonPath("$.page.number").value(2));
+
+        mvc.perform(get("/api/v1/orders")
+                        .param("page", "3")
+                        .param("size", "2")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.orders.length()").value(0))
-                .andExpect(jsonPath("$.totalElements").value(3))
-                .andExpect(jsonPath("$.totalPages").value(2));
+                .andExpect(jsonPath("$.page.totalElements").value(3))
+                .andExpect(jsonPath("$.page.totalPages").value(2));
     }
 
     @Test
-    @DisplayName("음수 page·1 미만 size의 주문 목록 조회는 400 VALIDATION_FAILED로 거부된다")
+    @DisplayName("1 미만 page·size의 주문 목록 조회는 400 VALIDATION_FAILED로 거부된다")
     void getOrdersRejectsInvalidPageParams() throws Exception {
         String token = bearer(registerMember());
 
-        mvc.perform(get("/api/v1/orders").param("page", "-1").header(HttpHeaders.AUTHORIZATION, token))
+        mvc.perform(get("/api/v1/orders").param("page", "0").header(HttpHeaders.AUTHORIZATION, token))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
                 .andExpect(jsonPath("$.errors[0].field").value("page"));
@@ -760,10 +760,10 @@ class OrderControllerTest extends WebIntegrationTest {
                 .andExpect(jsonPath("$.orders[0].id").value(orderId.toString()))
                 .andExpect(jsonPath("$.orders[0].status").value("PAID"))
                 .andExpect(jsonPath("$.orders[0].fulfillmentStatus").value("PREPARING"))
-                .andExpect(jsonPath("$.page").value(0))
-                .andExpect(jsonPath("$.size").value(20))
-                .andExpect(jsonPath("$.totalElements").isNumber())
-                .andExpect(jsonPath("$.totalPages").isNumber());
+                .andExpect(jsonPath("$.page.number").value(1))
+                .andExpect(jsonPath("$.page.size").value(20))
+                .andExpect(jsonPath("$.page.totalElements").isNumber())
+                .andExpect(jsonPath("$.page.totalPages").isNumber());
 
         orderModifier.ship(orderId, "CJ대한통운", "688900123456");
 

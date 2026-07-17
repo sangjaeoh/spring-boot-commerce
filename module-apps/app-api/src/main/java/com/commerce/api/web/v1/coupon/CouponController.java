@@ -13,6 +13,7 @@ import com.commerce.coupon.service.CouponReader;
 import com.commerce.coupon.service.IssuedCouponReader;
 import com.commerce.web.auth.AdminOnly;
 import com.commerce.web.auth.AuthUser;
+import com.commerce.web.paging.PaginationRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -20,8 +21,8 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.Min;
 import java.util.UUID;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -30,7 +31,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -118,9 +118,9 @@ public class CouponController {
     })
     @AdminOnly
     @GetMapping
-    public CouponPageResponse getCoupons(
-            @RequestParam(defaultValue = "0") @Min(0) int page, @RequestParam(defaultValue = "20") @Min(1) int size) {
-        return CouponPageResponse.from(couponReader.getCoupons(PageRequest.of(page, size)));
+    public CouponPageResponse getCoupons(@Valid @ParameterObject PaginationRequest pagination) {
+        return CouponPageResponse.from(
+                couponReader.getCoupons(PageRequest.of(pagination.zeroBasedPage(), pagination.size())));
     }
 
     /** 정책의 발급분 목록을 최신순 페이지로 조회한다(무효화 대상 발급분 발견). */
@@ -143,11 +143,9 @@ public class CouponController {
     @AdminOnly
     @GetMapping("/{couponId}/issues")
     public IssuedCouponPageResponse getIssues(
-            @PathVariable UUID couponId,
-            @RequestParam(defaultValue = "0") @Min(0) int page,
-            @RequestParam(defaultValue = "20") @Min(1) int size) {
-        return IssuedCouponPageResponse.from(
-                issuedCouponReader.getIssuedCouponsByCoupon(couponId, PageRequest.of(page, size)));
+            @PathVariable UUID couponId, @Valid @ParameterObject PaginationRequest pagination) {
+        return IssuedCouponPageResponse.from(issuedCouponReader.getIssuedCouponsByCoupon(
+                couponId, PageRequest.of(pagination.zeroBasedPage(), pagination.size())));
     }
 
     /** 본인에게 쿠폰을 발급하고 발급분 ID를 반환한다. */
