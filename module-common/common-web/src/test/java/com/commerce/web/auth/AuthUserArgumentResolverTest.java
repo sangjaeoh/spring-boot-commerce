@@ -5,7 +5,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.commerce.auth.token.AuthRole;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
@@ -41,7 +40,7 @@ class AuthUserArgumentResolverTest {
     @DisplayName("시큐리티 컨텍스트에 인증 주체가 있으면 AuthUser 파라미터에 주입된다")
     void authenticatedPrincipalResolvesAuthUserParameter() throws Exception {
         UUID memberId = UUID.randomUUID();
-        setPrincipal(new AuthUser(memberId, AuthRole.BUYER));
+        setPrincipal(new AuthUser(memberId, "BUYER"));
 
         mvc.perform(get("/test/principal"))
                 .andExpect(status().isOk())
@@ -59,9 +58,7 @@ class AuthUserArgumentResolverTest {
 
     private static void setPrincipal(AuthUser authUser) {
         PreAuthenticatedAuthenticationToken authentication = new PreAuthenticatedAuthenticationToken(
-                authUser,
-                null,
-                List.of(new SimpleGrantedAuthority("ROLE_" + authUser.role().name())));
+                authUser, null, List.of(new SimpleGrantedAuthority("ROLE_" + authUser.role())));
         SecurityContext context = SecurityContextHolder.createEmptyContext();
         context.setAuthentication(authentication);
         SecurityContextHolder.setContext(context);

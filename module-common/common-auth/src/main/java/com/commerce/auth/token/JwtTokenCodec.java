@@ -13,19 +13,18 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
 
 /**
  * JWT 액세스 토큰을 HS256 단일 대칭 키로 발급·검증한다.
  *
- * <p>토큰은 주체(회원 ID)를 {@code sub} 클레임으로, 역할을 {@code role} 클레임으로 싣는다. 검증은
- * 서명·만료·주체·역할 형식을 모두 통과해야 클레임을 반환하며, 어떤 실패든 원인을 구분하지 않고 빈
- * 결과로 응답한다.
+ * <p>토큰은 주체를 {@code sub} 클레임으로, 호출자가 넘긴 커스텀 클레임을 그대로 싣는다. 검증은
+ * 서명·만료·주체를 모두 통과해야 주체와 커스텀 클레임을 반환하며, 어떤 실패든 원인을 구분하지 않고 빈
+ * 결과로 응답한다. 역할 등 도메인 어휘는 코덱이 모르며 호출자가 클레임으로 싣고 읽는다.
  */
 public final class JwtTokenCodec {
-
-    private static final String ROLE_CLAIM = "role";
 
     // MACSigner(HS256)의 최소 키 길이. 미달 키는 배선 시점에 실패시켜 약한 키 운용을 막는다.
     private static final int MIN_SECRET_BYTES = 32;
@@ -47,16 +46,15 @@ public final class JwtTokenCodec {
         this.clock = clock;
     }
 
-    /** 주체를 {@code sub}로, 역할을 {@code role}로 싣고 TTL 만큼 유효한 서명 토큰을 발급한다. */
-    public String issue(UUID subject, AuthRole role) {
+    /** 주체를 {@code sub}로, 넘겨받은 커스텀 클레임을 그대로 싣고 TTL 만큼 유효한 서명 토큰을 발급한다. */
+    public String issue(String subject, Map<String, String> claims) {
         Instant now = clock.instant();
-        JWTClaimsSet claims = new JWTClaimsSet.Builder()
-                .subject(subject.toString())
-                .claim(ROLE_CLAIM, role.name())
+        JWTClaimsSet.Builder builder = new JWTClaimsSet.Builder()
+                .subject(subject)
                 .issueTime(Date.from(now))
-                .expirationTime(Date.from(now.plus(accessTokenTtl)))
-                .build();
-        SignedJWT jwt = new SignedJWT(new JWSHeader(JWSAlgorithm.HS256), claims);
+                .expirationTime(Date.from(now.plus(accessTokenTtl)));
+        claims.forEach(builder::claim);
+        SignedJWT jwt = new SignedJWT(new JWSHeader(JWSAlgorithm.HS256), builder.build());
         try {
             jwt.sign(new MACSigner(secret));
         } catch (JOSEException e) {
@@ -65,7 +63,7 @@ public final class JwtTokenCodec {
         return jwt.serialize();
     }
 
-    /** 서명·만료·주체·역할 형식이 모두 유효하면 클레임을 반환하고, 아니면 빈 결과를 반환한다. */
+    /** 서명·만료·주체가 유효하면 주체와 커스텀 클레임을 반환하고, 아니면 빈 결과를 반환한다. */
     public Optional<TokenClaims> verify(String token) {
         try {
             SignedJWT jwt = SignedJWT.parse(token);
@@ -75,16 +73,23 @@ public final class JwtTokenCodec {
             JWTClaimsSet claims = jwt.getJWTClaimsSet();
             Date expiration = claims.getExpirationTime();
             String subject = claims.getSubject();
-            String role = claims.getStringClaim(ROLE_CLAIM);
-            if (expiration == null
-                    || expiration.toInstant().isBefore(clock.instant())
-                    || subject == null
-                    || role == null) {
+            if (expiration == null || expiration.toInstant().isBefore(clock.instant()) || subject == null) {
                 return Optional.empty();
             }
-            return Optional.of(new TokenClaims(UUID.fromString(subject), AuthRole.valueOf(role)));
-        } catch (ParseException | JOSEException | IllegalArgumentException e) {
+            return Optional.of(new TokenClaims(subject, customClaims(claims)));
+        } catch (ParseException | JOSEException e) {
             return Optional.empty();
         }
+    }
+
+    /** 등록 클레임(sub·exp·iat 등)을 뺀 커스텀 클레임만 문자열로 추린다. */
+    private static Map<String, String> customClaims(JWTClaimsSet claims) {
+        Map<String, String> custom = new HashMap<>();
+        claims.getClaims().forEach((name, value) -> {
+            if (!JWTClaimsSet.getRegisteredNames().contains(name) && value != null) {
+                custom.put(name, String.valueOf(value));
+            }
+        });
+        return custom;
     }
 }

@@ -113,7 +113,7 @@
   | `common-core`      | 프레임워크 의존 제로의 순수 코드 — UUIDv7 생성기·시간·벤더 중립 애노테이션·`BaseException`·`ErrorCode` |
   | `common-jpa`       | JPA 공통 지원 — Auditing·`SchemaFlywayFactory`                                 |
   | `common-messaging` | 발행 포트(`MessagePublisher`)·도메인 이벤트 마커(`DomainEvent`)(transport 구현은 infra) |
-  | `common-auth`      | 토큰(JWT) 검증 원자재(웹 필터는 common-web 소유)                               |
+  | `common-auth`      | 토큰(JWT) 발급·검증 메커니즘 — 주체·커스텀 클레임(문자열 맵)만 다루고 클레임 어휘는 소비자 소유(웹 필터는 common-web) |
   | `common-web`       | 웹 공통 — Spring Security 인증 필터(`JwtAuthenticationFilter`)·인증 진입점(`RestAuthenticationEntryPoint`, 401)·접근거부 핸들러(`RestAccessDeniedHandler`, 403)·멱등·시큐리티 헤더·로그인 레이트리밋 필터·`AuthUser`·`PaginationRequest`·`PaginationResponse`·ProblemDetail 핸들러·공용 validator 승격처(필터 체인 조립은 `app-api` `SecurityConfig`) |
 
 - 배치가 애매하면 더 좁은 의존의 모듈을 택한다(core에 갈 수 있으면 core로).

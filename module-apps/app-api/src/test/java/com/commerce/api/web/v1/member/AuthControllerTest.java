@@ -10,7 +10,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.commerce.api.web.v1.WebIntegrationTest;
 import com.commerce.api.web.v1.member.request.LoginRequest;
 import com.commerce.api.web.v1.member.response.LoginResponse;
-import com.commerce.auth.token.AuthRole;
 import com.commerce.auth.token.JwtTokenCodec;
 import com.commerce.auth.token.TokenClaims;
 import com.commerce.member.entity.SuspensionReason;
@@ -18,6 +17,7 @@ import com.commerce.member.entity.WithdrawalReason;
 import com.commerce.member.service.MemberAppender;
 import com.commerce.member.service.MemberModifier;
 import com.commerce.member.service.MemberRemover;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -75,7 +75,8 @@ class AuthControllerTest extends WebIntegrationTest {
 
         String accessToken = objectMapper.readValue(body, LoginResponse.class).accessToken();
         assertThat(accessToken.split("\\.")).hasSize(3);
-        assertThat(jwtTokenCodec.verify(accessToken)).contains(new TokenClaims(memberId, AuthRole.BUYER));
+        assertThat(jwtTokenCodec.verify(accessToken))
+                .contains(new TokenClaims(memberId.toString(), Map.of("role", "BUYER")));
     }
 
     @Test

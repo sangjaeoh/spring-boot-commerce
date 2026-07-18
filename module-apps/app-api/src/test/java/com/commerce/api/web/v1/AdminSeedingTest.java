@@ -8,7 +8,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.commerce.api.web.v1.admin.product.request.ProductRegistrationRequest;
 import com.commerce.api.web.v1.member.request.LoginRequest;
 import com.commerce.api.web.v1.member.response.LoginResponse;
-import com.commerce.auth.token.AuthRole;
 import com.commerce.auth.token.JwtTokenCodec;
 import com.commerce.member.entity.MemberRole;
 import com.commerce.member.info.MemberInfo;
@@ -81,7 +80,8 @@ class AdminSeedingTest extends WebIntegrationTest {
                 .getContentAsString();
         String accessToken = objectMapper.readValue(body, LoginResponse.class).accessToken();
         assertThat(jwtTokenCodec.verify(accessToken))
-                .hasValueSatisfying(claims -> assertThat(claims.role()).isEqualTo(AuthRole.ADMIN));
+                .hasValueSatisfying(
+                        claims -> assertThat(claims.claims().get("role")).isEqualTo("ADMIN"));
 
         ProductRegistrationRequest request = new ProductRegistrationRequest("시딩검증셔츠", null, 10000L, List.of(), 1);
         mvc.perform(post("/api/v1/admin/products")

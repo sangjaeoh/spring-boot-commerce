@@ -8,6 +8,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.List;
+import java.util.UUID;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -27,6 +28,7 @@ public final class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private static final String BEARER_PREFIX = "Bearer ";
     private static final String ROLE_PREFIX = "ROLE_";
+    private static final String ROLE_CLAIM = "role";
 
     private final JwtTokenCodec jwtTokenCodec;
 
@@ -45,9 +47,12 @@ public final class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     private void authenticate(TokenClaims claims) {
-        AuthUser authUser = new AuthUser(claims.subject(), claims.role());
-        List<GrantedAuthority> authorities =
-                List.of(new SimpleGrantedAuthority(ROLE_PREFIX + claims.role().name()));
+        String role = claims.claims().get(ROLE_CLAIM);
+        if (role == null) {
+            return;
+        }
+        AuthUser authUser = new AuthUser(UUID.fromString(claims.subject()), role);
+        List<GrantedAuthority> authorities = List.of(new SimpleGrantedAuthority(ROLE_PREFIX + role));
         PreAuthenticatedAuthenticationToken authentication =
                 new PreAuthenticatedAuthenticationToken(authUser, null, authorities);
         // 공유 컨텍스트를 변이하지 않도록 새 컨텍스트를 만들어 세팅한다(무상태 — 저장소 지속 없음).

@@ -2,9 +2,9 @@ package com.commerce.api.web.v1;
 
 import com.commerce.api.SharedPostgresContainer;
 import com.commerce.api.SharedRedisContainer;
-import com.commerce.auth.token.AuthRole;
 import com.commerce.auth.token.JwtTokenCodec;
 import com.commerce.member.service.MemberCredentialValidator;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -71,7 +71,7 @@ public abstract class WebIntegrationTest {
 
     /** 회원을 주체로 실은 구매자 {@code Authorization} 헤더 값(Bearer 토큰)을 만든다. */
     protected String bearer(UUID memberId) {
-        return "Bearer " + jwtTokenCodec.issue(memberId, AuthRole.BUYER);
+        return "Bearer " + jwtTokenCodec.issue(memberId.toString(), Map.of("role", "BUYER"));
     }
 
     /** 시딩된 관리자를 주체로 실은 관리자 {@code Authorization} 헤더 값(Bearer 토큰)을 만든다. */
@@ -83,6 +83,6 @@ public abstract class WebIntegrationTest {
                     .id();
             seededAdminId = adminId;
         }
-        return "Bearer " + jwtTokenCodec.issue(adminId, AuthRole.ADMIN);
+        return "Bearer " + jwtTokenCodec.issue(adminId.toString(), Map.of("role", "ADMIN"));
     }
 }
