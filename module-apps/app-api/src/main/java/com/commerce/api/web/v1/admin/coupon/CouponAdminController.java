@@ -1,5 +1,6 @@
 package com.commerce.api.web.v1.admin.coupon;
 
+import com.commerce.api.web.auth.Admin;
 import com.commerce.api.web.v1.admin.coupon.request.CouponCreationRequest;
 import com.commerce.api.web.v1.admin.coupon.response.CouponCreationResponse;
 import com.commerce.api.web.v1.admin.coupon.response.CouponPageResponse;
@@ -9,7 +10,6 @@ import com.commerce.coupon.service.CouponAppender;
 import com.commerce.coupon.service.CouponModifier;
 import com.commerce.coupon.service.CouponReader;
 import com.commerce.coupon.service.IssuedCouponReader;
-import com.commerce.web.auth.AdminOnly;
 import com.commerce.web.paging.PaginationRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -35,7 +35,7 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 쿠폰 정책 생성·목록 조회·정책별 발급분 조회·전환(중지·재개)의 관리자 엔드포인트다.
  *
- * <p>전부 관리자 표면이라 관리자 토큰만 허용한다({@link AdminOnly} — 미인증 401·비관리자 403). 생성은 쿠폰
+ * <p>전부 관리자 표면이라 관리자 토큰만 허용한다({@link Admin} — 미인증 401·비관리자 403). 생성은 쿠폰
  * 도메인 Appender에 얇게 위임하고(할인 조합·유효 기간·사용 창 불변식은 도메인이 검증), 전환은 단일 도메인
  * 쓰기라 파사드 없이 쿠폰 도메인 Modifier에 얇게 위임하며, 중지는 신규 발급만 막고 기발급분 사용에는 소급하지
  * 않는다. 본인 발급(셀프 클레임)의 본인용 표면은 {@link com.commerce.api.web.v1.coupon.CouponController}가
@@ -43,7 +43,7 @@ import org.springframework.web.bind.annotation.RestController;
  * problem+json으로 매핑한다.
  */
 @Tag(name = "쿠폰 관리", description = "쿠폰 정책 생성·목록 조회·발급분 조회·전환")
-@AdminOnly
+@Admin
 @RestController
 @RequestMapping("/api/v1/admin/coupons")
 public class CouponAdminController {

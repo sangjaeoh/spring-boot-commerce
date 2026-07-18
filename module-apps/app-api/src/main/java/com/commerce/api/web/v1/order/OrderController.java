@@ -3,6 +3,7 @@ package com.commerce.api.web.v1.order;
 import com.commerce.api.facade.CheckoutFacade;
 import com.commerce.api.facade.OrderCancellationFacade;
 import com.commerce.api.facade.OrderPaymentFacade;
+import com.commerce.api.web.auth.Authenticated;
 import com.commerce.api.web.v1.order.request.CheckoutRequest;
 import com.commerce.api.web.v1.order.response.CheckoutResponse;
 import com.commerce.api.web.v1.order.response.OrderPageResponse;
@@ -44,6 +45,7 @@ import org.springframework.web.bind.annotation.RestController;
  * problem+json으로 매핑한다.
  */
 @Tag(name = "주문", description = "체크아웃·취소·조회")
+@Authenticated
 @RestController
 @RequestMapping("/api/v1/orders")
 public class OrderController {

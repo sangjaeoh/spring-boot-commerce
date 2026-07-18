@@ -2,6 +2,7 @@ package com.commerce.web.error;
 
 import com.commerce.core.exception.BaseException;
 import com.commerce.core.exception.ErrorCode;
+import com.commerce.web.exception.WebErrorCode;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -13,6 +14,7 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -55,6 +57,21 @@ public class ProblemDetailHandler extends ResponseEntityExceptionHandler {
         ProblemDetail body = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, "동시 요청으로 충돌이 발생했다. 다시 시도해 주세요.");
         body.setProperty(CODE, "CONCURRENT_MODIFICATION");
         return respond(exception, body, HttpStatus.CONFLICT, request);
+    }
+
+    /**
+     * 메서드 시큐리티({@code @PreAuthorize})가 컨트롤러에서 던지는 접근 거부를 403으로 매핑한다. URL 기반 거부는
+     * 필터에서 던져져 접근거부 핸들러가 처리하지만, 컨트롤러에서 던져지는 이 예외는 MVC 경계에 도달하므로 여기서
+     * 같은 FORBIDDEN 계약으로 응답해 아래 500 폴백이 삼키지 않게 한다. 미인증 익명은 URL 규칙이 먼저 401로 거부하므로
+     * 여기 도달하는 것은 인증된 권한 부족뿐이다.
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    protected ResponseEntity<Object> handleAccessDenied(AccessDeniedException exception, WebRequest request) {
+        WebErrorCode errorCode = WebErrorCode.FORBIDDEN;
+        HttpStatusCode status = HttpStatusCode.valueOf(errorCode.status());
+        ProblemDetail body = ProblemDetail.forStatusAndDetail(status, errorCode.message());
+        body.setProperty(CODE, errorCode.code());
+        return respond(exception, body, status, request);
     }
 
     /**

@@ -1,6 +1,8 @@
 package com.commerce.api.web.v1.member;
 
 import com.commerce.api.facade.MemberWithdrawalFacade;
+import com.commerce.api.web.auth.Anonymous;
+import com.commerce.api.web.auth.Authenticated;
 import com.commerce.api.web.v1.member.request.MemberRegistrationRequest;
 import com.commerce.api.web.v1.member.request.MemberRenameRequest;
 import com.commerce.api.web.v1.member.request.MemberWithdrawalRequest;
@@ -32,7 +34,7 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 회원 가입·본인 조회·이름 변경·탈퇴 엔드포인트다.
  *
- * <p>가입은 공개, 본인 조회({@code /me})·이름 변경·탈퇴는 토큰 주체({@link AuthUser})에서 회원을 도출하는
+ * <p>가입은 익명 전용(인증된 주체는 403), 본인 조회({@code /me})·이름 변경·탈퇴는 토큰 주체({@link AuthUser})에서 회원을 도출하는
  * 본인용 표면이다(미인증은 401). 회원 지정 조회·이메일 검색·정지·해제의 관리자 표면은
  * {@link com.commerce.api.web.v1.admin.member.MemberAdminController}가 소유한다. 가입·조회는 회원 도메인
  * 서비스에, 탈퇴는 탈퇴 파사드에 위임하고, 이메일 형식 오류·중복·미존재·탈퇴 거부는 도메인/파사드가 던지는 예외를
@@ -68,10 +70,15 @@ public class MemberController {
                 description = "요청 값 무효",
                 content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
         @ApiResponse(
+                responseCode = "403",
+                description = "이미 인증된 주체의 가입",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+        @ApiResponse(
                 responseCode = "409",
                 description = "이메일 중복",
                 content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
     })
+    @Anonymous
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public MemberRegistrationResponse register(@Valid @RequestBody MemberRegistrationRequest request) {
@@ -92,6 +99,7 @@ public class MemberController {
                 description = "회원 없음",
                 content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
     })
+    @Authenticated
     @GetMapping("/me")
     public MemberResponse getMe(AuthUser authUser) {
         return MemberResponse.from(memberReader.getMember(authUser.memberId()));
@@ -114,6 +122,7 @@ public class MemberController {
                 description = "회원 없음",
                 content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
     })
+    @Authenticated
     @PatchMapping("/me")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void rename(AuthUser authUser, @Valid @RequestBody MemberRenameRequest request) {
@@ -141,6 +150,7 @@ public class MemberController {
                 description = "미배송 결제 주문이 있어 탈퇴 불가",
                 content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
     })
+    @Authenticated
     @DeleteMapping("/me")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void withdraw(AuthUser authUser, @Valid @RequestBody MemberWithdrawalRequest request) {

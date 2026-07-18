@@ -1,5 +1,6 @@
 package com.commerce.api.web.v1.member;
 
+import com.commerce.api.web.auth.Anonymous;
 import com.commerce.api.web.v1.member.request.LoginRequest;
 import com.commerce.api.web.v1.member.response.LoginResponse;
 import com.commerce.auth.token.AuthRole;
@@ -24,12 +25,14 @@ import org.springframework.web.bind.annotation.RestController;
  * 로그인·토큰 발급 엔드포인트다.
  *
  * <p>자격증명 검증은 회원 도메인에 위임하고 검증된 주체(회원 ID)·역할로 JWT 액세스 토큰을 발급한다. 검증
- * 실패(미존재·탈퇴·패스워드 불일치)는 도메인이 던지는 예외를 전역 핸들러가 401 problem+json으로 매핑한다.
+ * 실패(미존재·탈퇴·패스워드 불일치)는 도메인이 던지는 예외를 전역 핸들러가 401 problem+json으로 매핑한다. 이 표면은
+ * 익명 전용({@link Anonymous})이라 이미 인증된 주체의 재로그인 요청은 403으로 거부된다.
  * 발급된 토큰의 엔드포인트 강제는 Spring Security 필터 체인이 담당한다 — 인증 필터가 토큰을 검증해 시큐리티
  * 컨텍스트에 주체를 싣고, 어드민 URL은 {@code hasRole('ADMIN')}로, 나머지는 인증으로 강제한다
  * (REQUIREMENTS.md 인증).
  */
 @Tag(name = "인증", description = "로그인·토큰 발급")
+@Anonymous
 @RestController
 @RequestMapping("/api/v1/auth")
 public class AuthController {
@@ -53,6 +56,10 @@ public class AuthController {
         @ApiResponse(
                 responseCode = "401",
                 description = "자격 증명 불일치",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+        @ApiResponse(
+                responseCode = "403",
+                description = "이미 인증된 주체의 재로그인",
                 content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
     })
     @PostMapping("/login")

@@ -1,9 +1,9 @@
 package com.commerce.api.web.v1.admin.product;
 
+import com.commerce.api.web.auth.Admin;
 import com.commerce.api.web.v1.admin.product.request.VariantPriceChangeRequest;
 import com.commerce.core.money.Money;
 import com.commerce.product.service.ProductVariantModifier;
-import com.commerce.web.auth.AdminOnly;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -25,12 +25,12 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 상품 변형 관리(가격 변경·활성/비활성/은퇴) 엔드포인트다.
  *
- * <p>전부 관리자 표면이라 관리자 토큰만 허용한다({@link AdminOnly} — 미인증 401·비관리자 403). 단일 도메인
+ * <p>전부 관리자 표면이라 관리자 토큰만 허용한다({@link Admin} — 미인증 401·비관리자 403). 단일 도메인
  * 쓰기라 파사드 없이 상품 도메인 Modifier에 얇게 위임하고, 미존재·허용되지 않은 전이·RETIRED 변경 거부는
  * 도메인이 던지는 예외를 전역 핸들러가 problem+json으로 매핑한다. 가격 변경은 기존 주문 스냅샷에 영향을 주지 않는다.
  */
 @Tag(name = "상품 변형 관리", description = "변형 가격 변경·판매 제공/중단·은퇴")
-@AdminOnly
+@Admin
 @RestController
 @RequestMapping("/api/v1/admin/product-variants")
 public class ProductVariantAdminController {

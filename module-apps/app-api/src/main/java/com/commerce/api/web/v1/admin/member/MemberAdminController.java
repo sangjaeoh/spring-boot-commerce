@@ -1,10 +1,10 @@
 package com.commerce.api.web.v1.admin.member;
 
+import com.commerce.api.web.auth.Admin;
 import com.commerce.api.web.v1.admin.member.request.MemberSuspensionRequest;
 import com.commerce.api.web.v1.member.response.MemberResponse;
 import com.commerce.member.service.MemberModifier;
 import com.commerce.member.service.MemberReader;
-import com.commerce.web.auth.AdminOnly;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -28,14 +28,14 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 회원 지정 조회·이메일 검색·관리(정지·해제)의 관리자 엔드포인트다.
  *
- * <p>전부 대상 회원을 경로·파라미터로 받는 관리자 표면이라 관리자 토큰만 허용한다({@link AdminOnly} — 미인증
+ * <p>전부 대상 회원을 경로·파라미터로 받는 관리자 표면이라 관리자 토큰만 허용한다({@link Admin} — 미인증
  * 401·비관리자 403). 가입·본인 조회·이름 변경·탈퇴의 본인용 표면은
  * {@link com.commerce.api.web.v1.member.MemberController}가 소유한다. 조회는 회원 도메인 Reader에, 관리는 단일
  * 도메인 쓰기라 파사드 없이 회원 도메인 Modifier에 얇게 위임하고, 미존재·허용되지 않은 상태 전이는 도메인이 던지는
  * 예외를 전역 핸들러가 problem+json으로 매핑한다. 정지와 탈퇴는 독립 축이라 정지 회원도 탈퇴할 수 있다.
  */
 @Tag(name = "회원 관리", description = "회원 지정 조회·이메일 검색·정지·해제")
-@AdminOnly
+@Admin
 @RestController
 @RequestMapping("/api/v1/admin/members")
 public class MemberAdminController {
