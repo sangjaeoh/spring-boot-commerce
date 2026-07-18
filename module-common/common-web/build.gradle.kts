@@ -30,10 +30,21 @@ dependencies {
     compileOnly(libs.swagger.annotations.jakarta)
     compileOnly(libs.spring.data.commons)
 
+    // Spring Security(무상태 JWT) 전환 준비 — 인증 필터·엔트리포인트가 컴파일 시 참조하는 원자재.
+    // 런타임(Boot 오토컨피그 포함)은 실행 앱의 시큐리티 스타터가 제공하므로 compileOnly(servlet·validation 관례와 동일).
+    compileOnly(libs.spring.security.web)
+    compileOnly(libs.spring.security.core)
+
+    // JWT 엔트리포인트·핸들러의 ProblemDetail JSON 직렬화(Jackson 3). 런타임은 실행 앱 제공이라 compileOnly.
+    compileOnly(libs.jackson.databind)
+
     // 웹 계층 하네스: 최소 부트 웹 컨텍스트(@SpringBootTest)로 핸들러·필터를 실제 필터 체인에 태운다.
     testImplementation(libs.spring.boot.starter.web)
     testImplementation(libs.spring.boot.starter.validation)
     testImplementation(libs.spring.boot.starter.test)
+    // security를 클래스패스에 올린 채로도 common-web 테스트가 green임을 증명한다.
+    // 기본 보안체인이 /test/* 를 잠그지 않도록 시큐리티 오토컨피그를 TestWebApplication에서 배제한다.
+    testImplementation(libs.spring.boot.starter.security)
     // PaginationResponse 단위 테스트가 PageImpl로 Page를 조립한다(compileOnly는 테스트 클래스패스에 안 실린다).
     testImplementation(libs.spring.data.commons)
     testRuntimeOnly(libs.junit.platform.launcher)
