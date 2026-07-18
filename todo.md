@@ -45,7 +45,7 @@
 - 이 항목을 1번에 두는 이유: 리뷰가 지목한 유일한 "숨은 빌드 파손" 리스크를 코어 전환 전에 격리해, 슬라이스 2가 red일 때 원인이 오토컨피그인지 전환 코드인지 헷갈리지 않게 한다.
 
 ### 2. 인증 코어 전환 — common-web Spring Security 컴포넌트 + app-api SecurityConfig [결정]
-- 상태: 대기
+- 상태: 완료
 - 결정(2026-07-18): 위 선행 결정 전부(채택 방향·타깃 스택·강제 축·principal·배치·무상태·공개 경로·에러 파리티). 되묻지 않는다.
 - 문제: 현재 인증 강제는 (a) `AuthTokenFilter`(@Component)가 Bearer 검증 후 `AuthUser`를 요청속성으로 부착, (b) `AuthUserArgumentResolver`가 파라미터 선언을 인증 강제로 사용(없으면 401), (c) `AdminOnlyInterceptor`가 `@AdminOnly` 핸들러를 401/403 게이트한다. 이 자체 기전을 Spring Security `SecurityFilterChain`으로 교체한다. common-web 컴포넌트와 app-api `SecurityConfig`는 상호 의존(둘 중 하나만 있으면 인증이 깨짐)이라 한 슬라이스로 원자적으로 전환한다.
 - 완료 기준:
