@@ -111,7 +111,7 @@
   | `common-jpa`       | JPA 공통 지원 — Auditing·`SchemaFlywayFactory`                                 |
   | `common-messaging` | 발행 포트(`MessagePublisher`)·도메인 이벤트 마커(`DomainEvent`)(transport 구현은 infra) |
   | `common-auth`      | 토큰(JWT) 검증 원자재(웹 필터는 common-web 소유)                               |
-  | `common-web`       | 웹 공통 — 인증·멱등·시큐리티 헤더·로그인 레이트리밋 필터·`AuthUser`·`PaginationRequest`·`PaginationResponse`·ProblemDetail 핸들러·공용 validator 승격처 |
+  | `common-web`       | 웹 공통 — Spring Security 인증 필터(`JwtAuthenticationFilter`)·인증 진입점(`RestAuthenticationEntryPoint`, 401)·접근거부 핸들러(`RestAccessDeniedHandler`, 403)·멱등·시큐리티 헤더·로그인 레이트리밋 필터·`AuthUser`·`PaginationRequest`·`PaginationResponse`·ProblemDetail 핸들러·공용 validator 승격처(필터 체인 조립은 `app-api` `SecurityConfig`) |
 
 - 배치가 애매하면 더 좁은 의존의 모듈을 택한다(core에 갈 수 있으면 core로).
   - 역할별 분할의 목적이 의존 가능 범위 축소라서다. 단일 util 모듈은 도메인이 web 타입에 의존하는 오염을 막지 못해 기각한다.
