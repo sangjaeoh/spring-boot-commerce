@@ -77,6 +77,8 @@ spring-security-core = { module = "org.springframework.security:spring-security-
 jackson-databind = { module = "tools.jackson.core:jackson-databind" }
 # common-web 테스트 — 시큐리티 런타임(Boot 오토컨피그 포함)을 테스트 앱 클래스패스에 올린다. 버전은 Spring Boot BOM
 spring-boot-starter-security = { module = "org.springframework.boot:spring-boot-starter-security" }
+# app-api 테스트 — 시큐리티 테스트 지원. 버전은 Spring Boot BOM(spring-security-bom)
+spring-security-test = { module = "org.springframework.security:spring-security-test" }
 
 # test runtime — version managed by the Spring Boot BOM (no dependency-management plugin on common/domain modules)
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }

@@ -6,13 +6,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.commerce.auth.token.AuthRole;
-import com.commerce.auth.token.JwtTokenCodec;
+import java.util.List;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.authentication.preauth.PreAuthenticatedAuthenticationToken;
 import org.springframework.test.context.TestConstructor;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -23,40 +27,43 @@ import org.springframework.web.context.WebApplicationContext;
 class AuthUserArgumentResolverTest {
 
     private final MockMvc mvc;
-    private final JwtTokenCodec codec;
 
-    AuthUserArgumentResolverTest(WebApplicationContext context, AuthTokenFilter filter, JwtTokenCodec codec) {
-        // 컨텍스트가 등록한 실제 필터 빈을 실제 MVC 필터 체인에 태운다.
-        this.mvc =
-                MockMvcBuilders.webAppContextSetup(context).addFilters(filter).build();
-        this.codec = codec;
+    AuthUserArgumentResolverTest(WebApplicationContext context) {
+        this.mvc = MockMvcBuilders.webAppContextSetup(context).build();
+    }
+
+    @AfterEach
+    void clearContext() {
+        SecurityContextHolder.clearContext();
     }
 
     @Test
-    @DisplayName("유효한 Bearer 토큰이 있으면 AuthUser 파라미터에 인증 주체가 주입된다")
-    void validTokenResolvesAuthUserParameter() throws Exception {
+    @DisplayName("시큐리티 컨텍스트에 인증 주체가 있으면 AuthUser 파라미터에 주입된다")
+    void authenticatedPrincipalResolvesAuthUserParameter() throws Exception {
         UUID memberId = UUID.randomUUID();
-        String token = codec.issue(memberId, AuthRole.BUYER);
+        setPrincipal(new AuthUser(memberId, AuthRole.BUYER));
 
-        mvc.perform(get("/test/principal").header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+        mvc.perform(get("/test/principal"))
                 .andExpect(status().isOk())
                 .andExpect(content().string(memberId.toString()));
     }
 
     @Test
-    @DisplayName("토큰이 없으면 AuthUser 파라미터 선언 자체가 401 UNAUTHENTICATED로 거부한다")
-    void missingTokenRejectsWith401() throws Exception {
+    @DisplayName("인증 주체가 없으면 AuthUser 파라미터 선언 자체가 401 UNAUTHENTICATED로 거부한다")
+    void missingPrincipalRejectsWith401() throws Exception {
         mvc.perform(get("/test/principal"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
     }
 
-    @Test
-    @DisplayName("유효하지 않은 토큰도 미인증이라 401로 거부한다")
-    void invalidTokenRejectsWith401() throws Exception {
-        mvc.perform(get("/test/principal").header(HttpHeaders.AUTHORIZATION, "Bearer not-a-jwt"))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+    private static void setPrincipal(AuthUser authUser) {
+        PreAuthenticatedAuthenticationToken authentication = new PreAuthenticatedAuthenticationToken(
+                authUser,
+                null,
+                List.of(new SimpleGrantedAuthority("ROLE_" + authUser.role().name())));
+        SecurityContext context = SecurityContextHolder.createEmptyContext();
+        context.setAuthentication(authentication);
+        SecurityContextHolder.setContext(context);
     }
 }

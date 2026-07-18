@@ -18,6 +18,8 @@ dependencies {
     implementation(project(":module-domains:domain-order"))
     implementation(project(":module-domains:domain-payment"))
     implementation(libs.spring.boot.starter.web)
+    // 무상태 JWT SecurityFilterChain(SecurityConfig)이 조립하는 시큐리티 런타임(오토컨피그 포함).
+    implementation(libs.spring.boot.starter.security)
     implementation(libs.spring.boot.starter.validation)
     implementation(libs.spring.boot.starter.data.jpa)
     implementation(libs.spring.boot.starter.actuator)
@@ -32,6 +34,7 @@ dependencies {
     runtimeOnly(libs.postgresql)
 
     testImplementation(libs.spring.boot.starter.test)
+    testImplementation(libs.spring.security.test)
     testImplementation(libs.spring.boot.starter.webmvc.test)
     // 웹 통합 테스트가 공유 Redis의 로그인 레이트리밋 카운터를 테스트 간 비운다(StringRedisTemplate).
     testImplementation(libs.spring.boot.starter.data.redis)
