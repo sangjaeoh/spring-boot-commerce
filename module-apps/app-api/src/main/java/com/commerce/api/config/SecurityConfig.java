@@ -27,6 +27,15 @@ import tools.jackson.databind.ObjectMapper;
 @EnableWebSecurity
 public class SecurityConfig {
 
+    private static final String[] PUBLIC_INFRA_PATHS = {
+        "/error", "/actuator/**", "/v3/api-docs", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html"
+    };
+    private static final String[] PUBLIC_AUTH_PATHS = {"/api/v1/auth/login"};
+    private static final String[] PUBLIC_MEMBER_PATHS = {"/api/v1/members"};
+    private static final String[] PUBLIC_PRODUCT_PATHS = {"/api/v1/products", "/api/v1/products/*"};
+    private static final String[] PUBLIC_PAYMENT_PATHS = {"/api/v1/payments/webhook"};
+    private static final String[] ADMIN_PATHS = {"/api/v1/admin/**"};
+
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http, JwtTokenCodec jwtTokenCodec, ObjectMapper objectMapper)
             throws Exception {
@@ -36,21 +45,17 @@ public class SecurityConfig {
                 .formLogin(form -> form.disable())
                 .httpBasic(basic -> basic.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(auth -> auth.requestMatchers("/error")
+                .authorizeHttpRequests(auth -> auth.requestMatchers(PUBLIC_INFRA_PATHS)
                         .permitAll()
-                        .requestMatchers("/actuator/**")
+                        .requestMatchers(HttpMethod.POST, PUBLIC_AUTH_PATHS)
                         .permitAll()
-                        .requestMatchers("/v3/api-docs", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
+                        .requestMatchers(HttpMethod.POST, PUBLIC_MEMBER_PATHS)
                         .permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/login")
+                        .requestMatchers(HttpMethod.GET, PUBLIC_PRODUCT_PATHS)
                         .permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/members")
+                        .requestMatchers(HttpMethod.POST, PUBLIC_PAYMENT_PATHS)
                         .permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/products", "/api/v1/products/*")
-                        .permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/payments/webhook")
-                        .permitAll()
-                        .requestMatchers("/api/v1/admin/**")
+                        .requestMatchers(ADMIN_PATHS)
                         .hasRole("ADMIN")
                         .anyRequest()
                         .authenticated())
