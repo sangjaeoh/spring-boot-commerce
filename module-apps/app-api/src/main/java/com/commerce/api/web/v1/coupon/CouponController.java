@@ -1,6 +1,7 @@
 package com.commerce.api.web.v1.coupon;
 
 import com.commerce.api.facade.CouponIssuanceFacade;
+import com.commerce.api.web.auth.Authenticated;
 import com.commerce.api.web.v1.coupon.response.CouponIssuanceResponse;
 import com.commerce.web.auth.AuthUser;
 import io.swagger.v3.oas.annotations.Operation;
@@ -28,6 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
  * 불변식 위반은 도메인/파사드가 던지는 예외를 전역 핸들러가 problem+json으로 매핑한다.
  */
 @Tag(name = "쿠폰", description = "쿠폰 발급(셀프 클레임)")
+@Authenticated
 @RestController
 @RequestMapping("/api/v1/coupons")
 public class CouponController {

@@ -1,10 +1,10 @@
 package com.commerce.api.web.v1.admin.stock;
 
+import com.commerce.api.web.auth.Admin;
 import com.commerce.api.web.v1.admin.stock.request.StockIncreaseRequest;
 import com.commerce.api.web.v1.admin.stock.response.StockResponse;
 import com.commerce.stock.service.StockModifier;
 import com.commerce.stock.service.StockReader;
-import com.commerce.web.auth.AdminOnly;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -29,12 +29,12 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 재고 운영(현황 조회·재입고·수동 품절/재개·단종) 엔드포인트다.
  *
- * <p>전부 관리자 표면이라 관리자 토큰만 허용한다({@link AdminOnly}). 재고는 변형당 1행이라 variantId가
+ * <p>전부 관리자 표면이라 관리자 토큰만 허용한다({@link Admin}). 재고는 변형당 1행이라 variantId가
  * 자연 키다. 조회는 재고 도메인 Reader에, 단일 도메인 쓰기는 파사드 없이 재고 도메인 Modifier에 얇게 위임하고,
  * 미존재·허용되지 않은 전이·단종 재입고 거부는 도메인이 던지는 예외를 전역 핸들러가 problem+json으로 매핑한다.
  */
 @Tag(name = "재고 관리", description = "재고 현황 조회·재입고·상태 전이")
-@AdminOnly
+@Admin
 @RestController
 @RequestMapping("/api/v1/admin/stocks")
 public class StockAdminController {

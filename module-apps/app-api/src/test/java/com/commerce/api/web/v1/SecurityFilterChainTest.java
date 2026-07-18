@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.commerce.api.web.v1.member.request.LoginRequest;
 import com.commerce.api.web.v1.member.request.MemberRegistrationRequest;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -69,6 +70,31 @@ class SecurityFilterChainTest extends WebIntegrationTest {
                         .param("variantIds", UUID.randomUUID().toString())
                         .header(HttpHeaders.AUTHORIZATION, adminBearer()))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("이미 인증된 주체의 로그인(POST /auth/login)은 403 FORBIDDEN으로 거부된다(@Anonymous 익명 전용)")
+    void loginRejectsAuthenticatedSubjectWith403() throws Exception {
+        LoginRequest request = new LoginRequest("user-" + UUID.randomUUID() + "@example.com", "password-123!");
+        mvc.perform(post("/api/v1/auth/login")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(UUID.randomUUID()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    @DisplayName("이미 인증된 주체의 회원 가입(POST /members)은 403 FORBIDDEN으로 거부된다(@Anonymous 메서드 레벨)")
+    void signupRejectsAuthenticatedSubjectWith403() throws Exception {
+        MemberRegistrationRequest request =
+                new MemberRegistrationRequest("user-" + UUID.randomUUID() + "@example.com", "테스터", "password-123!");
+        mvc.perform(post("/api/v1/members")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(UUID.randomUUID()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
     }
 
     @Test

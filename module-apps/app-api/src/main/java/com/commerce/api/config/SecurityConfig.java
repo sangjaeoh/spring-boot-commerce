@@ -7,6 +7,7 @@ import com.commerce.web.auth.RestAuthenticationEntryPoint;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -22,9 +23,14 @@ import tools.jackson.databind.ObjectMapper;
  * permitAll로 완전 열거하고, 어드민 URL 네임스페이스({@code /api/v1/admin/**})는 {@code hasRole('ADMIN')},
  * 나머지는 인증을 요구한다. 미인증 익명은 {@link RestAuthenticationEntryPoint}가 401, 권한 부족은
  * {@link RestAccessDeniedHandler}가 403으로 problem+json 응답한다.
+ *
+ * <p>{@link EnableMethodSecurity}로 메서드 시큐리티를 켜, 컨트롤러의 관객 마커({@code @Admin}·{@code @Authenticated}·
+ * {@code @Anonymous} — {@code @PreAuthorize} 합성)가 핸들러에서 2차로 인가를 강제한다. URL 규칙이 1차 게이트,
+ * 마커가 핸들러에 붙는 2차 게이트다. 메서드 시큐리티의 거부도 같은 진입점·접근거부 핸들러로 401·403 problem+json을 낸다.
  */
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
 public class SecurityConfig {
 
     private static final String[] PUBLIC_INFRA_PATHS = {

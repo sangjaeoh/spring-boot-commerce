@@ -2,6 +2,7 @@ package com.commerce.api.web.v1.cart;
 
 import com.commerce.api.facade.CartCommandFacade;
 import com.commerce.api.facade.CartViewFacade;
+import com.commerce.api.web.auth.Authenticated;
 import com.commerce.api.web.v1.cart.request.AddCartItemRequest;
 import com.commerce.api.web.v1.cart.request.ChangeCartItemQuantityRequest;
 import com.commerce.api.web.v1.cart.response.CartResponse;
@@ -36,6 +37,7 @@ import org.springframework.web.bind.annotation.RestController;
  * problem+json으로 매핑한다.
  */
 @Tag(name = "장바구니", description = "장바구니 조회·담기·수량 변경·제거·비우기")
+@Authenticated
 @RestController
 @RequestMapping("/api/v1/carts")
 public class CartController {

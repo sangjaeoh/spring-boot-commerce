@@ -1,5 +1,6 @@
 package com.commerce.api.web.v1.coupon;
 
+import com.commerce.api.web.auth.Authenticated;
 import com.commerce.api.web.v1.coupon.response.DiscountPreviewResponse;
 import com.commerce.api.web.v1.coupon.response.IssuedCouponResponse;
 import com.commerce.core.money.Money;
@@ -33,6 +34,7 @@ import org.springframework.web.bind.annotation.RestController;
  * {@link com.commerce.api.web.v1.admin.coupon.IssuedCouponAdminController}가 소유한다.
  */
 @Tag(name = "발급 쿠폰", description = "발급 쿠폰 조회·할인 미리보기")
+@Authenticated
 @RestController
 @RequestMapping("/api/v1/issued-coupons")
 public class IssuedCouponController {

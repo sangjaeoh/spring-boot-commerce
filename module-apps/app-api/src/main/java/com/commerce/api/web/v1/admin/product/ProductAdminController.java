@@ -1,6 +1,7 @@
 package com.commerce.api.web.v1.admin.product;
 
 import com.commerce.api.facade.ProductRegistrationFacade;
+import com.commerce.api.web.auth.Admin;
 import com.commerce.api.web.v1.admin.product.request.ProductEditRequest;
 import com.commerce.api.web.v1.admin.product.request.ProductRegistrationRequest;
 import com.commerce.api.web.v1.admin.product.request.VariantRegistrationRequest;
@@ -11,7 +12,6 @@ import com.commerce.core.money.Money;
 import com.commerce.product.service.ProductModifier;
 import com.commerce.product.service.ProductReader;
 import com.commerce.product.service.ProductRemover;
-import com.commerce.web.auth.AdminOnly;
 import com.commerce.web.paging.PaginationRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -39,14 +39,14 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 상품 등록·추가 변형 등록·관리(노출·숨김·편집·논리삭제)·숨김 포함 목록 조회의 관리자 엔드포인트다.
  *
- * <p>전부 관리자 표면이라 관리자 토큰만 허용한다({@link AdminOnly} — 미인증 401·비관리자 403). 등록·추가 변형
+ * <p>전부 관리자 표면이라 관리자 토큰만 허용한다({@link Admin} — 미인증 401·비관리자 403). 등록·추가 변형
  * 등록은 상품 등록 파사드에 얇게 위임한다(변형·초기 재고를 순차 시딩). 공개 목록·상세 조회는
  * {@link com.commerce.api.web.v1.product.ProductController}가 소유한다. 관리는 단일 도메인 쓰기라 파사드 없이
  * 상품 도메인 Modifier·Remover에 얇게 위임하고, 미존재·허용되지 않은 전이는 도메인이 던지는 예외를 전역 핸들러가
  * problem+json으로 매핑한다. 편집은 기존 주문 스냅샷에 영향을 주지 않고, 논리삭제는 변형을 연쇄 삭제하지 않는다.
  */
 @Tag(name = "상품 관리", description = "상품 등록·관리·숨김 포함 목록 조회")
-@AdminOnly
+@Admin
 @RestController
 @RequestMapping("/api/v1/admin/products")
 public class ProductAdminController {

@@ -1,6 +1,7 @@
 package com.commerce.api.web.v1.admin.order;
 
 import com.commerce.api.facade.OrderRefundFacade;
+import com.commerce.api.web.auth.Admin;
 import com.commerce.api.web.v1.admin.order.request.FulfillmentHoldRequest;
 import com.commerce.api.web.v1.admin.order.request.OrderRefundRequest;
 import com.commerce.api.web.v1.admin.order.request.OrderShipRequest;
@@ -9,7 +10,6 @@ import com.commerce.order.entity.FulfillmentStatus;
 import com.commerce.order.entity.OrderStatus;
 import com.commerce.order.service.OrderModifier;
 import com.commerce.order.service.OrderReader;
-import com.commerce.web.auth.AdminOnly;
 import com.commerce.web.paging.PaginationRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -36,14 +36,14 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 주문 이행 전이·반품 환불·상태별 목록 조회의 관리자 엔드포인트다.
  *
- * <p>전부 관리자 표면이라 관리자 토큰만 허용한다({@link AdminOnly} — 미인증 401·비관리자 403). 크로스 도메인
+ * <p>전부 관리자 표면이라 관리자 토큰만 허용한다({@link Admin} — 미인증 401·비관리자 403). 크로스 도메인
  * 쓰기인 반품 환불은 파사드에, 단일 도메인 쓰기인 이행 전이는 주문 도메인 Modifier에, 상태별 목록 조회는 주문 도메인
  * Reader에 얇게 위임해 결과를 응답 DTO로 변환한다. 본인용 표면(체크아웃·취소·조회)은
  * {@link com.commerce.api.web.v1.order.OrderController}가 소유한다. 정책 거부·전이 위반·미존재는 도메인/파사드가
  * 던지는 예외를 전역 핸들러가 problem+json으로 매핑한다.
  */
 @Tag(name = "주문 관리", description = "이행 전이·반품 환불·상태별 목록 조회")
-@AdminOnly
+@Admin
 @RestController
 @RequestMapping("/api/v1/admin/orders")
 public class OrderAdminController {
