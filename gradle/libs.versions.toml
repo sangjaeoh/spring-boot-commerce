@@ -69,6 +69,14 @@ swagger-annotations-jakarta = { module = "io.swagger.core.v3:swagger-annotations
 spring-data-commons = { module = "org.springframework.data:spring-data-commons" }
 spring-boot-starter-validation = { module = "org.springframework.boot:spring-boot-starter-validation" }
 spring-boot-starter-webmvc-test = { module = "org.springframework.boot:spring-boot-starter-webmvc-test" }
+# common-web — Spring Security(무상태 JWT) 전환 준비. 인증 필터·엔트리포인트가 컴파일 시 참조하는 원자재.
+# 런타임은 실행 앱이 시큐리티 스타터로 제공하므로 compileOnly. 버전은 Spring Boot BOM(spring-security-bom)
+spring-security-web = { module = "org.springframework.security:spring-security-web" }
+spring-security-core = { module = "org.springframework.security:spring-security-core" }
+# common-web — JWT 엔트리포인트·핸들러의 ProblemDetail JSON 직렬화(Jackson 3). 런타임은 실행 앱 제공이라 compileOnly. 버전은 Spring Boot BOM(jackson-bom 3.x)
+jackson-databind = { module = "tools.jackson.core:jackson-databind" }
+# common-web 테스트 — 시큐리티 런타임(Boot 오토컨피그 포함)을 테스트 앱 클래스패스에 올린다. 버전은 Spring Boot BOM
+spring-boot-starter-security = { module = "org.springframework.boot:spring-boot-starter-security" }
 
 # test runtime — version managed by the Spring Boot BOM (no dependency-management plugin on common/domain modules)
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }

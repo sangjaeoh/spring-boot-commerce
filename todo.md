@@ -33,7 +33,7 @@
 ## 슬라이스 (순서 고정: 1 → 2 → 3)
 
 ### 1. 빌드 배선 + common-web 테스트 오토컨피그 배제 게이트
-- 상태: 대기
+- 상태: 완료
 - 목표: security 의존을 배선하고, common-web 테스트가 security를 클래스패스에 올린 채로도 green임을 먼저 증명한다(코어 전환의 선결 리스크를 코드 변경 없이 격리 검증).
 - 문제(선결 리스크): security-web/core가 common-web 테스트 클래스패스에 오르면 Boot 시큐리티 오토컨피그가 `TestWebApplication`(@SpringBootApplication)에 기본 보안체인을 걸어 `/test/*`가 전부 401이 되고, `ProblemDetailHandlerTest`·`IdempotencyFilterTest`·`RequestIdFilterTest`·`LoginRateLimitFilterTest`·paging 테스트가 무더기로 깨진다. app-api에 스타터-security를 먼저 넣으면 커스텀 `SecurityFilterChain`이 없어 기본 보안체인이 전 엔드포인트를 잠그므로, app-api 배선은 이 슬라이스에 넣지 않는다(코어 전환과 함께).
 - 완료 기준:
