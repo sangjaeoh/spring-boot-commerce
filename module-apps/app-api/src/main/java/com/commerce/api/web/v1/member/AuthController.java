@@ -3,9 +3,7 @@ package com.commerce.api.web.v1.member;
 import com.commerce.api.web.auth.Anonymous;
 import com.commerce.api.web.v1.member.request.LoginRequest;
 import com.commerce.api.web.v1.member.response.LoginResponse;
-import com.commerce.auth.token.AuthRole;
 import com.commerce.auth.token.JwtTokenCodec;
-import com.commerce.member.entity.MemberRole;
 import com.commerce.member.info.MemberInfo;
 import com.commerce.member.service.MemberCredentialValidator;
 import io.swagger.v3.oas.annotations.Operation;
@@ -15,6 +13,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.Map;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -65,13 +64,7 @@ public class AuthController {
     @PostMapping("/login")
     public LoginResponse login(@Valid @RequestBody LoginRequest request) {
         MemberInfo member = memberCredentialValidator.authenticate(request.email(), request.password());
-        return LoginResponse.from(jwtTokenCodec.issue(member.id(), toAuthRole(member.role())));
-    }
-
-    private static AuthRole toAuthRole(MemberRole role) {
-        return switch (role) {
-            case BUYER -> AuthRole.BUYER;
-            case ADMIN -> AuthRole.ADMIN;
-        };
+        return LoginResponse.from(jwtTokenCodec.issue(
+                member.id().toString(), Map.of("role", member.role().name())));
     }
 }

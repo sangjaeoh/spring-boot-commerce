@@ -4,8 +4,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.commerce.auth.token.AuthRole;
 import com.commerce.auth.token.JwtTokenCodec;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -43,7 +43,7 @@ class JwtAuthenticationFilterTest {
     @DisplayName("유효한 Bearer 토큰은 인증 주체를 시큐리티 컨텍스트에 싣는다")
     void validBearerTokenPopulatesSecurityContext() throws Exception {
         UUID memberId = UUID.randomUUID();
-        String token = codec.issue(memberId, AuthRole.BUYER);
+        String token = codec.issue(memberId.toString(), Map.of("role", "BUYER"));
 
         mvc.perform(get("/test/auth-user").header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .andExpect(status().isOk())
