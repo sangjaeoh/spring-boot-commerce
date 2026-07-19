@@ -97,7 +97,7 @@
 - 범위: 중.
 
 ### 8. domain-product
-- 상태: 대기
+- 상태: 완료
 - 스캔 대상: `module-domains/domain-product/src/main/java` 전체(25파일, 엔티티 2·enum 3). `NormalizedOptions` 포함.
 - 인계 사항(슬라이스 2 독립 리뷰 발견): `ProductRepository.findExposedPage`는 `@Query`를 달고도 요약이 없다(`docs/coding-conventions.md`의 "`@Query`가 붙으면 요약을 둔다" 위반, main의 기존 잔여). 이 요약이 노출 술어를 파사드 후필터가 아니라 쿼리에 두는 근거(페이지 크기·총계가 노출 집합과 일치)의 소유처가 된다 — 슬라이스 2가 `ProductCatalogFacade` 타입 doc에서 지운 유일한 무소유 내용이다.
 - 완료 기준: 공통.
