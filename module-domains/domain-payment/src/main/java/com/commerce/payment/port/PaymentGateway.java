@@ -11,13 +11,13 @@ public interface PaymentGateway {
     PaymentApproval approve(UUID paymentId, Money amount, PaymentMethod method);
 
     /**
-     * 승인 거래를 취소·환불하고 취소 거래 식별자를 반환한다.
+     * 승인 거래를 취소·환불하고 취소 거래 ID를 반환한다.
      *
      * <p>{@code idempotencyKey}로 멱등해야 한다: 같은 키의 반복 취소는 환불을 정확히 한 번만 수행하고 최초 취소
      * 결과를 그대로 반환한다.
      */
     String cancel(String pgTransactionId, String idempotencyKey);
 
-    /** 결제의 PG 거래 상태를 가맹점 참조(결제 식별자)로 조회한다. */
+    /** 결제의 PG 거래 상태를 가맹점 참조(결제 ID)로 조회한다. */
     GatewayTransactionStatus inquire(UUID paymentId);
 }

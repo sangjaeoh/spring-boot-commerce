@@ -54,12 +54,12 @@ public class Payment extends BaseTimeEntity<UUID> {
     @Nullable
     private FailureReason failureReason;
 
-    /** PG 승인 거래 식별자. PG를 호출한 승인에만 있다. */
+    /** PG 승인 거래 ID. PG를 호출한 승인에만 있다. */
     @Column(name = "pg_transaction_id")
     @Nullable
     private String pgTransactionId;
 
-    /** PG 취소(환불) 거래 식별자. PG 환불을 호출한 취소에만 있다. */
+    /** PG 취소(환불) 거래 ID. PG 환불을 호출한 취소에만 있다. */
     @Column(name = "pg_cancel_transaction_id")
     @Nullable
     private String pgCancelTransactionId;

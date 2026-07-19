@@ -6,7 +6,7 @@ import org.jspecify.annotations.Nullable;
 /**
  * PG 승인 결과다.
  *
- * @param pgTransactionId 승인 거래 식별자. 승인일 때만 있다
+ * @param pgTransactionId 승인 거래 ID. 승인일 때만 있다
  * @param failureReason 거절 사유. 거절일 때만 있다
  */
 public record PaymentApproval(

@@ -84,6 +84,7 @@ public class PaymentProcessor {
             inTransaction(() -> recordCancellation(paymentId, null));
             return;
         }
+        // 환불은 비가역이라 승인의 고아 청구처럼 역보상할 수 없다.
         String pgCancelTransactionId = paymentGateway.cancel(pgTransactionId, refundIdempotencyKey(pgTransactionId));
         inTransaction(() -> recordCancellation(paymentId, pgCancelTransactionId));
     }
@@ -160,7 +161,7 @@ public class PaymentProcessor {
         return PaymentInfo.from(payment);
     }
 
-    /** 환불 멱등 키를 원거래 식별자에서 결정론적으로 파생한다. */
+    /** 환불 멱등 키를 원거래 ID에서 결정론적으로 파생한다. */
     private static String refundIdempotencyKey(String pgTransactionId) {
         // 시간·UUID·카운터를 섞으면 재시도가 다른 키를 내 이중 환불 창이 다시 열리므로 순수 함수로 유지한다.
         return "CANCEL:" + pgTransactionId;
