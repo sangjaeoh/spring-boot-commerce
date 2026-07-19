@@ -24,8 +24,7 @@ public class IssuedCouponModifier {
     }
 
     /**
-     * 발급분을 사용 처리한다. 본인({@code memberId}) 소유가 아니면 미존재로 취급해 거부한다. 동시 사용은
-     * 낙관락으로 직렬화된다.
+     * 발급분을 사용 처리한다. 본인({@code memberId}) 소유가 아니면 미존재로 취급해 거부한다.
      *
      * @throws IssuedCouponNotFoundException 발급분이 없거나 본인 소유가 아니면
      * @throws CouponStatusException 이미 사용된 발급분이면
@@ -53,12 +52,14 @@ public class IssuedCouponModifier {
         find(issuedCouponId).revoke(reason, clock.instant());
     }
 
+    /** 발급분을 찾고 없으면 거부한다. */
     private IssuedCoupon find(UUID issuedCouponId) {
         return issuedCouponRepository
                 .findById(issuedCouponId)
                 .orElseThrow(() -> new IssuedCouponNotFoundException(CouponErrorCode.ISSUED_COUPON_NOT_FOUND));
     }
 
+    /** 본인 소유 발급분을 찾고 없으면 거부한다. */
     private IssuedCoupon findOwned(UUID issuedCouponId, UUID memberId) {
         return issuedCouponRepository
                 .findByIdAndMemberId(issuedCouponId, memberId)

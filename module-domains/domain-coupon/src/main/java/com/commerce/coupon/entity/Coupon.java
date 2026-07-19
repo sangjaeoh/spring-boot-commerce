@@ -19,43 +19,46 @@ import java.time.Instant;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
-/**
- * 쿠폰 정책 애그리거트 루트다. 최초 상태는 {@code ACTIVE}다.
- *
- * <p>발급 후 정책이 {@code DISABLED}가 돼도 이미 발급된 쿠폰은 계속 사용할 수 있다(신규 발급만 막는다).
- * 발급 한도({@code maxIssuance})는 선택이며, 소진 카운트({@code issuedCount})는 경합 안전을 위해
- * 리포지토리의 원자적 조건부 UPDATE로만 증가한다.
- */
+/** 쿠폰 정책 애그리거트 루트다. */
 @Entity
 @Table(schema = "coupon", name = "coupon")
 public class Coupon extends BaseTimeEntity<UUID> {
 
+    /** 쿠폰 식별자. 생성 시각 순서를 담은 UUIDv7. */
     @Id
     private UUID id;
 
+    /** 쿠폰명. */
     @Column(name = "name")
     private String name;
 
+    /** 할인 정책. */
     @Embedded
     private Discount discount;
 
+    /** 최소 주문 금액. 할인 전 주문 금액 기준이고 0일 수 있다. */
     @Convert(converter = MoneyConverter.class)
     @Column(name = "min_order_amount")
     private Money minOrderAmount;
 
+    /** 발급 가능 기간. */
     @Embedded
     private ValidityPeriod validity;
 
+    /** 발급분 사용 창(일). 발급 시각에 더해 발급분 사용 기한이 된다. 1 이상. */
     @Column(name = "usage_valid_days")
     private int usageValidDays;
 
+    /** 총 발급 한도. 없으면 무제한이고, 있으면 1 이상. */
     @Column(name = "max_issuance")
     @Nullable
     private Integer maxIssuance;
 
+    /** 발급 소진 카운트. 발급 한도와 비교하는 누적 발급 수. */
     @Column(name = "issued_count")
     private int issuedCount;
 
+    /** 발급 가능 상태. */
     @Enumerated(EnumType.STRING)
     @Column(name = "status")
     private CouponStatus status;
@@ -141,10 +144,12 @@ public class Coupon extends BaseTimeEntity<UUID> {
         }
     }
 
+    /** 발급 한도가 설정돼 있는지 본다. */
     public boolean hasIssuanceLimit() {
         return maxIssuance != null;
     }
 
+    /** 주문 금액이 최소 주문 금액을 충족하는지 본다. */
     public boolean isMinOrderAmountMet(Money orderAmount) {
         return orderAmount.isGreaterThanOrEqualTo(minOrderAmount);
     }
