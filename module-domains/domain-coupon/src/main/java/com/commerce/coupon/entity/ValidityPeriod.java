@@ -7,7 +7,7 @@ import jakarta.persistence.Embeddable;
 import java.time.Instant;
 
 /**
- * 쿠폰의 발급 가능 기간 값 객체다. 다중 컬럼으로 매핑한다.
+ * 쿠폰의 발급 가능 기간 값 객체다.
  *
  * <p>발급 창이지 발급분 사용 만료가 아니다(사용 만료는 발급분 expiresAt).
  */
