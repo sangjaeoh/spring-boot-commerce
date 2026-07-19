@@ -66,7 +66,7 @@ public class ProductVariantModifier {
         find(variantId).changePrice(newPrice);
     }
 
-    /** 변형을 찾는다. */
+    /** 변형을 찾고 없으면 거부한다. */
     private ProductVariant find(UUID variantId) {
         return variantRepository
                 .findById(variantId)

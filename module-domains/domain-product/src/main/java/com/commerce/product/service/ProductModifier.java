@@ -62,7 +62,7 @@ public class ProductModifier {
         find(productId).changeDescription(newDescription);
     }
 
-    /** 논리삭제되지 않은 상품을 찾는다. */
+    /** 활성 상품을 찾고 없으면 거부한다. */
     private Product find(UUID productId) {
         return productRepository
                 .findByIdAndDeletedAtIsNull(productId)

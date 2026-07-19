@@ -12,8 +12,8 @@ import org.jspecify.annotations.Nullable;
 /**
  * 변형 옵션을 평탄화한 값 객체다.
  *
- * @param signature 옵션명 기준 정렬·케이스 폴딩해 대조에 쓰는 정규화 키. 옵션이 없으면 {@code ""}
- * @param label 값을 입력 순서·대소문자 그대로 조인해 화면에 쓰는 표시 라벨. 옵션이 없으면 {@code null}
+ * @param signature 정규 옵션 시그니처. 옵션이 없으면 {@code ""}
+ * @param label 표시 라벨. 옵션이 없으면 {@code null}
  */
 public record NormalizedOptions(String signature, @Nullable String label) {
 
