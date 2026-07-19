@@ -56,6 +56,7 @@ public class MemberAppender {
         return append(email, name, rawPassword, MemberRole.ADMIN);
     }
 
+    /** 이메일·패스워드를 검증하고 주어진 역할로 회원을 저장한다. */
     private UUID append(String email, String name, String rawPassword, MemberRole role) {
         Email emailValue = Email.of(email);
         validatePassword(rawPassword);
@@ -72,6 +73,7 @@ public class MemberAppender {
         }
     }
 
+    /** 패스워드가 길이 정책을 벗어나면 거부한다. */
     private static void validatePassword(String rawPassword) {
         if (rawPassword.length() < MIN_PASSWORD_LENGTH
                 || rawPassword.getBytes(StandardCharsets.UTF_8).length > MAX_PASSWORD_BYTES) {

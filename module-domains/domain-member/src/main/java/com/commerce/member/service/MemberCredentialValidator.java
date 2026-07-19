@@ -38,11 +38,7 @@ public class MemberCredentialValidator {
     }
 
     /**
-     * 이메일+패스워드 자격증명을 검증하고 검증된 회원을 반환한다. 정지 회원은 통과한다 — 차단은 담기·체크아웃
-     * 자격 게이트가 담당한다.
-     *
-     * <p>미존재·탈퇴 이메일에서도 고정 더미 해시로 bcrypt를 한 번 태워, 응답 시간 차로 계정 존재를 유추하지
-     * 못하게 한다.
+     * 이메일+패스워드 자격증명을 검증하고 검증된 회원을 반환한다. 정지 회원도 통과한다.
      *
      * @throws InvalidCredentialsException 미존재·탈퇴·패스워드 불일치 — 원인을 구분하지 않는다(계정 존재 노출 방지)
      */
@@ -61,8 +57,9 @@ public class MemberCredentialValidator {
         throw new InvalidCredentialsException(MemberErrorCode.INVALID_CREDENTIALS);
     }
 
-    // 형식이 어긋난 이메일은 어떤 계정에도 속하지 않으므로 형식 오류(400)가 아니라 동일 거부(401)로 응답한다.
+    /** 이메일을 파싱하고 형식 오류를 자격증명 거부로 바꾼다. */
     private static Email parseEmail(String email) {
+        // 형식이 어긋난 이메일은 어떤 계정에도 속하지 않으므로 형식 오류(400)가 아니라 동일 거부(401)로 응답한다.
         try {
             return Email.of(email);
         } catch (InvalidEmailException e) {
