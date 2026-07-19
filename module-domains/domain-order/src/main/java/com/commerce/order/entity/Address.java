@@ -4,7 +4,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
 import org.jspecify.annotations.Nullable;
 
-/** 배송지 값 객체다. 주문 시점 값을 스냅샷으로 보관하며 다중 컬럼으로 매핑한다. */
+/** 배송지 값 객체다. */
 @Embeddable
 public record Address(
         @Column(name = "recipient_name") String recipientName,

@@ -15,7 +15,7 @@ import org.jspecify.annotations.Nullable;
 /**
  * 할인 정책 값 객체다. 판별 형 정액({@code FIXED})·정률({@code RATE})을 단일 임베더블로 평탄화한다.
  *
- * <p>형별 nullable 값 컬럼과 형 판별 컬럼으로 매핑하며, 불법 조합은 생성 시 배제한다.
+ * <p>불법 조합은 생성 시 배제한다.
  *
  * @param type 판별 형
  * @param amount 정액 할인액({@code FIXED}에서만 존재, 1 이상)
