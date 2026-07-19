@@ -31,7 +31,6 @@ public record ValidityPeriod(
         return new ValidityPeriod(validFrom, validUntil);
     }
 
-    /** 주어진 시각이 발급 가능 기간 내인지 판정한다. */
     public boolean isValidAt(Instant now) {
         return !now.isBefore(validFrom) && !now.isAfter(validUntil);
     }

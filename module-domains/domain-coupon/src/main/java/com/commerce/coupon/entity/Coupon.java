@@ -141,12 +141,10 @@ public class Coupon extends BaseTimeEntity<UUID> {
         }
     }
 
-    /** 발급 한도가 걸려 있는지 판정한다. */
     public boolean hasIssuanceLimit() {
         return maxIssuance != null;
     }
 
-    /** 주문 금액이 최소 주문 금액 이상인지 판정한다. */
     public boolean isMinOrderAmountMet(Money orderAmount) {
         return orderAmount.isGreaterThanOrEqualTo(minOrderAmount);
     }
