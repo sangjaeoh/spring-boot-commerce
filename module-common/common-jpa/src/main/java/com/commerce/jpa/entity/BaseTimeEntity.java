@@ -16,8 +16,6 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
  * <p>{@link Persistable}을 구현해 수동 UUIDv7 PK가 유발하는 merge penalty를 막는다 —
  * {@code createdAt == null}이면 신규로 판정해 {@code persist()}로 직행한다. 식별자 기반
  * 동등성이라 {@code orphanRemoval} Set·LAZY 프록시·detached 비교에서 안전하다.
- *
- * @param <ID> 식별자 타입
  */
 @MappedSuperclass
 @EntityListeners(AuditingEntityListener.class)

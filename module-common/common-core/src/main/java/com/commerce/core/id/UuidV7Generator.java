@@ -19,7 +19,6 @@ public final class UuidV7Generator {
 
     private UuidV7Generator() {}
 
-    /** 새 UUIDv7 값을 반환한다. */
     public static UUID generate() {
         long millis = System.currentTimeMillis() & MILLIS_MASK;
         long randA = RANDOM.nextInt(0x1000);

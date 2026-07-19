@@ -54,7 +54,7 @@ public class PendingOrderSweepFacade {
 
     private static final Logger log = LoggerFactory.getLogger(PendingOrderSweepFacade.class);
 
-    /** 라인 재고 복원의 낙관락 충돌 재시도 상한(첫 시도 포함) — 일시 경합만 흡수한다. */
+    // 라인 재고 복원의 낙관락 충돌 재시도 상한(첫 시도 포함) — 일시 경합만 흡수한다.
     private static final int RESTORE_MAX_ATTEMPTS = 3;
 
     private final OrderReader orderReader;
