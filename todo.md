@@ -44,7 +44,7 @@
 ## 슬라이스
 
 ### 1. app-api 완료 파사드의 잔여 주석 정리
-- 상태: 대기
+- 상태: 완료
 - 목표: 이미 타입 doc을 정리한 파사드 6개에 남은 라인 주석·private doc의 규칙 발산을 걷어낸다.
 - 스캔 대상: `CheckoutFacade`·`PendingOrderSweepFacade`·`PaymentConfirmationFacade`·`OrderCancellationFacade`·`OrderRefundFacade`·`OrderPaymentFacade`.
 - 관측된 발산(포함하되 여기서 멈추지 말 것):
