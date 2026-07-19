@@ -10,18 +10,13 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-/**
- * 설정으로 주입된 관리자 계정을 기동 시 시딩한다.
- *
- * <p>관리자 계정 관리 API를 두지 않는 대신(REQUIREMENTS.md 범위) 자격증명을 설정(환경변수
- * {@code AUTH_ADMIN_EMAIL}·{@code AUTH_ADMIN_PASSWORD}·{@code AUTH_ADMIN_NAME})으로 받아 없으면 생성한다.
- * 같은 이메일의 활성 회원이 이미 있으면 건너뛰고(재기동 멱등), 설정이 없으면 시딩하지 않는다.
- */
+/** 관리자 계정 기동 시딩을 배선하는 설정이다. */
 @Configuration
 public class AdminSeedConfig {
 
     private static final Logger log = LoggerFactory.getLogger(AdminSeedConfig.class);
 
+    /** 설정으로 주입된 자격증명의 관리자를 기동 시 만드는 러너를 공급한다. 재기동에 멱등하다. */
     @Bean
     @ConditionalOnProperty(
             prefix = "auth.admin",

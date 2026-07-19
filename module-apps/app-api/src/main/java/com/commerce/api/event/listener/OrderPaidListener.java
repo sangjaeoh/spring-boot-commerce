@@ -10,13 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
-/**
- * {@link OrderPaid}를 커밋 후 소비해 주문된 변형 라인을 장바구니에서 비운다.
- *
- * <p>커밋 후 실행이라 결제 완료 커밋을 되돌리지 않는다. 장바구니 비우기는 정합성 비필수(유실돼도 무해)라
- * 소비 실패를 삼키고 로그만 남긴다. {@code removeItems}는 구조적으로 멱등이다. 제거가 동시 재담기와
- * 라인 낙관락({@code CartItem.@Version})으로 충돌해 건너뛰어질 수 있으나 같은 무해 범주다(사용자 재제거 가능).
- */
+/** {@link OrderPaid}를 소비해 주문된 변형 라인을 장바구니에서 비우는 리스너다. */
 @Component
 public class OrderPaidListener {
 
@@ -28,18 +22,16 @@ public class OrderPaidListener {
         this.cartModifier = cartModifier;
     }
 
-    /**
-     * 결제 완료 커밋 후 주문된 변형 라인을 장바구니에서 제거한다.
-     *
-     * <p>커밋 후 단계에는 방금 커밋된 트랜잭션의 동기화가 아직 살아 있어, 새 트랜잭션 없이 도메인 쓰기를
-     * 하면 재커밋되지 않고 유실된다. 그래서 {@code REQUIRES_NEW}로 별도 트랜잭션을 연다.
-     */
+    /** 결제 완료 커밋 후 주문된 변형 라인을 장바구니에서 제거한다. */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    // 커밋 후 단계에는 방금 커밋된 트랜잭션의 동기화가 아직 살아 있어, 새 트랜잭션 없이 도메인 쓰기를 하면
+    // 재커밋되지 않고 유실된다. REQUIRES_NEW로 별도 트랜잭션을 연다.
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void on(OrderPaid event) {
         try {
             cartModifier.removeItems(event.memberId(), event.orderedVariantIds());
         } catch (RuntimeException e) {
+            // 장바구니 비우기는 정합성 비필수라 소비 실패를 삼키고 로그만 남긴다.
             log.warn("OrderPaid 소비 실패 — 장바구니 비우기 건너뜀: orderId={}", event.orderId(), e);
         }
     }
