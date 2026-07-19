@@ -91,7 +91,7 @@
 - 범위: 중.
 
 ### 7. domain-member
-- 상태: 대기
+- 상태: 완료
 - 스캔 대상: `module-domains/domain-member/src/main/java` 전체(22파일, 엔티티 1·enum 5). `Email` VO·`EmailConverter` 포함.
 - 완료 기준: 공통.
 - 범위: 중.
@@ -108,6 +108,14 @@
 - 스캔 대상: `module-domains/domain-coupon/src/main/java` 전체(27파일, 엔티티 4·enum 4). `Discount`·`ValidityPeriod` VO 포함.
 - 완료 기준: 공통.
 - 범위: 중.
+
+### 11. 소프트삭제 용어 전역 정합 (슬라이스 7에서 발견)
+- 상태: 대기
+- 목표: `soft delete`의 한국어 표기를 하나로 모은다.
+- 발견: `DOMAIN_MODEL.md` 용어집은 `soft delete → 소프트삭제`로 등재하는데, 자바 소스는 `논리삭제`만 쓰고 `소프트삭제`는 0회다(domain-member 4곳·domain-product 3곳·app-api 4곳). `DOMAIN_MODEL.md:135` 자체가 한 줄에서 두 표기를 섞어 쓴다.
+- 이 마이그레이션의 슬라이스로 처리하지 않은 이유: 슬라이스 3·7이 이미 머지됐고 8이 같은 용어를 건드리므로, 모듈 단위로 고치면 중간 상태가 더 갈린다. 용어를 먼저 확정하고 한 번에 sweep한다.
+- 선행 결정 필요: 등재어를 `소프트삭제`로 두고 코드를 맞출지, `논리삭제`로 용어집을 고칠지. 코드 11곳 대 용어집 1행이라 후자가 변경이 작지만, `docs/`는 `소프트삭제`를 쓴다.
+- 범위: 소.
 
 ### 10. common 모듈 + app-migration
 - 상태: 대기
