@@ -8,11 +8,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import org.jspecify.annotations.Nullable;
 
-/**
- * 주문 결제 응답이다. 승인·환불 거래 ID와 시각을 각각 싣는다.
- *
- * <p>전액 할인(0원) 결제는 PG를 생략하므로 수단·승인 거래 ID가 비어 있을 수 있다.
- */
+/** 전액 할인(0원) 결제는 PG를 생략하므로 수단·승인 거래 ID가 비어 있을 수 있다. */
 @Schema(description = "주문 결제 응답")
 public record PaymentResponse(
         @Schema(description = "결제 상태") PaymentStatus status,

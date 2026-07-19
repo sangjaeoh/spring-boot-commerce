@@ -33,15 +33,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * 주문 이행 전이·반품 환불·상태별 목록 조회의 관리자 엔드포인트다.
- *
- * <p>전부 관리자 표면이라 관리자 토큰만 허용한다({@link Admin} — 미인증 401·비관리자 403). 크로스 도메인
- * 쓰기인 반품 환불은 파사드에, 단일 도메인 쓰기인 이행 전이는 주문 도메인 Modifier에, 상태별 목록 조회는 주문 도메인
- * Reader에 얇게 위임해 결과를 응답 DTO로 변환한다. 본인용 표면(체크아웃·취소·조회)은
- * {@link com.commerce.api.web.v1.order.OrderController}가 소유한다. 정책 거부·전이 위반·미존재는 도메인/파사드가
- * 던지는 예외를 전역 핸들러가 problem+json으로 매핑한다.
- */
+/** 주문 이행 전이·반품 환불·상태별 목록 조회의 관리자 엔드포인트다. */
 @Tag(name = "주문 관리", description = "이행 전이·반품 환불·상태별 목록 조회")
 @Admin
 @RestController
@@ -59,7 +51,6 @@ public class OrderAdminController {
         this.orderReader = orderReader;
     }
 
-    /** 배송 완료 주문을 전체 반품 환불하고 재고·쿠폰을 복원한다. */
     @Operation(summary = "반품 환불", description = "배송 완료 주문을 전체 반품 환불하고 재고·쿠폰을 복원한다.")
     @ApiResponses({
         @ApiResponse(responseCode = "204", description = "반품 환불·복원 완료"),
@@ -92,7 +83,6 @@ public class OrderAdminController {
         orderRefundFacade.refund(orderId, request.reason());
     }
 
-    /** 결제 완료 주문을 택배사·운송장 번호와 함께 출고 처리한다. */
     @Operation(summary = "출고 처리", description = "결제 완료 주문을 택배사·운송장 번호와 함께 출고 처리한다.")
     @ApiResponses({
         @ApiResponse(responseCode = "204", description = "출고 처리 완료"),
@@ -125,7 +115,6 @@ public class OrderAdminController {
         orderModifier.ship(orderId, request.carrier(), request.trackingNumber());
     }
 
-    /** 출고된 주문을 배송 완료 처리한다. */
     @Operation(summary = "배송 완료 처리", description = "출고된 주문을 배송 완료 처리한다.")
     @ApiResponses({
         @ApiResponse(responseCode = "204", description = "배송 완료 처리 완료"),
@@ -152,7 +141,6 @@ public class OrderAdminController {
         orderModifier.confirmDelivery(orderId);
     }
 
-    /** 준비 중인 주문의 이행을 보류한다. */
     @Operation(summary = "이행 보류", description = "준비 중인 주문의 이행을 보류한다.")
     @ApiResponses({
         @ApiResponse(responseCode = "204", description = "이행 보류 완료"),
@@ -185,7 +173,6 @@ public class OrderAdminController {
         orderModifier.holdFulfillment(orderId, request.reason());
     }
 
-    /** 보류된 주문의 이행을 준비 중으로 되돌린다. */
     @Operation(summary = "이행 보류 해제", description = "보류된 주문의 이행을 준비 중으로 되돌린다.")
     @ApiResponses({
         @ApiResponse(responseCode = "204", description = "이행 보류 해제 완료"),
@@ -212,7 +199,6 @@ public class OrderAdminController {
         orderModifier.releaseFulfillment(orderId);
     }
 
-    /** 결제·이행 축 상태로 주문 목록을 최신순 페이지로 조회한다(출고·환불 대상 발견). */
     @Operation(summary = "상태별 주문 목록 조회", description = "결제·이행 축 상태로 주문 목록을 최신순 페이지로 조회한다(출고·환불 대상 발견).")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "주문 목록 페이지"),

@@ -85,7 +85,7 @@ public class ProductRegistrationFacade {
         return variantId;
     }
 
-    /** 중단된 시딩의 남은 단계를 이어간다 — 재고가 없으면 만들고 변형을 활성화한다. */
+    /** 중단된 시딩의 남은 단계를 이어간다. */
     private UUID resumeSeeding(UUID variantId, int initialQuantity) {
         if (!stockReader.existsByVariantId(variantId)) {
             stockAppender.create(variantId, initialQuantity);

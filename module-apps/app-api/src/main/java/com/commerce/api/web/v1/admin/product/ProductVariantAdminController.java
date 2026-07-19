@@ -25,9 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 상품 변형 관리(가격 변경·활성/비활성/은퇴) 엔드포인트다.
  *
- * <p>전부 관리자 표면이라 관리자 토큰만 허용한다({@link Admin} — 미인증 401·비관리자 403). 단일 도메인
- * 쓰기라 파사드 없이 상품 도메인 Modifier에 얇게 위임하고, 미존재·허용되지 않은 전이·RETIRED 변경 거부는
- * 도메인이 던지는 예외를 전역 핸들러가 problem+json으로 매핑한다. 가격 변경은 기존 주문 스냅샷에 영향을 주지 않는다.
+ * <p>가격 변경은 기존 주문 스냅샷에 영향을 주지 않는다.
  */
 @Tag(name = "상품 변형 관리", description = "변형 가격 변경·판매 제공/중단·은퇴")
 @Admin
@@ -41,7 +39,6 @@ public class ProductVariantAdminController {
         this.variantModifier = variantModifier;
     }
 
-    /** 변형 판매가를 바꾼다. */
     @Operation(summary = "변형 가격 변경", description = "변형 판매가를 바꾼다.")
     @ApiResponses({
         @ApiResponse(responseCode = "204", description = "변경됨"),
@@ -74,7 +71,6 @@ public class ProductVariantAdminController {
         variantModifier.changePrice(variantId, Money.of(request.price()));
     }
 
-    /** 변형을 판매 제공한다. */
     @Operation(summary = "변형 판매 제공", description = "변형을 판매 제공한다.")
     @ApiResponses({
         @ApiResponse(responseCode = "204", description = "판매 제공됨"),
@@ -101,7 +97,6 @@ public class ProductVariantAdminController {
         variantModifier.enable(variantId);
     }
 
-    /** 변형 판매 제공을 중단한다. */
     @Operation(summary = "변형 판매 중단", description = "변형 판매 제공을 중단한다.")
     @ApiResponses({
         @ApiResponse(responseCode = "204", description = "중단됨"),
@@ -128,7 +123,6 @@ public class ProductVariantAdminController {
         variantModifier.disable(variantId);
     }
 
-    /** 변형을 은퇴시킨다. */
     @Operation(summary = "변형 은퇴", description = "변형을 은퇴시킨다.")
     @ApiResponses({
         @ApiResponse(responseCode = "204", description = "은퇴됨"),

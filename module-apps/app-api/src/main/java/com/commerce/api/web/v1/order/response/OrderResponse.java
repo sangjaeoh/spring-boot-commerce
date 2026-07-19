@@ -13,7 +13,6 @@ import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
-/** 주문 상세 응답이다. 결제·이행 축 상태와 이력 시각·사유·운송장 기록을 싣는다. */
 @Schema(description = "주문 상세 응답. 결제·이행 축 상태와 이력 시각·사유·운송장 기록을 싣는다.")
 public record OrderResponse(
         @Schema(description = "주문 ID") UUID id,

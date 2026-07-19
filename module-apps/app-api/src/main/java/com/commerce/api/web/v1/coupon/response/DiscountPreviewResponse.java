@@ -4,7 +4,7 @@ import com.commerce.coupon.info.DiscountPreviewInfo;
 import io.swagger.v3.oas.annotations.media.Schema;
 import org.jspecify.annotations.Nullable;
 
-/** 발급 쿠폰 할인 미리보기 응답이다. 적용 불가는 오류가 아니라 사유와 0원으로 싣는다. */
+/** 적용 불가는 오류가 아니라 사유와 0원으로 싣는다. */
 @Schema(description = "발급 쿠폰 할인 미리보기 응답")
 public record DiscountPreviewResponse(
         @Schema(description = "적용 가능 여부") boolean applicable,

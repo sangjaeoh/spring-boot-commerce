@@ -39,11 +39,7 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 상품 등록·추가 변형 등록·관리(노출·숨김·편집·논리삭제)·숨김 포함 목록 조회의 관리자 엔드포인트다.
  *
- * <p>전부 관리자 표면이라 관리자 토큰만 허용한다({@link Admin} — 미인증 401·비관리자 403). 등록·추가 변형
- * 등록은 상품 등록 파사드에 얇게 위임한다(변형·초기 재고를 순차 시딩). 공개 목록·상세 조회는
- * {@link com.commerce.api.web.v1.product.ProductController}가 소유한다. 관리는 단일 도메인 쓰기라 파사드 없이
- * 상품 도메인 Modifier·Remover에 얇게 위임하고, 미존재·허용되지 않은 전이는 도메인이 던지는 예외를 전역 핸들러가
- * problem+json으로 매핑한다. 편집은 기존 주문 스냅샷에 영향을 주지 않고, 논리삭제는 변형을 연쇄 삭제하지 않는다.
+ * <p>편집은 기존 주문 스냅샷에 영향을 주지 않고, 논리삭제는 변형을 연쇄 삭제하지 않는다.
  */
 @Tag(name = "상품 관리", description = "상품 등록·관리·숨김 포함 목록 조회")
 @Admin
@@ -67,7 +63,6 @@ public class ProductAdminController {
         this.productRemover = productRemover;
     }
 
-    /** 상품·첫 변형·초기 재고를 시딩하고 등록된 상품 ID를 반환한다. */
     @Operation(summary = "상품 등록", description = "상품·첫 변형·초기 재고를 시딩하고 등록된 상품 ID를 반환한다.")
     @ApiResponses({
         @ApiResponse(responseCode = "201", description = "상품 등록됨"),
@@ -96,7 +91,6 @@ public class ProductAdminController {
         return ProductRegistrationResponse.from(productId);
     }
 
-    /** 기존 상품에 변형·재고를 시딩하고 등록된 변형 ID를 반환한다. */
     @Operation(summary = "추가 변형 등록", description = "기존 상품에 변형·재고를 시딩하고 등록된 변형 ID를 반환한다.")
     @ApiResponses({
         @ApiResponse(responseCode = "201", description = "변형 등록됨"),
@@ -131,7 +125,6 @@ public class ProductAdminController {
         return VariantRegistrationResponse.from(variantId);
     }
 
-    /** 미삭제 상품 목록을 숨김 포함 최신 등록순 페이지로 조회한다(관리 대상 발견). */
     @Operation(summary = "관리자 상품 목록 조회", description = "미삭제 상품 목록을 숨김 포함 최신 등록순 페이지로 조회한다.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "조회됨"),
@@ -154,7 +147,6 @@ public class ProductAdminController {
                 productReader.getPage(PageRequest.of(pagination.zeroBasedPage(), pagination.size())));
     }
 
-    /** 상품을 노출한다. */
     @Operation(summary = "상품 노출", description = "상품을 노출한다.")
     @ApiResponses({
         @ApiResponse(responseCode = "204", description = "노출됨"),
@@ -181,7 +173,6 @@ public class ProductAdminController {
         productModifier.show(productId);
     }
 
-    /** 상품을 숨긴다. */
     @Operation(summary = "상품 숨김", description = "상품을 숨긴다.")
     @ApiResponses({
         @ApiResponse(responseCode = "204", description = "숨겨짐"),
@@ -208,7 +199,6 @@ public class ProductAdminController {
         productModifier.hide(productId);
     }
 
-    /** 상품명·상세 설명을 바꾼다. */
     @Operation(summary = "상품 편집", description = "상품명·상세 설명을 바꾼다.")
     @ApiResponses({
         @ApiResponse(responseCode = "204", description = "편집됨"),
@@ -238,7 +228,6 @@ public class ProductAdminController {
         productModifier.changeDescription(productId, request.description());
     }
 
-    /** 상품을 논리삭제한다. */
     @Operation(summary = "상품 논리삭제", description = "상품을 논리삭제한다.")
     @ApiResponses({
         @ApiResponse(responseCode = "204", description = "논리삭제됨"),

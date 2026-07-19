@@ -24,9 +24,8 @@ import org.springframework.web.bind.annotation.RestController;
  * 쿠폰 발급(셀프 클레임) 엔드포인트다.
  *
  * <p>발급은 본인용 셀프서비스라 대상 회원을 토큰 주체({@link AuthUser})에서 도출해 발급 파사드에 위임하고
- * 회원 자격 게이트를 적용한다(미인증은 401). 정책 생성·목록 조회·발급분 조회·전환(중지·재개)의 관리자 표면은
- * {@link com.commerce.api.web.v1.admin.coupon.CouponAdminController}가 소유한다. 크로스 도메인 정책 거부·도메인
- * 불변식 위반은 도메인/파사드가 던지는 예외를 전역 핸들러가 problem+json으로 매핑한다.
+ * 회원 자격 게이트를 적용한다. 크로스 도메인 정책 거부·도메인 불변식 위반은 도메인/파사드가 던지는 예외를
+ * 전역 핸들러가 problem+json으로 매핑한다.
  */
 @Tag(name = "쿠폰", description = "쿠폰 발급(셀프 클레임)")
 @Authenticated
@@ -40,7 +39,6 @@ public class CouponController {
         this.couponIssuanceFacade = couponIssuanceFacade;
     }
 
-    /** 본인에게 쿠폰을 발급하고 발급분 ID를 반환한다. */
     @Operation(summary = "쿠폰 발급", description = "본인에게 쿠폰을 발급하고 발급분 ID를 반환한다.")
     @ApiResponses({
         @ApiResponse(responseCode = "201", description = "발급됨"),

@@ -35,12 +35,7 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 쿠폰 정책 생성·목록 조회·정책별 발급분 조회·전환(중지·재개)의 관리자 엔드포인트다.
  *
- * <p>전부 관리자 표면이라 관리자 토큰만 허용한다({@link Admin} — 미인증 401·비관리자 403). 생성은 쿠폰
- * 도메인 Appender에 얇게 위임하고(할인 조합·유효 기간·사용 창 불변식은 도메인이 검증), 전환은 단일 도메인
- * 쓰기라 파사드 없이 쿠폰 도메인 Modifier에 얇게 위임하며, 중지는 신규 발급만 막고 기발급분 사용에는 소급하지
- * 않는다. 본인 발급(셀프 클레임)의 본인용 표면은 {@link com.commerce.api.web.v1.coupon.CouponController}가
- * 소유한다. 도메인 불변식 위반·미존재·허용되지 않은 전이는 도메인이 던지는 예외를 전역 핸들러가
- * problem+json으로 매핑한다.
+ * <p>중지는 신규 발급만 막고 기발급분 사용에는 소급하지 않는다.
  */
 @Tag(name = "쿠폰 관리", description = "쿠폰 정책 생성·목록 조회·발급분 조회·전환")
 @Admin
@@ -64,7 +59,6 @@ public class CouponAdminController {
         this.issuedCouponReader = issuedCouponReader;
     }
 
-    /** 쿠폰 정책을 발급 가능 상태로 생성하고 생성된 쿠폰 ID를 반환한다. */
     @Operation(summary = "쿠폰 생성", description = "쿠폰 정책을 발급 가능 상태로 생성하고 생성된 쿠폰 ID를 반환한다.")
     @ApiResponses({
         @ApiResponse(responseCode = "201", description = "생성됨"),
@@ -94,7 +88,6 @@ public class CouponAdminController {
         return CouponCreationResponse.from(couponId);
     }
 
-    /** 쿠폰 정책 목록을 최신 등록순 페이지로 조회한다. */
     @Operation(summary = "쿠폰 목록 조회", description = "쿠폰 정책 목록을 최신 등록순 페이지로 조회한다.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "조회됨"),
@@ -117,7 +110,6 @@ public class CouponAdminController {
                 couponReader.getCoupons(PageRequest.of(pagination.zeroBasedPage(), pagination.size())));
     }
 
-    /** 정책의 발급분 목록을 최신순 페이지로 조회한다(무효화 대상 발급분 발견). */
     @Operation(summary = "정책별 발급분 조회", description = "정책의 발급분 목록을 최신순 페이지로 조회한다.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "조회됨"),
@@ -142,7 +134,6 @@ public class CouponAdminController {
                 couponId, PageRequest.of(pagination.zeroBasedPage(), pagination.size())));
     }
 
-    /** 쿠폰 정책의 신규 발급을 중지한다. 기발급분 사용에는 소급하지 않는다. */
     @Operation(summary = "발급 중지", description = "쿠폰 정책의 신규 발급을 중지한다. 기발급분 사용에는 소급하지 않는다.")
     @ApiResponses({
         @ApiResponse(responseCode = "204", description = "중지됨"),
@@ -169,7 +160,6 @@ public class CouponAdminController {
         couponModifier.disable(couponId);
     }
 
-    /** 쿠폰 정책의 신규 발급을 재개한다. */
     @Operation(summary = "발급 재개", description = "쿠폰 정책의 신규 발급을 재개한다.")
     @ApiResponses({
         @ApiResponse(responseCode = "204", description = "재개됨"),

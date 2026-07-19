@@ -5,7 +5,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
-/** 주문 라인 응답이다. 단가·옵션은 주문 시점 스냅샷이다. */
 @Schema(description = "주문 라인 응답. 단가·옵션은 주문 시점 스냅샷이다.")
 public record OrderLineResponse(
         @Schema(description = "변형(SKU) ID") UUID variantId,

@@ -6,7 +6,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 import org.springframework.data.domain.Page;
 
-/** 본인 주문 목록 페이지 응답이다. */
 @Schema(description = "본인 주문 목록 페이지 응답")
 public record OrderPageResponse(
         @Schema(description = "현재 페이지 주문 목록") List<OrderResponse> orders,

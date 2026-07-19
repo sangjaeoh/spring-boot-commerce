@@ -24,11 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
  * 로그인·토큰 발급 엔드포인트다.
  *
  * <p>자격증명 검증은 회원 도메인에 위임하고 검증된 주체(회원 ID)·역할로 JWT 액세스 토큰을 발급한다. 검증
- * 실패(미존재·탈퇴·패스워드 불일치)는 도메인이 던지는 예외를 전역 핸들러가 401 problem+json으로 매핑한다. 이 표면은
- * 익명 전용({@link Anonymous})이라 이미 인증된 주체의 재로그인 요청은 403으로 거부된다.
- * 발급된 토큰의 엔드포인트 강제는 Spring Security 필터 체인이 담당한다 — 인증 필터가 토큰을 검증해 시큐리티
- * 컨텍스트에 주체를 싣고, 어드민 URL은 {@code hasRole('ADMIN')}로, 나머지는 인증으로 강제한다
- * (REQUIREMENTS.md 인증).
+ * 실패(미존재·탈퇴·패스워드 불일치)는 도메인이 던지는 예외를 전역 핸들러가 401 problem+json으로 매핑한다.
  */
 @Tag(name = "인증", description = "로그인·토큰 발급")
 @Anonymous
@@ -44,7 +40,6 @@ public class AuthController {
         this.jwtTokenCodec = jwtTokenCodec;
     }
 
-    /** 이메일+패스워드를 검증하고 JWT 액세스 토큰을 발급한다. */
     @Operation(summary = "로그인", description = "이메일·비밀번호로 인증하고 액세스 토큰을 발급한다.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "인증됨"),

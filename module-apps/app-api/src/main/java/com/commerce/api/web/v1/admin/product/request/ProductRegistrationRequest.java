@@ -11,12 +11,7 @@ import jakarta.validation.constraints.Size;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
 
-/**
- * 상품 등록(첫 변형·초기 재고 시딩 포함) 요청이다.
- *
- * <p>가격은 1원 이상, 초기 수량은 0 이상이다. 옵션 목록은 비어 있을 수 있고(옵션 없는 단일 변형),
- * 비어 있지 않으면 각 옵션의 이름·값이 필수다.
- */
+/** 옵션 목록은 비어 있을 수 있다(옵션 없는 단일 변형). */
 @Schema(description = "상품 등록 요청(첫 변형·초기 재고 시딩 포함)")
 public record ProductRegistrationRequest(
         @Schema(description = "상품명") @NotBlank String name,

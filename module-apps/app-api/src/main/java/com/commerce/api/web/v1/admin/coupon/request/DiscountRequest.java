@@ -9,10 +9,9 @@ import jakarta.validation.constraints.Positive;
 import org.jspecify.annotations.Nullable;
 
 /**
- * 쿠폰 할인 정책 요청이다. 판별 형 정액({@code FIXED})·정률({@code RATE})을 평탄한 nullable 필드로 싣는다.
+ * 판별 형 정액({@code FIXED})·정률({@code RATE})을 평탄한 nullable 필드로 싣는다.
  *
- * <p>형별 조합 검증은 도메인 값 객체가 소유한다. 잘못된 조합은 변환 시 도메인이 거부한다. 정액 할인액과 정률 상한은
- * 존재하면 양수여야 한다.
+ * <p>형별 조합 검증은 도메인 값 객체가 소유한다. 잘못된 조합은 변환 시 도메인이 거부한다.
  */
 @Schema(description = "쿠폰 할인 정책 요청")
 public record DiscountRequest(

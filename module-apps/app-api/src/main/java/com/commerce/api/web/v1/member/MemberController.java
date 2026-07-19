@@ -34,11 +34,10 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 회원 가입·본인 조회·이름 변경·탈퇴 엔드포인트다.
  *
- * <p>가입은 익명 전용(인증된 주체는 403), 본인 조회({@code /me})·이름 변경·탈퇴는 토큰 주체({@link AuthUser})에서 회원을 도출하는
- * 본인용 표면이다(미인증은 401). 회원 지정 조회·이메일 검색·정지·해제의 관리자 표면은
- * {@link com.commerce.api.web.v1.admin.member.MemberAdminController}가 소유한다. 가입·조회는 회원 도메인
- * 서비스에, 탈퇴는 탈퇴 파사드에 위임하고, 이메일 형식 오류·중복·미존재·탈퇴 거부는 도메인/파사드가 던지는 예외를
- * 전역 핸들러가 problem+json으로 매핑한다. 정지와 탈퇴는 독립 축이라 정지 회원도 탈퇴할 수 있다.
+ * <p>본인 조회({@code /me})·이름 변경·탈퇴는 토큰 주체({@link AuthUser})에서 회원을 도출하는 본인용 표면이다.
+ * 가입·조회는 회원 도메인 서비스에, 탈퇴는 탈퇴 파사드에 위임하고, 이메일 형식 오류·중복·미존재·탈퇴 거부는
+ * 도메인/파사드가 던지는 예외를 전역 핸들러가 problem+json으로 매핑한다. 정지와 탈퇴는 독립 축이라 정지 회원도
+ * 탈퇴할 수 있다.
  */
 @Tag(name = "회원", description = "회원 가입·본인 조회·이름 변경·탈퇴")
 @RestController
@@ -61,7 +60,6 @@ public class MemberController {
         this.memberWithdrawalFacade = memberWithdrawalFacade;
     }
 
-    /** 회원을 가입시키고 가입된 회원 ID를 반환한다. */
     @Operation(summary = "회원 가입", description = "회원을 가입시키고 가입된 회원 ID를 반환한다.")
     @ApiResponses({
         @ApiResponse(responseCode = "201", description = "가입됨"),
@@ -86,7 +84,6 @@ public class MemberController {
         return MemberRegistrationResponse.from(memberId);
     }
 
-    /** 본인 회원 상세를 계정 상태·정지 사유와 함께 조회한다. */
     @Operation(summary = "본인 조회", description = "토큰 주체의 회원 상세를 계정 상태·정지 사유와 함께 조회한다.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "조회됨"),
@@ -105,7 +102,6 @@ public class MemberController {
         return MemberResponse.from(memberReader.getMember(authUser.memberId()));
     }
 
-    /** 본인 표시 이름을 바꾼다. 이메일은 불변이다. */
     @Operation(summary = "본인 이름 변경", description = "본인 표시 이름을 바꾼다. 이메일은 불변이다.")
     @ApiResponses({
         @ApiResponse(responseCode = "204", description = "변경됨"),
@@ -129,7 +125,6 @@ public class MemberController {
         memberModifier.rename(authUser.memberId(), request.name());
     }
 
-    /** 본인을 탈퇴(논리삭제) 처리한다. */
     @Operation(summary = "본인 탈퇴", description = "본인을 탈퇴(논리삭제) 처리한다.")
     @ApiResponses({
         @ApiResponse(responseCode = "204", description = "탈퇴됨"),

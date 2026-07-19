@@ -29,9 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 재고 운영(현황 조회·재입고·수동 품절/재개·단종) 엔드포인트다.
  *
- * <p>전부 관리자 표면이라 관리자 토큰만 허용한다({@link Admin}). 재고는 변형당 1행이라 variantId가
- * 자연 키다. 조회는 재고 도메인 Reader에, 단일 도메인 쓰기는 파사드 없이 재고 도메인 Modifier에 얇게 위임하고,
- * 미존재·허용되지 않은 전이·단종 재입고 거부는 도메인이 던지는 예외를 전역 핸들러가 problem+json으로 매핑한다.
+ * <p>재고는 변형당 1행이라 variantId가 자연 키다.
  */
 @Tag(name = "재고 관리", description = "재고 현황 조회·재입고·상태 전이")
 @Admin
@@ -47,7 +45,6 @@ public class StockAdminController {
         this.stockReader = stockReader;
     }
 
-    /** 변형 ID들의 재고 현황을 조회한다. 재고 행이 없는 변형은 결과에 없다. */
     @Operation(summary = "재고 현황 조회", description = "변형 ID들의 재고 현황을 조회한다. 재고 행이 없는 변형은 결과에 없다.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "조회됨"),
@@ -71,7 +68,6 @@ public class StockAdminController {
                 .toList();
     }
 
-    /** 변형의 재고를 재입고한다. */
     @Operation(summary = "재고 재입고", description = "변형의 재고를 재입고한다.")
     @ApiResponses({
         @ApiResponse(responseCode = "204", description = "재입고됨"),
@@ -104,7 +100,6 @@ public class StockAdminController {
         stockModifier.increase(variantId, request.quantity());
     }
 
-    /** 변형의 재고를 수동 품절로 둔다. */
     @Operation(summary = "수동 품절", description = "변형의 재고를 수동 품절로 둔다.")
     @ApiResponses({
         @ApiResponse(responseCode = "204", description = "품절 처리됨"),
@@ -131,7 +126,6 @@ public class StockAdminController {
         stockModifier.markSoldOut(variantId);
     }
 
-    /** 변형의 재고를 판매 가능으로 되돌린다. */
     @Operation(summary = "판매 재개", description = "변형의 재고를 판매 가능으로 되돌린다.")
     @ApiResponses({
         @ApiResponse(responseCode = "204", description = "판매 재개됨"),
@@ -158,7 +152,6 @@ public class StockAdminController {
         stockModifier.markSellable(variantId);
     }
 
-    /** 변형의 재고를 단종한다. */
     @Operation(summary = "재고 단종", description = "변형의 재고를 단종한다.")
     @ApiResponses({
         @ApiResponse(responseCode = "204", description = "단종됨"),

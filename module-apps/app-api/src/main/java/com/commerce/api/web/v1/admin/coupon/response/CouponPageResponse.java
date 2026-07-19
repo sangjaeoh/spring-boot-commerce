@@ -6,7 +6,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 import org.springframework.data.domain.Page;
 
-/** 쿠폰 정책 목록 페이지 응답이다. */
 @Schema(description = "쿠폰 정책 목록 페이지 응답")
 public record CouponPageResponse(
         @Schema(description = "쿠폰 목록") List<CouponResponse> coupons,

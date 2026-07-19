@@ -7,7 +7,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 import org.springframework.data.domain.Page;
 
-/** 정책별 발급 쿠폰 목록 페이지 응답이다. */
 @Schema(description = "정책별 발급 쿠폰 목록 페이지 응답")
 public record IssuedCouponPageResponse(
         @Schema(description = "발급 쿠폰 목록") List<IssuedCouponResponse> issuedCoupons,

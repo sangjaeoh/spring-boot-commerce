@@ -8,7 +8,7 @@ import java.time.Instant;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
-/** 회원 상세 응답이다. 계정 상태와 정지 사유(정지 회원만)를 싣는다. */
+/** 계정 상태와 정지 사유(정지 회원만)를 싣는다. */
 @Schema(description = "회원 상세 응답")
 public record MemberResponse(
         @Schema(description = "회원 ID") UUID id,

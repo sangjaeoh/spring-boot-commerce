@@ -6,7 +6,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.UUID;
 
-/** 변형별 재고 현황 응답이다. */
 @Schema(description = "변형별 재고 현황 응답")
 public record StockResponse(
         @Schema(description = "재고 ID") UUID id,

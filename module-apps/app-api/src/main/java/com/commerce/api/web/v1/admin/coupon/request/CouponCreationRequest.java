@@ -11,10 +11,7 @@ import java.time.Instant;
 import org.jspecify.annotations.Nullable;
 
 /**
- * 쿠폰 정책 생성 요청이다.
- *
- * <p>최소 주문 금액은 0 이상, 사용 창(일)은 1 이상이다. 발급 가능 기간은 {@code validFrom < validUntil}이며
- * 도메인이 검증한다. 발급 한도는 선택이며 존재하면 1 이상, 없으면 무제한이다.
+ * 발급 가능 기간은 {@code validFrom < validUntil}이며 도메인이 검증한다. 발급 한도는 없으면 무제한이다.
  */
 @Schema(description = "쿠폰 정책 생성 요청")
 public record CouponCreationRequest(

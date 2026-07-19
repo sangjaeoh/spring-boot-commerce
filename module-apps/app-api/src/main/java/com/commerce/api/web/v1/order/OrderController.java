@@ -38,11 +38,9 @@ import org.springframework.web.bind.annotation.RestController;
  * 주문 체크아웃·취소·조회 엔드포인트다.
  *
  * <p>본인용 표면이라 회원을 토큰 주체({@link AuthUser})에서 도출하고 미인증 요청은 401로 거부된다. 타인 주문은
- * 존재 누출 방지로 미존재(404) 취급한다(발급 쿠폰 관례와 동일). 이행 전이·반품 환불·상태별 목록 조회의 관리자
- * 표면은 {@link com.commerce.api.web.v1.admin.order.OrderAdminController}가 소유한다. 크로스 도메인
- * 쓰기(체크아웃·취소)와 크로스 도메인 조회(결제 조회)는 파사드에, 단일 도메인 조회는 주문 도메인 Reader에 얇게
- * 위임해 결과를 응답 DTO로 변환한다. 정책 거부·전이 위반·미존재는 도메인/파사드가 던지는 예외를 전역 핸들러가
- * problem+json으로 매핑한다.
+ * 존재 누출 방지로 미존재(404) 취급한다(발급 쿠폰 관례와 동일). 크로스 도메인 쓰기(체크아웃·취소)와 크로스 도메인
+ * 조회(결제 조회)는 파사드에, 단일 도메인 조회는 주문 도메인 Reader에 얇게 위임해 결과를 응답 DTO로 변환한다.
+ * 정책 거부·전이 위반·미존재는 도메인/파사드가 던지는 예외를 전역 핸들러가 problem+json으로 매핑한다.
  */
 @Tag(name = "주문", description = "체크아웃·취소·조회")
 @Authenticated
@@ -66,7 +64,6 @@ public class OrderController {
         this.orderReader = orderReader;
     }
 
-    /** 본인 장바구니를 주문·결제로 전환하고 결제 완료된 주문 ID를 반환한다. */
     @Operation(summary = "체크아웃", description = "본인 장바구니를 주문·결제로 전환하고 결제 완료된 주문 ID를 반환한다.")
     @ApiResponses({
         @ApiResponse(responseCode = "201", description = "주문 생성·결제 완료"),
@@ -99,7 +96,6 @@ public class OrderController {
         return CheckoutResponse.from(orderId);
     }
 
-    /** 결제 완료된 본인 주문을 취소하고 환불·재고·쿠폰을 복원한다. */
     @Operation(summary = "주문 취소", description = "결제 완료된 본인 주문을 취소하고 환불·재고·쿠폰을 복원한다.")
     @ApiResponses({
         @ApiResponse(responseCode = "204", description = "주문 취소·환불·복원 완료"),
@@ -122,7 +118,6 @@ public class OrderController {
         orderCancellationFacade.cancel(orderId, authUser.memberId());
     }
 
-    /** 본인 주문 상세를 조회한다. */
     @Operation(summary = "주문 상세 조회", description = "본인 주문 상세를 조회한다.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "주문 상세"),
@@ -140,7 +135,6 @@ public class OrderController {
         return OrderResponse.from(orderReader.getOrder(orderId, authUser.memberId()));
     }
 
-    /** 본인 주문 목록을 최신순 페이지로 조회한다. */
     @Operation(summary = "본인 주문 목록 조회", description = "본인 주문 목록을 최신순 페이지로 조회한다.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "주문 목록 페이지"),
@@ -159,7 +153,6 @@ public class OrderController {
                 authUser.memberId(), PageRequest.of(pagination.zeroBasedPage(), pagination.size())));
     }
 
-    /** 본인 주문의 결제 정보(승인·환불 거래)를 조회한다. */
     @Operation(summary = "주문 결제 정보 조회", description = "본인 주문의 결제 정보(승인·환불 거래)를 조회한다.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "결제 정보"),
