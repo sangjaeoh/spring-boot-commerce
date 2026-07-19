@@ -15,45 +15,50 @@ import java.time.Instant;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
-/**
- * 회원 애그리거트 루트다. 식별(이메일·표시 이름)과 자격증명(패스워드 해시)·역할을 소유한다.
- *
- * <p>정지(status)와 탈퇴(deletedAt)는 독립 축이라 겹치지 않는다. 최초 상태는 {@code ACTIVE}다.
- */
+/** 회원 애그리거트 루트다. 식별(이메일·표시 이름)과 자격증명(패스워드 해시)·역할을 소유한다. */
 @Entity
 @Table(schema = "member", name = "member")
 public class Member extends BaseTimeEntity<UUID> {
 
+    /** 회원 식별자. 생성 시각 순서를 담은 UUIDv7. */
     @Id
     private UUID id;
 
+    /** 회원 이메일. 활성 회원 사이에서 유니크한 식별 키. 생성 후 바뀌지 않는다. */
     @Convert(converter = EmailConverter.class)
     @Column(name = "email")
     private Email email;
 
+    /** 회원 표시 이름. */
     @Column(name = "name")
     private String name;
 
+    /** 패스워드의 bcrypt 해시(60자). */
     @Column(name = "password_hash")
     private String passwordHash;
 
+    /** 회원 역할. 가입은 항상 구매자이고 관리자는 기동 시딩으로만 부여된다. 생성 후 바뀌지 않는다. */
     @Enumerated(EnumType.STRING)
     @Column(name = "role")
     private MemberRole role;
 
+    /** 회원 계정 상태. */
     @Enumerated(EnumType.STRING)
     @Column(name = "status")
     private MemberStatus status;
 
+    /** 정지 사유. 정지 상태일 때만 있다. */
     @Enumerated(EnumType.STRING)
     @Column(name = "suspension_reason")
     @Nullable
     private SuspensionReason suspensionReason;
 
+    /** 탈퇴(논리삭제) 시각. 탈퇴 여부는 status가 아니라 이 값의 존재로 나타낸다. */
     @Column(name = "deleted_at")
     @Nullable
     private Instant deletedAt;
 
+    /** 탈퇴 사유. 탈퇴한 회원에만 있다. */
     @Enumerated(EnumType.STRING)
     @Column(name = "withdrawal_reason")
     @Nullable
@@ -101,7 +106,7 @@ public class Member extends BaseTimeEntity<UUID> {
         this.suspensionReason = null;
     }
 
-    /** 표시 이름을 바꾼다. 이메일은 불변이다. */
+    /** 표시 이름을 바꾼다. */
     public void rename(String newName) {
         this.name = newName;
     }

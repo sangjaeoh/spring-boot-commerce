@@ -23,6 +23,7 @@ public class MemberModifier {
     /**
      * 회원을 정지한다.
      *
+     * @throws MemberNotFoundException 활성 회원이 없으면
      * @throws MemberStatusException 활성 상태가 아니면
      */
     @Transactional
@@ -33,6 +34,7 @@ public class MemberModifier {
     /**
      * 회원 정지를 해제한다.
      *
+     * @throws MemberNotFoundException 활성 회원이 없으면
      * @throws MemberStatusException 정지 상태가 아니면
      */
     @Transactional
@@ -40,12 +42,17 @@ public class MemberModifier {
         find(memberId).reinstate();
     }
 
-    /** 회원 표시 이름을 바꾼다. */
+    /**
+     * 회원 표시 이름을 바꾼다.
+     *
+     * @throws MemberNotFoundException 활성 회원이 없으면
+     */
     @Transactional
     public void rename(UUID memberId, String newName) {
         find(memberId).rename(newName);
     }
 
+    /** 활성 회원을 찾고 없으면 거부한다. */
     private Member find(UUID memberId) {
         return memberRepository
                 .findByIdAndDeletedAtIsNull(memberId)

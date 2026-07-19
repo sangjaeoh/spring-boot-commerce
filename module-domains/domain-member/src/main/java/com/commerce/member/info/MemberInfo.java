@@ -8,11 +8,7 @@ import java.time.Instant;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
-/**
- * 회원 조회 경계 모델이다. 활성(미탈퇴) 회원만 나타내며 정지 회원·정지 사유를 포함한다.
- *
- * @param suspensionReason {@code SUSPENDED}일 때만 존재
- */
+/** 회원 조회 경계 모델이다. */
 public record MemberInfo(
         UUID id,
         String email,
@@ -23,6 +19,7 @@ public record MemberInfo(
         Instant createdAt,
         Instant updatedAt) {
 
+    /** 회원 엔티티에서 조회 모델을 만든다. */
     public static MemberInfo from(Member member) {
         return new MemberInfo(
                 member.getId(),
