@@ -18,13 +18,9 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 
 /**
- * 상품 상세 조회를 합성한다. 상품 그룹 + ACTIVE 변형 + 각 변형 재고로 주문가능·품절·대표가를 파생한다.
+ * 상품 상세 조회를 ACTIVE 변형·재고와 합성해 주문가능(orderable)·품절·대표가를 파생한다.
  *
- * <p>트랜잭션을 열지 않고 도메인 Reader를 조립한다(각 Reader가 자기 readOnly 트랜잭션에서 Info로 변환).
- * 공개 표면이라 카탈로그와 같은 상품 게이트(판매중 ∧ 미삭제)로 걸러, 숨김·삭제 상품은 미존재와 같은 404로
- * 은닉한다(관리자 표면의 숨김 포함 조회와 구분). 변형별 주문가능(재고)과 품절 파생만 담고, 실제 주문 가능
- * 여부(상품 ON_SALE ∧ 변형 ACTIVE ∧ 재고)는 체크아웃 게이트가 최종 판정한다. 변형은 대표가 오름차순으로
- * 정렬해 결정적 순서로 싣는다.
+ * <p>트랜잭션을 열지 않고 도메인 Reader를 조립한다(각 Reader가 자기 트랜잭션 소유).
  */
 @Component
 public class ProductDetailFacade {
@@ -41,7 +37,7 @@ public class ProductDetailFacade {
     }
 
     /**
-     * 상품 상세를 합성해 반환한다.
+     * 상품 상세를 합성해 반환한다. 변형은 가격 오름차순으로 싣는다.
      *
      * @throws com.commerce.product.exception.ProductNotFoundException 노출 상품이 없으면(미존재·숨김·삭제 포함)
      */
@@ -68,6 +64,7 @@ public class ProductDetailFacade {
                 product.id(), product.name(), product.description(), product.status(), fromPrice, soldOut, variants);
     }
 
+    /** 재고가 받쳐주는(SELLABLE ∧ 수량 1 이상) 변형 ID를 모은다. */
     private Set<UUID> orderableVariantIds(List<ProductVariantInfo> activeVariants) {
         if (activeVariants.isEmpty()) {
             return Set.of();
@@ -80,6 +77,7 @@ public class ProductDetailFacade {
                 .collect(Collectors.toSet());
     }
 
+    /** 둘 중 작은 금액을 고른다. */
     private static Money min(Money a, Money b) {
         return a.isLessThan(b) ? a : b;
     }

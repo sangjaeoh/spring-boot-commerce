@@ -22,9 +22,7 @@ import org.springframework.stereotype.Component;
 /**
  * 장바구니 쓰기를 조율하며 담기·증량에 주문 자격 게이트를 적용한다.
  *
- * <p>트랜잭션을 열지 않고 도메인 서비스를 조립한다(각 서비스가 자기 트랜잭션 소유). 담기와 증량은 회원 자격
- * 활성·변형 ACTIVE·변형의 상품 ON_SALE·미삭제를 요구하고, 감량·유지·제거·비우기는 게이트 없이 통과시켜
- * 정지·탈퇴 회원이나 비활성·삭제 라인도 정리할 수 있게 한다. 재고는 담기 시점에 검증하지 않는다(체크아웃 게이트가 소유).
+ * <p>트랜잭션을 열지 않고 도메인 서비스를 조립한다(각 서비스가 자기 트랜잭션 소유).
  */
 @Component
 public class CartCommandFacade {
@@ -83,14 +81,16 @@ public class CartCommandFacade {
         cartModifier.clear(memberId);
     }
 
+    /** 회원 자격·변형·상품 게이트를 모두 통과시킨다. */
     private void requireAddable(UUID memberId, UUID variantId) {
         requireEligibleMember(memberId);
         ProductVariantInfo variant = requireActiveVariant(variantId);
         requireOnSaleProduct(variant.productId());
     }
 
-    // 라인이 없으면 증량이 아니다 — 게이트를 건너뛰고 도메인의 changeItemQuantity가 라인 미존재를 보고한다.
+    /** 새 수량이 기존 라인 수량보다 큰지 판정한다. */
     private boolean isIncrease(UUID memberId, UUID variantId, int newQuantity) {
+        // 라인이 없으면 증량이 아니다 — 게이트를 건너뛰어 도메인의 changeItemQuantity가 라인 미존재를 보고한다.
         return cartReader.getCart(memberId).items().stream()
                 .filter(item -> item.variantId().equals(variantId))
                 .findFirst()
@@ -98,6 +98,7 @@ public class CartCommandFacade {
                 .orElse(false);
     }
 
+    /** 회원이 활성 자격인지 확인한다. */
     private void requireEligibleMember(UUID memberId) {
         MemberInfo member = memberReader.getMember(memberId);
         if (member.status() != MemberStatus.ACTIVE) {
@@ -105,6 +106,7 @@ public class CartCommandFacade {
         }
     }
 
+    /** 변형이 활성인지 확인한다. 미존재도 주문 불가로 합친다. */
     private ProductVariantInfo requireActiveVariant(UUID variantId) {
         ProductVariantInfo variant;
         try {
@@ -118,6 +120,7 @@ public class CartCommandFacade {
         return variant;
     }
 
+    /** 상품이 판매중인지 확인한다. 미존재도 주문 불가로 합친다. */
     private void requireOnSaleProduct(UUID productId) {
         ProductInfo product;
         try {

@@ -19,11 +19,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 
 /**
- * 카탈로그 상품 목록 조회를 합성한다. 노출 상품 페이지(판매중 ∧ 미삭제 ∧ ACTIVE 변형 1개 이상)에 변형·재고를
- * 배치(IN) 조회로 합성해 대표가·품절을 파생한다.
+ * 카탈로그 상품 목록 조회를 ACTIVE 변형·재고와 합성해 대표가·품절을 파생한다.
  *
- * <p>노출 필터는 페이지 산정(크기·총계)이 노출 집합과 일치하도록 상품 도메인 쿼리가 거르고, 이 파사드는 페이지에
- * 실린 상품의 대표가·품절 파생만 담당한다(상세와 같은 파생 규칙). 트랜잭션을 열지 않고 도메인 Reader를 조립한다.
+ * <p>트랜잭션을 열지 않고 도메인 Reader를 조립한다(각 Reader가 자기 트랜잭션 소유).
  */
 @Component
 public class ProductCatalogFacade {
@@ -48,6 +46,7 @@ public class ProductCatalogFacade {
                 summarize(product, activeVariantsByProduct.getOrDefault(product.id(), List.of()), orderableVariantIds));
     }
 
+    /** 페이지에 실린 상품의 ACTIVE 변형을 상품별로 모은다. */
     private Map<UUID, List<ProductVariantInfo>> activeVariantsByProduct(List<ProductInfo> products) {
         if (products.isEmpty()) {
             return Map.of();
@@ -58,6 +57,7 @@ public class ProductCatalogFacade {
                 .collect(Collectors.groupingBy(ProductVariantInfo::productId));
     }
 
+    /** 재고가 받쳐주는(SELLABLE ∧ 수량 1 이상) 변형 ID를 모은다. */
     private Set<UUID> orderableVariantIds(Map<UUID, List<ProductVariantInfo>> activeVariantsByProduct) {
         List<UUID> variantIds = activeVariantsByProduct.values().stream()
                 .flatMap(List::stream)
@@ -72,6 +72,7 @@ public class ProductCatalogFacade {
                 .collect(Collectors.toSet());
     }
 
+    /** 상품 하나를 대표가·품절 파생과 함께 목록 뷰로 옮긴다. */
     private static ProductSummaryView summarize(
             ProductInfo product, List<ProductVariantInfo> activeVariants, Set<UUID> orderableVariantIds) {
         Money fromPrice = null;
@@ -84,6 +85,7 @@ public class ProductCatalogFacade {
         return new ProductSummaryView(product.id(), product.name(), fromPrice, soldOut);
     }
 
+    /** 둘 중 작은 금액을 고른다. */
     private static Money min(Money a, Money b) {
         return a.isLessThan(b) ? a : b;
     }
