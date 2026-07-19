@@ -16,7 +16,7 @@ import java.time.Instant;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
-/** 회원에게 발급된 쿠폰(issued coupon) 애그리거트 루트다. */
+/** 회원의 발급분(issued coupon) 애그리거트 루트다. */
 @Entity
 @Table(schema = "coupon", name = "issued_coupon")
 public class IssuedCoupon extends BaseTimeEntity<UUID> {
@@ -42,22 +42,22 @@ public class IssuedCoupon extends BaseTimeEntity<UUID> {
     @Column(name = "expires_at")
     private Instant expiresAt;
 
-    /** 사용 시각. */
+    /** 사용 시각. 사용 상태일 때만 있다. */
     @Column(name = "used_at")
     @Nullable
     private Instant usedAt;
 
-    /** 사용된 주문 식별자. order 도메인 논리 참조. */
+    /** 사용된 주문 식별자. order 도메인 논리 참조. 사용 상태일 때만 있다. */
     @Column(name = "order_id")
     @Nullable
     private UUID orderId;
 
-    /** 무효화 시각. */
+    /** 무효화 시각. 무효화 상태일 때만 있다. */
     @Column(name = "revoked_at")
     @Nullable
     private Instant revokedAt;
 
-    /** 무효화 사유. 자유 문자열. */
+    /** 무효화 사유. 자유 문자열. 무효화 상태일 때만 있다. */
     @Column(name = "revoke_reason")
     @Nullable
     private String revokeReason;
