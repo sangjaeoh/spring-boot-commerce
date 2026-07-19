@@ -9,6 +9,7 @@ import java.util.UUID;
 public record StockInfo(
         UUID id, UUID variantId, int quantity, StockStatus status, Instant createdAt, Instant updatedAt) {
 
+    /** 재고 엔티티에서 조회 모델을 만든다. */
     public static StockInfo from(Stock stock) {
         return new StockInfo(
                 stock.getId(),
