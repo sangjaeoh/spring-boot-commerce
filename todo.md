@@ -110,7 +110,7 @@
 - 범위: 중.
 
 ### 12. domain-order 잔여 + DOMAIN_MODEL 오기 (슬라이스 9에서 발견)
-- 상태: 대기
+- 상태: 완료
 - 목표: 참조 구현으로 선언된 domain-order의 규칙 잔여를 닫고, 정본 문서의 자기모순을 고친다.
 - `OrderRepository`의 `@Query` 2건(`findIdPageByMemberId`·`findIdPageByStatusAndFulfillmentStatus`)에 요약이 없다. `@Query`가 붙으면 파생 쿼리 면제가 아니라 요약 의무 대상이라는 규칙 위반이다. 리포지토리 전수 스캔 결과 저장소에 남은 `@Query` 무요약은 이 2건뿐이다(슬라이스 8이 `findExposedPage`, 9가 `findPage`를 닫았다).
 - **왜 남았나**: `todo.md`가 domain-order를 "이미 현재 규칙으로 정리된 참조 구현"으로 선언해 어느 슬라이스의 스캔 대상에도 넣지 않았다. 참조 구현 자체는 2차 규칙으로 재스캔된 적이 없다 — 이 항목이 그 구멍을 닫는다.
