@@ -22,6 +22,7 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
     boolean existsByMemberIdAndStatusAndFulfillmentStatusNot(
             UUID memberId, OrderStatus status, FulfillmentStatus fulfillmentStatus);
 
+    /** 회원의 주문 ID 페이지를 최신순으로 조회한다. */
     @Query("""
             select o.id
             from Order o
@@ -30,6 +31,7 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
             """)
     Page<UUID> findIdPageByMemberId(@Param("memberId") UUID memberId, Pageable pageable);
 
+    /** 결제·이행 축 상태가 모두 일치하는 주문의 ID 페이지를 최신순으로 조회한다. */
     @Query("""
             select o.id
             from Order o

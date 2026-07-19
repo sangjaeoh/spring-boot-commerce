@@ -385,7 +385,7 @@
 | REVOKED | 관리자 무효화. 사용 불가·재전이 없는 종료 상태 |
 
 - 정책 전이: `ACTIVE ↔ DISABLED`. 의도 동사 `disable()`(ACTIVE→DISABLED)·`enable()`(DISABLED→ACTIVE)로만 전환한다. 발급 가능/중지는 쿠폰의 도메인 생명주기이며 호출자(관리자 등)의 유무와 무관하게 모델에 둔다.
-- 발급분 전이: `ISSUED → USED`(사용), `USED → ISSUED`(취소 복원), `ISSUED → REVOKED`(무효화). 만료는 상태가 아니라 `validUntil` 경과로 파생 판정한다(죽은 상태·죽은 배치 없음).
+- 발급분 전이: `ISSUED → USED`(사용), `USED → ISSUED`(취소 복원), `ISSUED → REVOKED`(무효화). 만료는 상태가 아니라 `expiresAt` 경과로 파생 판정한다(죽은 상태·죽은 배치 없음).
 - 발급분 불변식: `status == USED ⇔ usedAt ≠ null ∧ orderId ≠ null`, `status == REVOKED ⇔ revokedAt ≠ null ∧ revokeReason ≠ null`.
 
 ### 정책·불변식
