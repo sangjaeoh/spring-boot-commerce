@@ -13,24 +13,18 @@ import org.springdoc.core.utils.SpringDocUtils;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-/**
- * OpenAPI 문서(/v3/api-docs·swagger-ui)의 공통 설정이다.
- *
- * <p>엔드포인트·필드 설명은 컨트롤러·request/response에 명시하는 {@code @Operation}·{@code @ApiResponse}·
- * {@code @Schema}가 소유하고 빌드가 강제한다(architecture.md 빌드가 강제하는 불변식). 이 설정은 문서 어노테이션으로는
- * 표현하지 않는 두 공통 축만 코드에서 기계적으로 보정한다 — (1) 커스텀 리졸버가 토큰에서 주입하는 {@link AuthUser}
- * 파라미터가 요청 파라미터로 오인 문서화되는 것, (2) 인증 강제 표면({@link AuthUser} 파라미터 선언·{@link Admin})의
- * bearer 요구 표기. 둘 다 코드에서 도출하므로 엔드포인트가 늘어도 보정이 따라간다.
- */
+/** OpenAPI 문서(/v3/api-docs·swagger-ui)의 공통 설정이다. */
 @Configuration
 public class OpenApiConfig {
 
     private static final String BEARER_JWT = "bearerAuth";
 
     static {
+        // AuthUser는 커스텀 리졸버가 토큰에서 주입하므로 요청 파라미터로 오인 문서화되지 않게 제외한다.
         SpringDocUtils.getConfig().addRequestWrapperToIgnore(AuthUser.class);
     }
 
+    /** 문서 제목·버전과 bearer JWT 보안 스킴을 담은 문서 뼈대를 공급한다. */
     @Bean
     OpenAPI commerceOpenApi() {
         return new OpenAPI()

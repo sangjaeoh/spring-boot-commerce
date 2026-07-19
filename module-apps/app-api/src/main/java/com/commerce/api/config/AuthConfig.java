@@ -7,10 +7,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-/** JWT 토큰 코덱을 서명 키(환경변수 주입)·TTL 설정으로 조립한다. */
+/** JWT 토큰 코덱을 배선하는 설정이다. */
 @Configuration
 public class AuthConfig {
 
+    /** 설정으로 주입된 서명 키·액세스 토큰 TTL로 조립한 코덱을 공급한다. */
     @Bean
     JwtTokenCodec jwtTokenCodec(
             @Value("${auth.jwt.secret}") String secret,

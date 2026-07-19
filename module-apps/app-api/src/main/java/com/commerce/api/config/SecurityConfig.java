@@ -15,19 +15,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import tools.jackson.databind.ObjectMapper;
 
-/**
- * 무상태 JWT 인증 필터 체인을 조립한다.
- *
- * <p>세션·CSRF·폼로그인·HTTP Basic을 끄고({@link SessionCreationPolicy#STATELESS}) 토큰 검증 필터
- * ({@link JwtAuthenticationFilter})를 {@link UsernamePasswordAuthenticationFilter} 앞에 둔다. 공개 경로는
- * permitAll로 완전 열거하고, 어드민 URL 네임스페이스({@code /api/v1/admin/**})는 {@code hasRole('ADMIN')},
- * 나머지는 인증을 요구한다. 미인증 익명은 {@link RestAuthenticationEntryPoint}가 401, 권한 부족은
- * {@link RestAccessDeniedHandler}가 403으로 problem+json 응답한다.
- *
- * <p>{@link EnableMethodSecurity}로 메서드 시큐리티를 켜, 컨트롤러의 관객 마커({@code @Admin}·{@code @Authenticated}·
- * {@code @Anonymous} — {@code @PreAuthorize} 합성)가 핸들러에서 2차로 인가를 강제한다. URL 규칙이 1차 게이트,
- * 마커가 핸들러에 붙는 2차 게이트다. 메서드 시큐리티의 거부도 같은 진입점·접근거부 핸들러로 401·403 problem+json을 낸다.
- */
+/** JWT 인증 강제를 배선하는 시큐리티 설정이다. */
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
@@ -42,6 +30,9 @@ public class SecurityConfig {
     private static final String[] PUBLIC_PAYMENT_PATHS = {"/api/v1/payments/webhook"};
     private static final String[] ADMIN_PATHS = {"/api/v1/admin/**"};
 
+    /**
+     * 열거된 공개 경로만 열고 어드민 URL 네임스페이스는 관리자 역할을, 나머지는 인증을 요구하는 무상태 체인을 공급한다.
+     */
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http, JwtTokenCodec jwtTokenCodec, ObjectMapper objectMapper)
             throws Exception {
