@@ -14,29 +14,30 @@ import java.time.Instant;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
-/**
- * 상품 카탈로그 그룹 애그리거트 루트다. 판매가는 변형이 소유하므로 여기 두지 않는다.
- *
- * <p>최초 상태는 {@code HIDDEN}이며 변형·재고 시딩 후 {@code show()}로 노출한다.
- */
+/** 상품 카탈로그 그룹 애그리거트 루트다. */
 @Entity
 @Table(schema = "product", name = "product")
 public class Product extends BaseTimeEntity<UUID> {
 
+    /** 상품 식별자. 생성 시각 순서를 담은 UUIDv7. */
     @Id
     private UUID id;
 
+    /** 상품명. */
     @Column(name = "name")
     private String name;
 
+    /** 상세 설명. */
     @Column(name = "description")
     @Nullable
     private String description;
 
+    /** 카탈로그 노출 상태. */
     @Enumerated(EnumType.STRING)
     @Column(name = "status")
     private ProductStatus status;
 
+    /** 논리삭제 시각. 삭제 전이면 없다. */
     @Column(name = "deleted_at")
     @Nullable
     private Instant deletedAt;

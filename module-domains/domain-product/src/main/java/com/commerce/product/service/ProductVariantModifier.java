@@ -24,6 +24,7 @@ public class ProductVariantModifier {
     /**
      * 변형을 판매 제공한다.
      *
+     * @throws ProductVariantNotFoundException 변형이 없으면
      * @throws ProductVariantStatusException 비활성 상태가 아니면
      */
     @Transactional
@@ -34,6 +35,7 @@ public class ProductVariantModifier {
     /**
      * 변형 판매 제공을 중단한다.
      *
+     * @throws ProductVariantNotFoundException 변형이 없으면
      * @throws ProductVariantStatusException 판매 제공 상태가 아니면
      */
     @Transactional
@@ -44,6 +46,7 @@ public class ProductVariantModifier {
     /**
      * 변형을 은퇴시킨다.
      *
+     * @throws ProductVariantNotFoundException 변형이 없으면
      * @throws ProductVariantStatusException 이미 은퇴한 변형이면
      */
     @Transactional
@@ -54,6 +57,7 @@ public class ProductVariantModifier {
     /**
      * 변형 판매가를 바꾼다.
      *
+     * @throws ProductVariantNotFoundException 변형이 없으면
      * @throws ProductVariantStatusException 은퇴한 변형이면
      * @throws InvalidVariantException 판매가가 최소가(1원) 미만이면
      */
@@ -62,6 +66,7 @@ public class ProductVariantModifier {
         find(variantId).changePrice(newPrice);
     }
 
+    /** 변형을 찾는다. */
     private ProductVariant find(UUID variantId) {
         return variantRepository
                 .findById(variantId)

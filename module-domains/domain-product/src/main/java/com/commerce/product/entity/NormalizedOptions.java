@@ -12,11 +12,8 @@ import org.jspecify.annotations.Nullable;
 /**
  * 변형 옵션을 평탄화한 값 객체다.
  *
- * <p>시그니처는 옵션명 정렬·케이스 폴딩(유니코드 정규화 포함)한 유니크 키이고, 라벨은 값을 입력 순서로
- * 대소문자 보존해 조인한 표시 문자열이다. 불변식 {@code signature.isEmpty() ⟺ label == null}.
- *
- * @param signature 정규 옵션 시그니처. 옵션이 없으면 {@code ""}
- * @param label 표시 라벨. 옵션이 없으면 {@code null}
+ * @param signature 옵션명 기준 정렬·케이스 폴딩해 대조에 쓰는 정규화 키. 옵션이 없으면 {@code ""}
+ * @param label 값을 입력 순서·대소문자 그대로 조인해 화면에 쓰는 표시 라벨. 옵션이 없으면 {@code null}
  */
 public record NormalizedOptions(String signature, @Nullable String label) {
 
@@ -59,10 +56,12 @@ public record NormalizedOptions(String signature, @Nullable String label) {
         return new NormalizedOptions(signature, label.toString());
     }
 
+    /** 값에 구분자 문자가 섞였는지 판정한다. */
     private static boolean hasSeparator(String value) {
         return value.contains(PAIR_SEPARATOR) || value.contains(NAME_VALUE_SEPARATOR);
     }
 
+    /** 유니코드 정규화·공백 제거·소문자화로 값을 대조용 형태로 접는다. */
     private static String caseFold(String value) {
         return Normalizer.normalize(value, Normalizer.Form.NFKC).strip().toLowerCase(Locale.ROOT);
     }
