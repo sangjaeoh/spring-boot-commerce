@@ -20,13 +20,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * 쿠폰 발급(셀프 클레임) 엔드포인트다.
- *
- * <p>발급은 본인용 셀프서비스라 대상 회원을 토큰 주체({@link AuthUser})에서 도출해 발급 파사드에 위임하고
- * 회원 자격 게이트를 적용한다. 크로스 도메인 정책 거부·도메인 불변식 위반은 도메인/파사드가 던지는 예외를
- * 전역 핸들러가 problem+json으로 매핑한다.
- */
+/** 쿠폰 발급(셀프 클레임) 엔드포인트다. */
 @Tag(name = "쿠폰", description = "쿠폰 발급(셀프 클레임)")
 @Authenticated
 @RestController

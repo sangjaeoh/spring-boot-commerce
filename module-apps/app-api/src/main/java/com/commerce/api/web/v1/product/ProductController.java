@@ -25,9 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 상품 목록·상세 조회 엔드포인트다.
  *
- * <p>전부 공개다(비로그인 쇼핑). 조회는 각 파사드에 위임해 ACTIVE 변형·재고 파생(주문가능·품절·대표가)을
- * 합성하고, 컨트롤러는 요청·결과를 DTO로 변환만 한다. 미존재는 도메인이 던지는 예외를 전역 핸들러가
- * problem+json으로 매핑한다.
+ * <p>전부 공개다(비로그인 쇼핑).
  */
 @Tag(name = "상품", description = "상품 목록·상세 조회")
 @RestController

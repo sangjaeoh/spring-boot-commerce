@@ -34,10 +34,7 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 회원 가입·본인 조회·이름 변경·탈퇴 엔드포인트다.
  *
- * <p>본인 조회({@code /me})·이름 변경·탈퇴는 토큰 주체({@link AuthUser})에서 회원을 도출하는 본인용 표면이다.
- * 가입·조회는 회원 도메인 서비스에, 탈퇴는 탈퇴 파사드에 위임하고, 이메일 형식 오류·중복·미존재·탈퇴 거부는
- * 도메인/파사드가 던지는 예외를 전역 핸들러가 problem+json으로 매핑한다. 정지와 탈퇴는 독립 축이라 정지 회원도
- * 탈퇴할 수 있다.
+ * <p>정지와 탈퇴는 독립 축이라 정지 회원도 탈퇴할 수 있다.
  */
 @Tag(name = "회원", description = "회원 가입·본인 조회·이름 변경·탈퇴")
 @RestController

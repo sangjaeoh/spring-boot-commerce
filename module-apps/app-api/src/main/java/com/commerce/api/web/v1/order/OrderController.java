@@ -34,14 +34,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * 주문 체크아웃·취소·조회 엔드포인트다.
- *
- * <p>본인용 표면이라 회원을 토큰 주체({@link AuthUser})에서 도출하고 미인증 요청은 401로 거부된다. 타인 주문은
- * 존재 누출 방지로 미존재(404) 취급한다(발급 쿠폰 관례와 동일). 크로스 도메인 쓰기(체크아웃·취소)와 크로스 도메인
- * 조회(결제 조회)는 파사드에, 단일 도메인 조회는 주문 도메인 Reader에 얇게 위임해 결과를 응답 DTO로 변환한다.
- * 정책 거부·전이 위반·미존재는 도메인/파사드가 던지는 예외를 전역 핸들러가 problem+json으로 매핑한다.
- */
+/** 주문 체크아웃·취소·조회 엔드포인트다. */
 @Tag(name = "주문", description = "체크아웃·취소·조회")
 @Authenticated
 @RestController
