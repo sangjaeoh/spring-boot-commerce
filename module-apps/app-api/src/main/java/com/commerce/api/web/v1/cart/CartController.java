@@ -28,14 +28,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * 장바구니 조회·쓰기 엔드포인트다.
- *
- * <p>본인용 표면이라 회원은 토큰 주체({@link AuthUser})에서 도출한다.
- * 조회는 뷰 파사드가 라인별 변형 현재가·소계·총액을 합성하고, 쓰기는 커맨드 파사드가 담기·증량에 주문 자격
- * 게이트를 적용한다. 크로스 도메인 정책 거부·미존재는 파사드/도메인이 던지는 예외를 전역 핸들러가
- * problem+json으로 매핑한다.
- */
+/** 장바구니 조회·쓰기 엔드포인트다. */
 @Tag(name = "장바구니", description = "장바구니 조회·담기·수량 변경·제거·비우기")
 @Authenticated
 @RestController

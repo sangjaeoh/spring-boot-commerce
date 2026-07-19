@@ -24,14 +24,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * 발급 쿠폰 조회·할인 미리보기 엔드포인트다.
- *
- * <p>전부 본인용 표면이라 소유 회원은 토큰 주체({@link AuthUser})에서 도출한다.
- * 발급 쿠폰 도메인 Reader에 위임해 본인 발급분을 단건·목록 조회한다. 미소유는 미존재로 취급하며, 도메인이
- * 던지는 미존재 예외를 전역 핸들러가 problem+json으로 매핑한다. 할인 미리보기는 주문 금액에 대한 예상 할인을
- * 계산만 하고 상태를 바꾸지 않는다.
- */
+/** 발급 쿠폰 조회·할인 미리보기 엔드포인트다. */
 @Tag(name = "발급 쿠폰", description = "발급 쿠폰 조회·할인 미리보기")
 @Authenticated
 @RestController
