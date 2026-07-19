@@ -6,6 +6,7 @@ import com.commerce.product.entity.ProductOption;
 import com.commerce.product.entity.ProductVariant;
 import com.commerce.product.entity.ProductVariantStatus;
 import com.commerce.product.exception.DuplicateVariantOptionException;
+import com.commerce.product.exception.InvalidVariantException;
 import com.commerce.product.exception.ProductErrorCode;
 import com.commerce.product.exception.ProductNotFoundException;
 import com.commerce.product.repository.ProductRepository;
@@ -40,6 +41,7 @@ public class ProductVariantAppender {
      *
      * @throws ProductNotFoundException 활성 상품이 없으면
      * @throws DuplicateVariantOptionException 비-RETIRED 변형과 옵션 조합이 겹칠 때
+     * @throws InvalidVariantException 옵션이 올바르지 않거나 판매가가 최소가(1원) 미만이면
      */
     @Transactional
     public UUID create(UUID productId, Money price, List<ProductOption> options) {

@@ -3,6 +3,7 @@ package com.commerce.cart.service;
 import com.commerce.cart.entity.Cart;
 import com.commerce.cart.exception.CartErrorCode;
 import com.commerce.cart.exception.CartItemNotFoundException;
+import com.commerce.cart.exception.InvalidCartItemException;
 import com.commerce.cart.repository.CartRepository;
 import java.util.Set;
 import java.util.UUID;
@@ -23,6 +24,7 @@ public class CartModifier {
      * 라인 수량을 바꾼다.
      *
      * @throws CartItemNotFoundException 장바구니나 라인이 없으면
+     * @throws InvalidCartItemException 수량이 1 미만이면
      */
     @Transactional
     public void changeItemQuantity(UUID memberId, UUID variantId, int quantity) {

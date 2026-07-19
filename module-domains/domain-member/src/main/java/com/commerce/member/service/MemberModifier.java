@@ -4,6 +4,7 @@ import com.commerce.member.entity.Member;
 import com.commerce.member.entity.SuspensionReason;
 import com.commerce.member.exception.MemberErrorCode;
 import com.commerce.member.exception.MemberNotFoundException;
+import com.commerce.member.exception.MemberStatusException;
 import com.commerce.member.repository.MemberRepository;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -19,13 +20,21 @@ public class MemberModifier {
         this.memberRepository = memberRepository;
     }
 
-    /** 회원을 정지한다. */
+    /**
+     * 회원을 정지한다.
+     *
+     * @throws MemberStatusException 활성 상태가 아니면
+     */
     @Transactional
     public void suspend(UUID memberId, SuspensionReason reason) {
         find(memberId).suspend(reason);
     }
 
-    /** 회원 정지를 해제한다. */
+    /**
+     * 회원 정지를 해제한다.
+     *
+     * @throws MemberStatusException 정지 상태가 아니면
+     */
     @Transactional
     public void reinstate(UUID memberId) {
         find(memberId).reinstate();

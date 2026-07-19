@@ -55,7 +55,11 @@ public class Product extends BaseTimeEntity<UUID> {
         return new Product(UuidV7Generator.generate(), name, description);
     }
 
-    /** 상품을 노출한다. */
+    /**
+     * 상품을 노출한다.
+     *
+     * @throws ProductStatusException 숨김 상태가 아니면
+     */
     public void show() {
         if (status != ProductStatus.HIDDEN) {
             throw new ProductStatusException(ProductErrorCode.INVALID_PRODUCT_STATE_TRANSITION);
@@ -63,7 +67,11 @@ public class Product extends BaseTimeEntity<UUID> {
         this.status = ProductStatus.ON_SALE;
     }
 
-    /** 상품을 숨긴다. */
+    /**
+     * 상품을 숨긴다.
+     *
+     * @throws ProductStatusException 노출 상태가 아니면
+     */
     public void hide() {
         if (status != ProductStatus.ON_SALE) {
             throw new ProductStatusException(ProductErrorCode.INVALID_PRODUCT_STATE_TRANSITION);

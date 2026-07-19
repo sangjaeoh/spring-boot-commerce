@@ -6,6 +6,7 @@ import com.commerce.order.entity.HoldReason;
 import com.commerce.order.entity.Order;
 import com.commerce.order.entity.RefundReason;
 import com.commerce.order.event.OrderPaid;
+import com.commerce.order.exception.FulfillmentStatusException;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderNotFoundException;
 import com.commerce.order.exception.OrderStatusException;
@@ -33,6 +34,8 @@ public class OrderModifier {
      * 결제를 완료하고 {@link OrderPaid}를 발행한다.
      *
      * <p>발행은 이 트랜잭션 안에서 일어나므로 커밋 후 소비 리스너가 커밋 후에만 통지받는다.
+     *
+     * @throws OrderStatusException 결제 진행 중({@code PENDING})이 아니면
      */
     @Transactional
     public void markPaid(UUID orderId) {
@@ -82,25 +85,41 @@ public class OrderModifier {
         find(orderId).refund(reason, clock.instant());
     }
 
-    /** 출고한다. 택배사·운송장 번호를 기록한다. */
+    /**
+     * 출고한다. 택배사·운송장 번호를 기록한다.
+     *
+     * @throws FulfillmentStatusException 결제 완료 주문이 아니거나, 준비 중이 아니거나, 취소가 진행 중이면
+     */
     @Transactional
     public void ship(UUID orderId, String carrier, String trackingNumber) {
         find(orderId).ship(carrier, trackingNumber, clock.instant());
     }
 
-    /** 배송 완료 처리한다. */
+    /**
+     * 배송 완료 처리한다.
+     *
+     * @throws FulfillmentStatusException 결제 완료 주문이 아니거나 출고된 상태가 아니면
+     */
     @Transactional
     public void confirmDelivery(UUID orderId) {
         find(orderId).confirmDelivery(clock.instant());
     }
 
-    /** 이행을 보류한다. */
+    /**
+     * 이행을 보류한다.
+     *
+     * @throws FulfillmentStatusException 결제 완료 주문이 아니거나 준비 중이 아니면
+     */
     @Transactional
     public void holdFulfillment(UUID orderId, HoldReason reason) {
         find(orderId).holdFulfillment(reason);
     }
 
-    /** 이행 보류를 해제한다. */
+    /**
+     * 이행 보류를 해제한다.
+     *
+     * @throws FulfillmentStatusException 결제 완료 주문이 아니거나 보류 중이 아니면
+     */
     @Transactional
     public void releaseFulfillment(UUID orderId) {
         find(orderId).releaseFulfillment();

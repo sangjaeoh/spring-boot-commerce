@@ -15,6 +15,11 @@ public record Email(String value) {
         }
     }
 
+    /**
+     * 이메일을 만든다.
+     *
+     * @throws InvalidEmailException 이메일 형식이 올바르지 않으면
+     */
     public static Email of(String value) {
         return new Email(value);
     }

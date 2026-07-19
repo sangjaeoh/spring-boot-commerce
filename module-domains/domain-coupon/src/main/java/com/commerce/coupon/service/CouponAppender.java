@@ -4,6 +4,7 @@ import com.commerce.core.money.Money;
 import com.commerce.coupon.entity.Coupon;
 import com.commerce.coupon.entity.Discount;
 import com.commerce.coupon.entity.ValidityPeriod;
+import com.commerce.coupon.exception.InvalidCouponException;
 import com.commerce.coupon.repository.CouponRepository;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -20,7 +21,11 @@ public class CouponAppender {
         this.couponRepository = couponRepository;
     }
 
-    /** 쿠폰 정책을 발급 가능 상태로 생성하고 새 쿠폰 ID를 반환한다. 발급 한도는 선택이며 없으면 무제한이다. */
+    /**
+     * 쿠폰 정책을 발급 가능 상태로 생성하고 새 쿠폰 ID를 반환한다. 발급 한도는 선택이며 없으면 무제한이다.
+     *
+     * @throws InvalidCouponException 사용 유효일수가 1 미만이거나 발급 한도가 1 미만이면
+     */
     @Transactional
     public UUID create(
             String name,

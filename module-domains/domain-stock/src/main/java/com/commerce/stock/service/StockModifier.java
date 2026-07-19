@@ -4,6 +4,7 @@ import com.commerce.stock.entity.Stock;
 import com.commerce.stock.exception.StockErrorCode;
 import com.commerce.stock.exception.StockNotFoundException;
 import com.commerce.stock.exception.StockShortageException;
+import com.commerce.stock.exception.StockStatusException;
 import com.commerce.stock.repository.StockRepository;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -35,25 +36,41 @@ public class StockModifier {
         find(variantId).restore(amount);
     }
 
-    /** 재고를 재입고한다. */
+    /**
+     * 재고를 재입고한다.
+     *
+     * @throws StockStatusException 단종 재고면
+     */
     @Transactional
     public void increase(UUID variantId, int amount) {
         find(variantId).increase(amount);
     }
 
-    /** 재고를 수동 품절로 둔다. */
+    /**
+     * 재고를 수동 품절로 둔다.
+     *
+     * @throws StockStatusException 판매 가능 상태가 아니면
+     */
     @Transactional
     public void markSoldOut(UUID variantId) {
         find(variantId).markSoldOut();
     }
 
-    /** 재고를 판매 가능으로 되돌린다. */
+    /**
+     * 재고를 판매 가능으로 되돌린다.
+     *
+     * @throws StockStatusException 품절 상태가 아니면
+     */
     @Transactional
     public void markSellable(UUID variantId) {
         find(variantId).markSellable();
     }
 
-    /** 재고를 단종한다. */
+    /**
+     * 재고를 단종한다.
+     *
+     * @throws StockStatusException 이미 단종된 재고면
+     */
     @Transactional
     public void discontinue(UUID variantId) {
         find(variantId).discontinue();

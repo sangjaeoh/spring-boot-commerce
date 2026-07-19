@@ -89,7 +89,11 @@ public class Stock extends BaseTimeEntity<UUID> {
         this.quantity += amount;
     }
 
-    /** 재고를 수동 품절로 둔다. */
+    /**
+     * 재고를 수동 품절로 둔다.
+     *
+     * @throws StockStatusException 판매 가능 상태가 아니면
+     */
     public void markSoldOut() {
         if (status != StockStatus.SELLABLE) {
             throw new StockStatusException(StockErrorCode.INVALID_STATE_TRANSITION);
@@ -97,7 +101,11 @@ public class Stock extends BaseTimeEntity<UUID> {
         this.status = StockStatus.SOLD_OUT;
     }
 
-    /** 재고를 판매 가능으로 되돌린다. */
+    /**
+     * 재고를 판매 가능으로 되돌린다.
+     *
+     * @throws StockStatusException 품절 상태가 아니면
+     */
     public void markSellable() {
         if (status != StockStatus.SOLD_OUT) {
             throw new StockStatusException(StockErrorCode.INVALID_STATE_TRANSITION);
@@ -105,7 +113,11 @@ public class Stock extends BaseTimeEntity<UUID> {
         this.status = StockStatus.SELLABLE;
     }
 
-    /** 재고를 단종한다. */
+    /**
+     * 재고를 단종한다.
+     *
+     * @throws StockStatusException 이미 단종된 재고면
+     */
     public void discontinue() {
         if (status == StockStatus.DISCONTINUED) {
             throw new StockStatusException(StockErrorCode.INVALID_STATE_TRANSITION);

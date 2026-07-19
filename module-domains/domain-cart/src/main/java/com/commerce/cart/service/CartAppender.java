@@ -1,6 +1,7 @@
 package com.commerce.cart.service;
 
 import com.commerce.cart.entity.Cart;
+import com.commerce.cart.exception.InvalidCartItemException;
 import com.commerce.cart.repository.CartRepository;
 import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -34,7 +35,11 @@ public class CartAppender {
         this.transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
-    /** 회원 장바구니가 없으면 만들고 변형을 담는다. 같은 변형은 수량을 합산한다. */
+    /**
+     * 회원 장바구니가 없으면 만들고 변형을 담는다. 같은 변형은 수량을 합산한다.
+     *
+     * @throws InvalidCartItemException 수량이 1 미만이거나 합산 수량이 한도를 넘으면
+     */
     public void addItem(UUID memberId, UUID variantId, int quantity) {
         try {
             addItemOnce(memberId, variantId, quantity);

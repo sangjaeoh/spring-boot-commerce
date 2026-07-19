@@ -178,7 +178,11 @@ public class Order extends BaseTimeEntity<UUID> {
         return order;
     }
 
-    /** 결제를 완료한다. 이행을 준비 중으로 전진시킨다. */
+    /**
+     * 결제를 완료한다. 이행을 준비 중으로 전진시킨다.
+     *
+     * @throws OrderStatusException 결제 진행 중({@code PENDING})이 아니면
+     */
     public void markPaid(Instant now) {
         if (status != OrderStatus.PENDING) {
             throw new OrderStatusException(OrderErrorCode.INVALID_ORDER_STATE_TRANSITION);
@@ -269,7 +273,11 @@ public class Order extends BaseTimeEntity<UUID> {
         this.trackingNumber = trackingNumber;
     }
 
-    /** 배송 완료 처리한다. */
+    /**
+     * 배송 완료 처리한다.
+     *
+     * @throws FulfillmentStatusException 결제 완료 주문이 아니거나 출고된 상태가 아니면
+     */
     public void confirmDelivery(Instant now) {
         requirePaid();
         requireFulfillment(FulfillmentStatus.SHIPPED);
@@ -277,7 +285,11 @@ public class Order extends BaseTimeEntity<UUID> {
         this.deliveredAt = now;
     }
 
-    /** 이행을 보류한다. */
+    /**
+     * 이행을 보류한다.
+     *
+     * @throws FulfillmentStatusException 결제 완료 주문이 아니거나 준비 중이 아니면
+     */
     public void holdFulfillment(HoldReason reason) {
         requirePaid();
         requireFulfillment(FulfillmentStatus.PREPARING);
@@ -285,7 +297,11 @@ public class Order extends BaseTimeEntity<UUID> {
         this.holdReason = reason;
     }
 
-    /** 이행 보류를 해제한다. */
+    /**
+     * 이행 보류를 해제한다.
+     *
+     * @throws FulfillmentStatusException 결제 완료 주문이 아니거나 보류 중이 아니면
+     */
     public void releaseFulfillment() {
         requirePaid();
         requireFulfillment(FulfillmentStatus.ON_HOLD);

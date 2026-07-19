@@ -24,11 +24,7 @@ public record Money(long amount) {
         return new Money(this.amount + other.amount);
     }
 
-    /**
-     * 두 금액의 차를 반환한다.
-     *
-     * @throws IllegalArgumentException 결과가 음수인 경우
-     */
+    /** 두 금액의 차를 반환한다. */
     public Money minus(Money other) {
         if (this.amount < other.amount) {
             throw new IllegalArgumentException("뺄셈 결과가 음수가 될 수 없다: " + this.amount + " - " + other.amount);
