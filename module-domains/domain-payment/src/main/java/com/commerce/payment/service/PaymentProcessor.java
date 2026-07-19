@@ -20,14 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/**
- * 결제 승인·취소·확정 기록을 조율한다. PG 호출은 포트에 위임한다.
- *
- * <p>승인·취소 모두 PG 호출을 트랜잭션 밖에서 내고 결과 영속만 좁힌다. 승인은 영속 실패 시 고아 청구를 환불로
- * 역보상한다(청구가 환불 없이 고아로 남지 않게). 취소는 환불이 비가역이라 역보상 대신 멱등 키로 재시도 이중
- * 환불을 막는다. 응답 유실로 요청 상태에 머문 결제는 확정 기록({@code confirm*})이 PG 재청구 없이 상태 조회
- * 결과만 반영하고, 주문이 이미 종결된 지연 승인은 환불을 선행한 뒤 승인·취소를 한 커밋으로 기록한다.
- */
+/** 결제 승인·취소와 리컨실 확정 기록을 조율한다. PG 호출은 포트에 위임한다. */
 @Service
 public class PaymentProcessor {
 
@@ -72,15 +65,9 @@ public class PaymentProcessor {
     }
 
     /**
-     * 결제를 취소·환불한다. PG 미호출 승인(전액 할인)이면 환불 호출을 생략한다.
-     *
-     * <p>승인 경로처럼 환불을 트랜잭션 밖에서 내고 결과 영속만 프로그램적 트랜잭션으로 좁힌다. 환불 성공 후 영속이
-     * 실패하면 재시도가 같은 멱등 키로 환불을 재호출하고 PG가 이를 멱등 처리해 이중 환불을 막는다 — 환불은
-     * 비가역이라 승인의 고아 청구와 달리 역보상할 수 없다. 호출자는 이 메서드를 트랜잭션 밖에서 부른다.
-     *
-     * <p>이미 취소된 결제는 관용하고 조용히 반환한다. 취소 후 다운스트림(주문 취소·복원)이 실패해 재시도되는
-     * 경로에서 이미-환불·CANCELLED 결제를 '환불 완료'로 통과시켜 복원을 완결한다. 이 반환이 아래 PG 환불 호출
-     * 앞이라 재시도가 PG를 재호출하지 않아 환불이 최대 한 번만 일어난다.
+     * 결제를 취소·환불한다. PG 미호출 승인(전액 할인)이면 환불 호출을 생략하고, 이미 취소된 결제는 PG 재호출
+     * 없이 조용히 통과시켜 환불이 최대 한 번만 일어나게 한다. 환불 성공 후 영속이 실패해도 재시도가 같은 멱등
+     * 키로 환불을 재호출한다. 호출자는 이 메서드를 트랜잭션 밖에서 부른다.
      *
      * @throws PaymentStatusException 승인·취소 상태가 아니면
      */
@@ -97,13 +84,13 @@ public class PaymentProcessor {
             inTransaction(() -> recordCancellation(paymentId, null));
             return;
         }
+        // 환불은 비가역이라 승인의 고아 청구처럼 역보상할 수 없다.
         String pgCancelTransactionId = paymentGateway.cancel(pgTransactionId, refundIdempotencyKey(pgTransactionId));
         inTransaction(() -> recordCancellation(paymentId, pgCancelTransactionId));
     }
 
     /**
-     * 결제의 PG 거래 상태를 조회한다. 응답 유실로 요청 상태에 머문 결제를 리컨실·웹훅 확정 경로가 확정할 때
-     * 근거로 쓴다. PG 호출이므로 호출자는 트랜잭션 밖에서 부른다.
+     * 결제의 PG 거래 상태를 조회한다. 결제 상태는 바꾸지 않으며, PG 호출이므로 호출자는 트랜잭션 밖에서 부른다.
      *
      * @throws PaymentNotFoundException 결제가 없으면
      */
@@ -131,10 +118,8 @@ public class PaymentProcessor {
     }
 
     /**
-     * 주문이 이미 취소·환불로 종결된 결제의 지연 승인(고아 청구)을 환불로 종결한다. PG 환불을 트랜잭션 밖에서
-     * 먼저 수행하고 승인·취소 기록을 한 커밋으로 남긴다 — 어느 지점에서 중단돼도 결제가 요청 상태로 남아 다음
-     * 리컨실이 재시도하고, 환불 재호출은 결정론적 멱등 키가 이중 환불을 막는다. 호출자는 이 메서드를 트랜잭션
-     * 밖에서 부른다.
+     * 주문이 이미 취소·환불로 종결된 결제의 지연 승인(고아 청구)을 환불로 종결한다. PG 환불을 먼저 수행하고
+     * 승인·취소 기록을 한 커밋으로 남긴다. 호출자는 이 메서드를 트랜잭션 밖에서 부른다.
      *
      * @throws PaymentStatusException 요청 상태가 아니면
      */
@@ -143,12 +128,14 @@ public class PaymentProcessor {
         return inTransaction(() -> recordRefundedApproval(paymentId, pgTransactionId, pgCancelTransactionId));
     }
 
+    /** PG를 생략한 자동 승인을 기록한다. */
     private PaymentInfo recordAutoApproval(UUID paymentId) {
         Payment payment = find(paymentId);
         payment.approveWithoutGateway(clock.instant());
         return PaymentInfo.from(payment);
     }
 
+    /** PG 승인 결과를 승인 또는 실패로 기록한다. */
     private PaymentInfo recordApproval(UUID paymentId, PaymentApproval approval) {
         Payment payment = find(paymentId);
         if (approval.approved()) {
@@ -159,12 +146,14 @@ public class PaymentProcessor {
         return PaymentInfo.from(payment);
     }
 
+    /** 취소·환불 결과를 기록한다. */
     private PaymentInfo recordCancellation(UUID paymentId, @Nullable String pgCancelTransactionId) {
         Payment payment = find(paymentId);
         payment.cancel(pgCancelTransactionId, clock.instant());
         return PaymentInfo.from(payment);
     }
 
+    /** 고아 청구의 승인과 취소를 한 커밋으로 기록한다. */
     private PaymentInfo recordRefundedApproval(UUID paymentId, String pgTransactionId, String pgCancelTransactionId) {
         Payment payment = find(paymentId);
         payment.approve(pgTransactionId, clock.instant());
@@ -172,14 +161,13 @@ public class PaymentProcessor {
         return PaymentInfo.from(payment);
     }
 
-    /**
-     * 환불 멱등 키를 원거래 ID에서 결정론적으로 파생한다. 영속 실패 후 재시도가 같은 키를 재생성해 PG가 이중
-     * 환불을 막는다. 시간·UUID·카운터를 섞으면 창이 다시 열리므로 순수 함수로 유지한다.
-     */
+    /** 환불 멱등 키를 원거래 ID에서 결정론적으로 파생한다. */
     private static String refundIdempotencyKey(String pgTransactionId) {
+        // 시간·UUID·카운터를 섞으면 재시도가 다른 키를 내 이중 환불 창이 다시 열리므로 순수 함수로 유지한다.
         return "CANCEL:" + pgTransactionId;
     }
 
+    /** 결과 영속에 실패한 승인 청구를 환불한다. */
     private void refundOrphanedCharge(PaymentApproval approval, RuntimeException persistFailure) {
         @Nullable String pgTransactionId = approval.pgTransactionId();
         if (!approval.approved() || pgTransactionId == null) {
@@ -193,10 +181,12 @@ public class PaymentProcessor {
         }
     }
 
+    /** 기록 동작을 트랜잭션 안에서 실행한다. */
     private PaymentInfo inTransaction(Supplier<PaymentInfo> action) {
         return Objects.requireNonNull(transactionTemplate.execute(status -> action.get()));
     }
 
+    /** 결제를 찾고 없으면 거부한다. */
     private Payment find(UUID paymentId) {
         return paymentRepository
                 .findById(paymentId)

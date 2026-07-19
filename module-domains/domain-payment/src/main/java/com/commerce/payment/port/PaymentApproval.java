@@ -3,7 +3,12 @@ package com.commerce.payment.port;
 import com.commerce.payment.entity.FailureReason;
 import org.jspecify.annotations.Nullable;
 
-/** PG 승인 결과다. 성공이면 거래 ID를, 실패면 사유를 담는다. */
+/**
+ * PG 승인 결과다.
+ *
+ * @param pgTransactionId 승인 거래 ID. 승인일 때만 있다
+ * @param failureReason 거절 사유. 거절일 때만 있다
+ */
 public record PaymentApproval(
         boolean approved,
         @Nullable String pgTransactionId,
@@ -17,10 +22,12 @@ public record PaymentApproval(
         }
     }
 
+    /** 승인 결과를 만든다. */
     public static PaymentApproval approved(String pgTransactionId) {
         return new PaymentApproval(true, pgTransactionId, null);
     }
 
+    /** 거절 결과를 만든다. */
     public static PaymentApproval declined(FailureReason failureReason) {
         return new PaymentApproval(false, null, failureReason);
     }
