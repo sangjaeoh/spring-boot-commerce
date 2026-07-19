@@ -85,7 +85,7 @@
 - 범위: 소.
 
 ### 6. domain-payment
-- 상태: 대기
+- 상태: 완료
 - 스캔 대상: `module-domains/domain-payment/src/main/java` 전체(17파일, 엔티티 1·enum 4). `port/` 하위 게이트웨이 인터페이스 포함.
 - 완료 기준: 공통.
 - 범위: 중.
