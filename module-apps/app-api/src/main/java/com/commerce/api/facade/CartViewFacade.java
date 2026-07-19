@@ -26,14 +26,9 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 
 /**
- * 장바구니 조회를 합성한다. 라인별 변형 현재가로 소계를 파생하고, 카탈로그와 같은 판매성 파생(변형 ACTIVE ∧
- * 상품 ON_SALE·미삭제 ∧ 재고 SELLABLE·수량 1 이상)으로 라인별 주문 가능(orderable)을 반영한다.
+ * 장바구니 조회를 변형·상품·재고와 합성해 라인별 소계·주문가능(orderable)을 파생한다.
  *
- * <p>트랜잭션을 열지 않고 도메인 Reader를 조립한다(변형·상품·재고 각 1회 IN 배치 조회). 단가는 저장하지 않고
- * 체크아웃과 같은 방식으로 변형 현재가를 조회 시점에 반영한다(장바구니는 "구매 예정" 목록). 변형은
- * 소프트삭제하지 않아 라인이 참조하는 변형은 항상 존재하고, 상품 부재(삭제)·재고 부재는 주문 불가로 강등한다.
- * 주문 불가 라인은 소계 표시는 유지하되 총액에서 제외한다 — 체크아웃이 전량 거부할 금액을 총액으로 보이지
- * 않게 하고, 라인 정리는 사용자가 직접 한다.
+ * <p>트랜잭션을 열지 않고 도메인 Reader를 조립한다(각 Reader가 자기 트랜잭션 소유).
  */
 @Component
 public class CartViewFacade {
@@ -54,7 +49,7 @@ public class CartViewFacade {
         this.stockReader = stockReader;
     }
 
-    /** 회원의 장바구니를 변형 현재가·소계·주문 가능 파생·총액(주문 가능 라인 합)과 함께 반환한다. 없으면 빈 장바구니다. */
+    /** 회원의 장바구니를 변형 현재가·소계·주문가능 파생·총액(주문가능 라인 합)과 함께 반환한다. 없으면 빈 장바구니다. */
     public CartView getCartView(UUID memberId) {
         CartInfo cart = cartReader.getCart(memberId);
         List<UUID> variantIds =
@@ -83,7 +78,7 @@ public class CartViewFacade {
         return new CartView(memberId, lines, total);
     }
 
-    /** 라인 변형들이 속한 상품 중 노출(ON_SALE·미삭제) 상품 ID 집합 — 삭제된 상품은 조회에 없어 자연히 빠진다. */
+    /** 라인 변형이 속한 상품 중 노출(ON_SALE·미삭제) 상품 ID를 모은다. */
     private Set<UUID> exposedProductIds(Collection<ProductVariantInfo> variants) {
         List<UUID> productIds =
                 variants.stream().map(ProductVariantInfo::productId).distinct().toList();
@@ -96,7 +91,7 @@ public class CartViewFacade {
                 .collect(Collectors.toSet());
     }
 
-    /** 재고가 받쳐주는(SELLABLE ∧ 수량 1 이상) 변형 ID 집합 — 카탈로그 품절 파생과 같은 기준이다. */
+    /** 재고가 받쳐주는(SELLABLE ∧ 수량 1 이상) 변형 ID를 모은다. */
     private Set<UUID> inStockVariantIds(List<UUID> variantIds) {
         if (variantIds.isEmpty()) {
             return Set.of();
