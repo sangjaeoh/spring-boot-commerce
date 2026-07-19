@@ -24,7 +24,7 @@ public class Member extends BaseTimeEntity<UUID> {
     @Id
     private UUID id;
 
-    /** 회원 이메일. 활성 회원 사이에서 유니크한 식별 키. */
+    /** 회원 이메일. 활성 회원 사이에서 유니크한 식별 키. 생성 후 바뀌지 않는다. */
     @Convert(converter = EmailConverter.class)
     @Column(name = "email")
     private Email email;
@@ -37,7 +37,7 @@ public class Member extends BaseTimeEntity<UUID> {
     @Column(name = "password_hash")
     private String passwordHash;
 
-    /** 회원 역할. 생성 후 바뀌지 않는다. */
+    /** 회원 역할. 가입은 항상 구매자이고 관리자는 기동 시딩으로만 부여된다. 생성 후 바뀌지 않는다. */
     @Enumerated(EnumType.STRING)
     @Column(name = "role")
     private MemberRole role;
