@@ -1,10 +1,6 @@
 package com.commerce.web.idempotency;
 
-/**
- * 멱등 키의 진행·완료를 기록하는 벤더 중립 저장소 포트다.
- *
- * <p>인메모리 기본 구현을 두고, 다중 인스턴스가 필요하면 infra가 분산 구현(예: Redis)을 제공한다.
- */
+/** 멱등 키의 진행·완료를 기록하는 벤더 중립 저장소 포트다. */
 public interface IdempotencyStore {
 
     /**

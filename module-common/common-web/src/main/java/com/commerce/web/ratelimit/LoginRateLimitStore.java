@@ -2,12 +2,7 @@ package com.commerce.web.ratelimit;
 
 import java.time.Duration;
 
-/**
- * 클라이언트 키의 고정창 시도 수를 세는 벤더 중립 저장소 포트다.
- *
- * <p>인메모리 기본 구현을 두고, 다중 인스턴스가 필요하면 infra가 분산 구현(예: Redis)을 제공한다.
- * 멱등 저장소와 같은 다중 인스턴스 근거로 실행 앱은 Redis 구현을 쓴다.
- */
+/** 클라이언트 키의 고정창 시도 수를 세는 벤더 중립 저장소 포트다. */
 public interface LoginRateLimitStore {
 
     /**

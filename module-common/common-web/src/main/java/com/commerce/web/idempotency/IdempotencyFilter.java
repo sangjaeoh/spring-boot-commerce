@@ -62,6 +62,7 @@ public final class IdempotencyFilter extends OncePerRequestFilter {
         }
     }
 
+    /** 거부 응답을 problem+json 본문으로 쓴다. */
     private static void writeProblem(HttpServletResponse response, HttpStatus status, String code, String detail)
             throws IOException {
         response.setStatus(status.value());

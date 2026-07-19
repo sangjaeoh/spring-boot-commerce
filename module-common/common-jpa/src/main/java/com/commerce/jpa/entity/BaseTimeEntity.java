@@ -10,21 +10,17 @@ import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.domain.Persistable;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-/**
- * 생성·수정 시각을 JPA Auditing으로 채우는 엔티티 공통 상위 타입이다.
- *
- * <p>{@link Persistable}을 구현해 수동 UUIDv7 PK가 유발하는 merge penalty를 막는다 —
- * {@code createdAt == null}이면 신규로 판정해 {@code persist()}로 직행한다. 식별자 기반
- * 동등성이라 {@code orphanRemoval} Set·LAZY 프록시·detached 비교에서 안전하다.
- */
+/** 생성·수정 시각을 JPA Auditing으로 채우는 엔티티 공통 상위 타입이다. */
 @MappedSuperclass
 @EntityListeners(AuditingEntityListener.class)
 public abstract class BaseTimeEntity<ID extends Serializable> implements Persistable<ID> {
 
+    /** 최초 저장 시각. 저장 전에는 없다. */
     @CreatedDate
     @Column(updatable = false)
     private Instant createdAt;
 
+    /** 마지막 수정 시각. 최초 저장 시에도 채워져 생성 시각과 같다. */
     @LastModifiedDate
     @Column
     private Instant updatedAt;

@@ -14,9 +14,7 @@ import tools.jackson.databind.ObjectMapper;
 /**
  * 미인증 요청(익명)에 401 problem+json을 쓰는 시큐리티 진입점이다.
  *
- * <p>{@code @RestControllerAdvice} 바깥에서 응답하므로 {@link WebErrorCode#UNAUTHENTICATED}를 실은
- * {@link ProblemDetail}을 주입된 Jackson {@link ObjectMapper}로 직접 직렬화하고 상태·{@code application/problem+json}·
- * charset을 수동 지정한다. 응답 본문은 전역 핸들러의 401과 {@code $.code}·content-type·status 계약이 같다.
+ * <p>응답 본문은 전역 핸들러의 401과 {@code $.code}·content-type·status 계약이 같다.
  */
 public final class RestAuthenticationEntryPoint implements AuthenticationEntryPoint {
 
@@ -30,6 +28,7 @@ public final class RestAuthenticationEntryPoint implements AuthenticationEntryPo
     public void commence(
             HttpServletRequest request, HttpServletResponse response, AuthenticationException authException)
             throws IOException {
+        // @RestControllerAdvice 바깥이라 ProblemDetail을 직접 직렬화하고 상태·content-type·charset을 수동 지정한다.
         WebErrorCode errorCode = WebErrorCode.UNAUTHENTICATED;
         ProblemDetail body = ProblemDetail.forStatus(errorCode.status());
         body.setDetail(errorCode.message());

@@ -3,12 +3,7 @@ package com.commerce.core.id;
 import java.security.SecureRandom;
 import java.util.UUID;
 
-/**
- * 시간 정렬(time-ordered) UUIDv7을 생성한다(RFC 9562).
- *
- * <p>상위 48비트에 Unix epoch 밀리초를, 나머지에 난수를 채워 삽입 지역성이 있는 정렬 가능한
- * 식별자를 만든다.
- */
+/** 시간 정렬(time-ordered) UUIDv7을 생성한다(RFC 9562). */
 public final class UuidV7Generator {
 
     private static final SecureRandom RANDOM = new SecureRandom();
@@ -19,7 +14,9 @@ public final class UuidV7Generator {
 
     private UuidV7Generator() {}
 
+    /** 새 UUIDv7 값을 만든다. */
     public static UUID generate() {
+        // 상위 48비트가 Unix epoch 밀리초라 값 순서가 곧 생성 시각 순서고, 그래서 인덱스 삽입 지역성이 생긴다.
         long millis = System.currentTimeMillis() & MILLIS_MASK;
         long randA = RANDOM.nextInt(0x1000);
         long randB = RANDOM.nextLong() & RAND_B_MASK;
