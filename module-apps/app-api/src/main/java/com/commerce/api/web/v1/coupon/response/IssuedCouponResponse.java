@@ -7,7 +7,7 @@ import java.time.Instant;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
-/** 발급 쿠폰 상세 응답이다. 사용 상태·사용 만료 시각과 사용 시각·주문, 무효화 시각·사유를 싣는다. */
+/** 사용 상태·사용 만료 시각과 사용 시각·주문, 무효화 시각·사유를 싣는다. */
 @Schema(description = "발급 쿠폰 상세 응답")
 public record IssuedCouponResponse(
         @Schema(description = "발급분 ID") UUID id,

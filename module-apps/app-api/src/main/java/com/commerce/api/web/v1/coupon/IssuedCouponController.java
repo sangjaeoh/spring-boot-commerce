@@ -27,11 +27,10 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 발급 쿠폰 조회·할인 미리보기 엔드포인트다.
  *
- * <p>전부 본인용 표면이라 소유 회원은 토큰 주체({@link AuthUser})에서 도출하고 미인증 요청은 401로 거부된다.
+ * <p>전부 본인용 표면이라 소유 회원은 토큰 주체({@link AuthUser})에서 도출한다.
  * 발급 쿠폰 도메인 Reader에 위임해 본인 발급분을 단건·목록 조회한다. 미소유는 미존재로 취급하며, 도메인이
  * 던지는 미존재 예외를 전역 핸들러가 problem+json으로 매핑한다. 할인 미리보기는 주문 금액에 대한 예상 할인을
- * 계산만 하고 상태를 바꾸지 않는다. 무효화의 관리자 표면은
- * {@link com.commerce.api.web.v1.admin.coupon.IssuedCouponAdminController}가 소유한다.
+ * 계산만 하고 상태를 바꾸지 않는다.
  */
 @Tag(name = "발급 쿠폰", description = "발급 쿠폰 조회·할인 미리보기")
 @Authenticated
@@ -48,7 +47,6 @@ public class IssuedCouponController {
         this.issuedCouponReader = issuedCouponReader;
     }
 
-    /** 본인 발급분을 조회한다. */
     @Operation(summary = "발급분 조회", description = "본인 발급분을 조회한다.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "조회됨"),
@@ -67,10 +65,7 @@ public class IssuedCouponController {
         return IssuedCouponResponse.from(issuedCouponReader.getIssuedCoupon(issuedCouponId, authUser.memberId()));
     }
 
-    /**
-     * 본인 발급분의 주문 금액 기준 예상 할인을 조회한다. 계산만 하고 상태를 바꾸지 않으며, 적용 불가는 오류가
-     * 아니라 사유와 0원으로 싣는다. 결과는 보증이 아니며 체크아웃 시점 재검증이 진실이다.
-     */
+    /** 결과는 보증이 아니며 체크아웃 시점 재검증이 진실이다. */
     @Operation(
             summary = "할인 미리보기",
             description = "본인 발급분의 주문 금액 기준 예상 할인을 조회한다. 계산만 하고 상태를 바꾸지 않으며, 적용 불가는 오류가 아니라 사유와 0원으로 싣는다.")
@@ -99,7 +94,6 @@ public class IssuedCouponController {
                 issuedCouponReader.getDiscountPreview(issuedCouponId, authUser.memberId(), Money.of(orderAmount)));
     }
 
-    /** 본인 발급 쿠폰 목록을 최신순으로 조회한다. 없으면 빈 목록이다. */
     @Operation(summary = "발급 쿠폰 목록 조회", description = "본인 발급 쿠폰 목록을 최신순으로 조회한다. 없으면 빈 목록이다.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "조회됨"),

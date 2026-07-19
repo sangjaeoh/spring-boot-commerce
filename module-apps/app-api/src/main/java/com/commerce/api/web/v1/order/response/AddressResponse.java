@@ -4,7 +4,6 @@ import com.commerce.order.info.AddressInfo;
 import io.swagger.v3.oas.annotations.media.Schema;
 import org.jspecify.annotations.Nullable;
 
-/** 배송지 응답이다. */
 @Schema(description = "배송지 응답")
 public record AddressResponse(
         @Schema(description = "수령인 이름") String recipientName,

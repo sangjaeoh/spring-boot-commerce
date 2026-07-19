@@ -9,7 +9,6 @@ import java.time.Instant;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
-/** 쿠폰 정책 응답이다. 판별 형 할인·발급 가능 기간·발급 한도·소진 카운트·발급 상태를 싣는다. */
 @Schema(description = "쿠폰 정책 응답")
 public record CouponResponse(
         @Schema(description = "쿠폰 ID") UUID id,

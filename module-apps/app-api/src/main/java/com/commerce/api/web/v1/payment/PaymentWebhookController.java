@@ -58,7 +58,6 @@ public class PaymentWebhookController {
         this.secretKey = new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), HMAC_ALGORITHM);
     }
 
-    /** 통지가 지목한 결제를 PG 상태 조회로 확정한다. 서명이 유효하지 않으면 거부한다. */
     @Operation(summary = "결제 웹훅 수신", description = "통지가 지목한 결제를 PG 상태 조회로 확정한다. 서명이 유효하지 않으면 거부한다.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "처리됨"),

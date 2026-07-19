@@ -6,7 +6,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 import org.springframework.data.domain.Page;
 
-/** 카탈로그 상품 목록 페이지 응답이다. */
 @Schema(description = "카탈로그 상품 목록 페이지 응답")
 public record ProductPageResponse(
         @Schema(description = "상품 목록") List<ProductSummaryResponse> products,

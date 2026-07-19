@@ -7,7 +7,6 @@ import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
-/** 상품 상세 응답이다. ACTIVE 변형·주문가능·품절·대표가를 싣는다. */
 @Schema(description = "상품 상세 응답")
 public record ProductDetailResponse(
         @Schema(description = "상품 ID") UUID id,

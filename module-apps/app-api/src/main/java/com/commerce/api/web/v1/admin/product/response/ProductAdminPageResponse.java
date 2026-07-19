@@ -6,7 +6,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 import org.springframework.data.domain.Page;
 
-/** 관리자 상품 목록 페이지 응답이다(숨김 포함). */
 @Schema(description = "관리자 상품 목록 페이지 응답(숨김 포함)")
 public record ProductAdminPageResponse(
         @Schema(description = "상품 목록") List<ProductAdminResponse> products,

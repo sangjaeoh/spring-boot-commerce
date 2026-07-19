@@ -7,7 +7,7 @@ import java.time.Instant;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
-/** 관리자 상품 목록 행 응답이다. 노출 상태(숨김 포함)를 싣되 대표가·품절 파생은 싣지 않는다(카탈로그와 별개). */
+/** 노출 상태(숨김 포함)를 싣되 대표가·품절 파생은 싣지 않는다(카탈로그와 별개). */
 @Schema(description = "관리자 상품 목록 행 응답")
 public record ProductAdminResponse(
         @Schema(description = "상품 ID") UUID id,

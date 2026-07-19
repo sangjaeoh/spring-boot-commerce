@@ -25,10 +25,9 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 상품 목록·상세 조회 엔드포인트다.
  *
- * <p>전부 공개다(비로그인 쇼핑). 등록·추가 변형 등록·관리(노출·숨김·편집·논리삭제)의 관리자 표면은
- * {@link com.commerce.api.web.v1.admin.product.ProductAdminController}가 소유한다. 조회는 각 파사드에 위임해
- * ACTIVE 변형·재고 파생(주문가능·품절·대표가)을 합성하고, 컨트롤러는 요청·결과를 DTO로 변환만 한다. 미존재는
- * 도메인이 던지는 예외를 전역 핸들러가 problem+json으로 매핑한다.
+ * <p>전부 공개다(비로그인 쇼핑). 조회는 각 파사드에 위임해 ACTIVE 변형·재고 파생(주문가능·품절·대표가)을
+ * 합성하고, 컨트롤러는 요청·결과를 DTO로 변환만 한다. 미존재는 도메인이 던지는 예외를 전역 핸들러가
+ * problem+json으로 매핑한다.
  */
 @Tag(name = "상품", description = "상품 목록·상세 조회")
 @RestController
@@ -43,7 +42,6 @@ public class ProductController {
         this.productDetailFacade = productDetailFacade;
     }
 
-    /** 노출 상품 목록을 대표가·품절과 함께 최신 등록순 페이지로 조회한다. */
     @Operation(summary = "상품 목록 조회", description = "노출 상품 목록을 대표가·품절과 함께 최신 등록순 페이지로 조회한다.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "조회됨"),
@@ -58,7 +56,6 @@ public class ProductController {
                 productCatalogFacade.getCatalogPage(PageRequest.of(pagination.zeroBasedPage(), pagination.size())));
     }
 
-    /** 상품 상세를 ACTIVE 변형·주문가능·품절·대표가와 함께 조회한다. */
     @Operation(summary = "상품 상세 조회", description = "상품 상세를 ACTIVE 변형·주문가능·품절·대표가와 함께 조회한다.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "조회됨"),
