@@ -104,10 +104,18 @@
 - 범위: 중.
 
 ### 9. domain-coupon
-- 상태: 대기
+- 상태: 완료
 - 스캔 대상: `module-domains/domain-coupon/src/main/java` 전체(27파일, 엔티티 4·enum 4). `Discount`·`ValidityPeriod` VO 포함.
 - 완료 기준: 공통.
 - 범위: 중.
+
+### 12. domain-order 잔여 + DOMAIN_MODEL 오기 (슬라이스 9에서 발견)
+- 상태: 대기
+- 목표: 참조 구현으로 선언된 domain-order의 규칙 잔여를 닫고, 정본 문서의 자기모순을 고친다.
+- `OrderRepository`의 `@Query` 2건(`findIdPageByMemberId`·`findIdPageByStatusAndFulfillmentStatus`)에 요약이 없다. `@Query`가 붙으면 파생 쿼리 면제가 아니라 요약 의무 대상이라는 규칙 위반이다. 리포지토리 전수 스캔 결과 저장소에 남은 `@Query` 무요약은 이 2건뿐이다(슬라이스 8이 `findExposedPage`, 9가 `findPage`를 닫았다).
+- **왜 남았나**: `todo.md`가 domain-order를 "이미 현재 규칙으로 정리된 참조 구현"으로 선언해 어느 슬라이스의 스캔 대상에도 넣지 않았다. 참조 구현 자체는 2차 규칙으로 재스캔된 적이 없다 — 이 항목이 그 구멍을 닫는다.
+- `DOMAIN_MODEL.md:388`이 "만료는 상태가 아니라 `validUntil` 경과로 파생 판정한다"고 적는데, 같은 문서 `:406`은 "정책 `validUntil`은 발급 가능 기간의 종료이지 사용 만료가 아니"라고 명시하고 코드(`IssuedCoupon.use`)는 `expiresAt`으로 판정한다. `:388`의 `validUntil`이 오기다 — `expiresAt`으로 고친다.
+- 범위: 소.
 
 ### 11. 소프트삭제 용어 전역 정합 (슬라이스 7에서 발견)
 - 상태: 대기
@@ -115,6 +123,7 @@
 - 발견: `DOMAIN_MODEL.md` 용어집은 `soft delete → 소프트삭제`로 등재하는데, 자바 소스는 `논리삭제`만 쓰고 `소프트삭제`는 0회다(domain-member 4곳·domain-product 3곳·app-api 4곳). `DOMAIN_MODEL.md:135` 자체가 한 줄에서 두 표기를 섞어 쓴다.
 - 이 마이그레이션의 슬라이스로 처리하지 않은 이유: 슬라이스 3·7이 이미 머지됐고 8이 같은 용어를 건드리므로, 모듈 단위로 고치면 중간 상태가 더 갈린다. 용어를 먼저 확정하고 한 번에 sweep한다.
 - 선행 결정 필요: 등재어를 `소프트삭제`로 두고 코드를 맞출지, `논리삭제`로 용어집을 고칠지. 코드 11곳 대 용어집 1행이라 후자가 변경이 작지만, `docs/`는 `소프트삭제`를 쓴다.
+- 같이 처리할 두 번째 발산(슬라이스 9에서 발견): 용어집은 `issued coupon → 발급분`인데 app-api의 Swagger `@Tag`·`@Schema`·`@Operation` 15곳 이상이 "발급 쿠폰"을 쓴다. domain-coupon 안쪽은 슬라이스 9가 "발급분"으로 맞췄으므로 남은 발산은 app-api 표면이다. 같은 유형이라 한 번에 sweep한다.
 - 범위: 소.
 
 ### 10. common 모듈 + app-migration
