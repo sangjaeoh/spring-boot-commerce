@@ -17,21 +17,20 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
-/**
- * 회원의 장바구니 애그리거트 루트다. 회원당 1개이며 자식 라인 집합을 소유한다.
- *
- * <p>같은 변형을 다시 담으면 새 라인 대신 기존 라인 수량을 합산한다.
- */
+/** 회원의 장바구니 애그리거트 루트다. 회원당 하나이며 담긴 라인 집합을 소유한다. */
 @Entity
 @Table(schema = "cart", name = "cart")
 public class Cart extends BaseTimeEntity<UUID> {
 
+    /** 장바구니 식별자. 생성 시각 순서를 담은 UUIDv7. */
     @Id
     private UUID id;
 
+    /** 장바구니를 소유한 회원 식별자. member 도메인 논리 참조. */
     @Column(name = "member_id")
     private UUID memberId;
 
+    /** 장바구니 라인 집합. */
     @OneToMany(mappedBy = "cart", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<CartItem> items = new HashSet<>();
 
@@ -88,10 +87,12 @@ public class Cart extends BaseTimeEntity<UUID> {
         items.clear();
     }
 
+    /** 변형 라인을 찾고 없으면 거부한다. */
     private CartItem requireItem(UUID variantId) {
         return findItem(variantId).orElseThrow(() -> new CartItemNotFoundException(CartErrorCode.CART_ITEM_NOT_FOUND));
     }
 
+    /** 변형에 해당하는 라인을 찾는다. */
     private Optional<CartItem> findItem(UUID variantId) {
         return items.stream()
                 .filter(item -> item.getVariantId().equals(variantId))
