@@ -16,49 +16,53 @@ import java.time.Instant;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
-/**
- * 회원에게 발급된 쿠폰 애그리거트 루트다. 동시 사용을 낙관락({@code @Version})으로 막는다.
- *
- * <p>사용 기한은 발급 시 확정한 스냅샷({@code expiresAt})이며 정책 변경이 소급하지 않는다.
- * 불변식 {@code status == USED ⇔ usedAt != null ∧ orderId != null},
- * {@code status == REVOKED ⇔ revokedAt != null ∧ revokeReason != null}.
- */
+/** 회원에게 발급된 쿠폰(issued coupon) 애그리거트 루트다. */
 @Entity
 @Table(schema = "coupon", name = "issued_coupon")
 public class IssuedCoupon extends BaseTimeEntity<UUID> {
 
+    /** 발급분 식별자. 생성 시각 순서를 담은 UUIDv7. */
     @Id
     private UUID id;
 
+    /** 발급 근거인 쿠폰 정책 식별자. */
     @Column(name = "coupon_id")
     private UUID couponId;
 
+    /** 발급 대상 회원 식별자. member 도메인 논리 참조. */
     @Column(name = "member_id")
     private UUID memberId;
 
+    /** 발급분 사용 상태. */
     @Enumerated(EnumType.STRING)
     @Column(name = "status")
     private IssuedCouponStatus status;
 
+    /** 사용 기한. 발급 시각 + 정책의 사용 창(일). */
     @Column(name = "expires_at")
     private Instant expiresAt;
 
+    /** 사용 시각. */
     @Column(name = "used_at")
     @Nullable
     private Instant usedAt;
 
+    /** 사용된 주문 식별자. order 도메인 논리 참조. */
     @Column(name = "order_id")
     @Nullable
     private UUID orderId;
 
+    /** 무효화 시각. */
     @Column(name = "revoked_at")
     @Nullable
     private Instant revokedAt;
 
+    /** 무효화 사유. 자유 문자열. */
     @Column(name = "revoke_reason")
     @Nullable
     private String revokeReason;
 
+    /** 낙관락 버전. */
     @Version
     @Column(name = "version")
     private long version;

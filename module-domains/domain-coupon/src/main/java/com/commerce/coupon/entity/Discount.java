@@ -13,9 +13,7 @@ import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
 /**
- * 할인 정책 값 객체다. 판별 형 정액({@code FIXED})·정률({@code RATE})을 단일 임베더블로 평탄화한다.
- *
- * <p>불법 조합은 생성 시 배제한다.
+ * 정액({@code FIXED})·정률({@code RATE}) 두 판별 형을 갖는 할인 정책 값 객체다.
  *
  * @param type 판별 형
  * @param amount 정액 할인액({@code FIXED}에서만 존재, 1 이상)
@@ -94,11 +92,13 @@ public record Discount(
         return min(discount, orderAmount);
     }
 
+    /** 정률 할인액을 산출하고 상한이 있으면 상한으로 자른다. */
     private Money rateDiscount(Money orderAmount) {
         Money rated = Money.of(orderAmount.amount() * Objects.requireNonNull(percent) / MAX_PERCENT);
         return maxCap == null ? rated : min(rated, maxCap);
     }
 
+    /** 두 금액 중 작은 쪽을 고른다. */
     private static Money min(Money a, Money b) {
         return a.isLessThan(b) ? a : b;
     }

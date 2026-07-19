@@ -9,7 +9,8 @@ import java.time.Instant;
 /**
  * 쿠폰의 발급 가능 기간 값 객체다.
  *
- * <p>발급 창이지 발급분 사용 만료가 아니다(사용 만료는 발급분 expiresAt).
+ * @param validFrom 발급 가능 시작 시각
+ * @param validUntil 발급 가능 종료 시각. 시작 시각보다 뒤다
  */
 @Embeddable
 public record ValidityPeriod(
@@ -31,6 +32,7 @@ public record ValidityPeriod(
         return new ValidityPeriod(validFrom, validUntil);
     }
 
+    /** 주어진 시각이 발급 가능 기간 안(양 끝 포함)인지 본다. */
     public boolean isValidAt(Instant now) {
         return !now.isBefore(validFrom) && !now.isAfter(validUntil);
     }

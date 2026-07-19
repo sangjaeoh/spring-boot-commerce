@@ -22,6 +22,7 @@ public class CouponModifier {
     /**
      * 발급을 중지한다.
      *
+     * @throws CouponNotFoundException 쿠폰이 없으면
      * @throws CouponStatusException 발급 가능 상태가 아니면
      */
     @Transactional
@@ -32,6 +33,7 @@ public class CouponModifier {
     /**
      * 발급을 재개한다.
      *
+     * @throws CouponNotFoundException 쿠폰이 없으면
      * @throws CouponStatusException 발급 중지 상태가 아니면
      */
     @Transactional
@@ -39,6 +41,7 @@ public class CouponModifier {
         find(couponId).enable();
     }
 
+    /** 쿠폰 정책을 찾고 없으면 거부한다. */
     private Coupon find(UUID couponId) {
         return couponRepository
                 .findById(couponId)
