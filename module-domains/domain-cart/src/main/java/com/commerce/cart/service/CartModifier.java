@@ -53,6 +53,7 @@ public class CartModifier {
         cartRepository.findByMemberId(memberId).ifPresent(Cart::clear);
     }
 
+    /** 회원의 장바구니를 찾고 없으면 거부한다. */
     private Cart requireCart(UUID memberId) {
         return cartRepository
                 .findByMemberId(memberId)

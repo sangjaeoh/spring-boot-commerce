@@ -11,6 +11,7 @@ public record CartInfo(UUID memberId, List<CartItemInfo> items) {
         items = List.copyOf(items);
     }
 
+    /** 장바구니 엔티티에서 조회 모델을 만든다. */
     public static CartInfo from(Cart cart) {
         return new CartInfo(
                 cart.getMemberId(),
