@@ -72,7 +72,7 @@
 - 범위: 소.
 
 ### 4. domain-cart
-- 상태: 대기
+- 상태: 완료
 - 목표: 엔티티 필드·enum 상수·메서드 요약 의무를 채우고 타입 doc을 축약한다.
 - 스캔 대상: `module-domains/domain-cart/src/main/java` 전체(12파일, 엔티티 2·enum 1).
 - 완료 기준: 공통(아래 "슬라이스 공통 완료 기준").
