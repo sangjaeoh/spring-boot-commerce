@@ -42,7 +42,8 @@
 - 범위: 중.
 
 ### 2. Swagger 단일 출처 중복 제거
-- 상태: 대기
+- 상태: 완료
+- 완료 메모: web request/response DTO·도메인 Info의 `@Schema`/`@Operation` 중복 Javadoc을 제거했다(`CheckoutRequest`·응답 DTO·`OrderInfo↔OrderResponse` 등). 애노테이션에 없는 계약(교차필드·부재필드·조건부 존재·보안 거동)만 단일 위치에 유지. 컨트롤러는 최근 커밋(`9e53c82`)이 이미 정리해 재작성하지 않았다. 세션 독립 리뷰가 구현이 놓친 cart 요청 DTO 2건(`AddCartItemRequest`·`ChangeCartItemQuantityRequest`)의 컨트롤러 `@Operation` 교차중복을 추가로 잡아 수정했다. 최종: 애노테이션-Javadoc 중복 0·동작 무변경.
 - 목표: web DTO·컨트롤러 계약을 `@Schema`/`@Operation` 단일 출처로 정합하고 중복 Javadoc을 제거한다.
 - 스캔 대상: `module-apps/app-api`의 web/v1 request·response record 전부, 컨트롤러 클래스·메서드 Javadoc.
 - 완료 기준:
