@@ -19,57 +19,62 @@ import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
-/**
- * 결제 애그리거트 루트다. 주문당 1행이지만 취소(환불) 전이에 사용자 취소·리컨실·웹훅 확정이 겹칠 수 있어
- * 동시 중복 전이를 낙관락({@code @Version})으로 직렬화한다 — 겹친 취소 2건이 모두 가드를 통과해도 한쪽만
- * 커밋된다.
- *
- * <p>불변식 {@code amount > 0 ⇔ method != null}. 전액 할인(amount == 0)은 PG를 생략하고 자동 승인한다.
- */
+/** 주문 결제 애그리거트 루트다. 주문당 한 행이며 결제 금액·수단과 PG 거래 결과를 소유한다. */
 @Entity
 @Table(schema = "payment", name = "payment")
 public class Payment extends BaseTimeEntity<UUID> {
 
+    /** 결제 식별자. 생성 시각 순서를 담은 UUIDv7. */
     @Id
     private UUID id;
 
+    /** 결제 대상 주문 식별자. order 도메인 논리 참조. 주문당 유니크하다. */
     @Column(name = "order_id")
     private UUID orderId;
 
+    /** 결제 금액. 주문 실청구액과 같다. */
     @Convert(converter = MoneyConverter.class)
     @Column(name = "amount")
     private Money amount;
 
+    /** 결제 상태. */
     @Enumerated(EnumType.STRING)
     @Column(name = "status")
     private PaymentStatus status;
 
+    /** 결제 수단. 결제 금액이 0보다 클 때만 있다. */
     @Enumerated(EnumType.STRING)
     @Column(name = "method")
     @Nullable
     private PaymentMethod method;
 
+    /** 승인 실패 사유. 실패 상태일 때만 있다. */
     @Enumerated(EnumType.STRING)
     @Column(name = "failure_reason")
     @Nullable
     private FailureReason failureReason;
 
+    /** PG 승인 거래 식별자. PG를 호출한 승인에만 있다. */
     @Column(name = "pg_transaction_id")
     @Nullable
     private String pgTransactionId;
 
+    /** PG 취소(환불) 거래 식별자. PG 환불을 호출한 취소에만 있다. */
     @Column(name = "pg_cancel_transaction_id")
     @Nullable
     private String pgCancelTransactionId;
 
+    /** 승인 시각. */
     @Column(name = "approved_at")
     @Nullable
     private Instant approvedAt;
 
+    /** 취소·환불 시각. */
     @Column(name = "cancelled_at")
     @Nullable
     private Instant cancelledAt;
 
+    /** 낙관락 버전. */
     @Version
     @Column(name = "version")
     private long version;
@@ -142,7 +147,7 @@ public class Payment extends BaseTimeEntity<UUID> {
         this.cancelledAt = now;
     }
 
-    /** PG 승인이 필요한지(금액 > 0) 여부다. */
+    /** PG 승인이 필요한지(결제 금액이 0보다 큰지) 본다. */
     public boolean requiresGatewayApproval() {
         return !amount.isZero();
     }
@@ -152,6 +157,7 @@ public class Payment extends BaseTimeEntity<UUID> {
         return Objects.requireNonNull(method);
     }
 
+    /** 요청 상태가 아니면 거부한다. */
     private void requireRequested() {
         if (status != PaymentStatus.REQUESTED) {
             throw new PaymentStatusException(PaymentErrorCode.INVALID_PAYMENT_STATE_TRANSITION);

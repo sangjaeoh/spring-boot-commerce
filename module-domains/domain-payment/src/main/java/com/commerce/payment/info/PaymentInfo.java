@@ -9,7 +9,7 @@ import java.time.Instant;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
-/** 결제 조회 경계 모델이다. 체크아웃 파사드가 승인/실패를 이 결과로 분기한다. */
+/** 결제 조회 경계 모델이다. */
 public record PaymentInfo(
         UUID id,
         UUID orderId,
@@ -24,6 +24,7 @@ public record PaymentInfo(
         Instant createdAt,
         Instant updatedAt) {
 
+    /** 결제 엔티티에서 조회 모델을 만든다. */
     public static PaymentInfo from(Payment payment) {
         return new PaymentInfo(
                 payment.getId(),

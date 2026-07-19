@@ -4,8 +4,10 @@ import com.commerce.payment.entity.FailureReason;
 import org.jspecify.annotations.Nullable;
 
 /**
- * PG 거래 상태 조회 결과다. 승인이면 거래 ID를, 거절이면 사유를 담는다. {@code NOT_FOUND}는 해당 결제의 청구가
- * PG에 도달하지 않았음을 뜻한다 — 돈이 움직이지 않았으므로 호출자는 실패로 확정해도 안전하다.
+ * PG 거래 상태 조회 결과다.
+ *
+ * @param pgTransactionId 승인 거래 식별자. 승인 판정일 때만 있다
+ * @param failureReason 거절 사유. 거절 판정일 때만 있다
  */
 public record GatewayTransactionStatus(
         Result result,
@@ -20,22 +22,28 @@ public record GatewayTransactionStatus(
         }
     }
 
+    /** 승인 판정 결과를 만든다. */
     public static GatewayTransactionStatus approved(String pgTransactionId) {
         return new GatewayTransactionStatus(Result.APPROVED, pgTransactionId, null);
     }
 
+    /** 거절 판정 결과를 만든다. */
     public static GatewayTransactionStatus declined(FailureReason failureReason) {
         return new GatewayTransactionStatus(Result.DECLINED, null, failureReason);
     }
 
+    /** 거래 미도달 판정 결과를 만든다. */
     public static GatewayTransactionStatus notFound() {
         return new GatewayTransactionStatus(Result.NOT_FOUND, null, null);
     }
 
     /** PG 거래 조회 판정이다. */
     public enum Result {
+        /** 승인된 거래. */
         APPROVED,
+        /** 거절된 거래. */
         DECLINED,
+        /** PG에 도달하지 않은 청구. */
         NOT_FOUND
     }
 }
