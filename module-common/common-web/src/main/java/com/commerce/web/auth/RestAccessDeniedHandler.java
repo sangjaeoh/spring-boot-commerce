@@ -14,9 +14,7 @@ import tools.jackson.databind.ObjectMapper;
 /**
  * 인증됐으나 권한이 부족한 요청에 403 problem+json을 쓰는 접근거부 핸들러다.
  *
- * <p>{@code @RestControllerAdvice} 바깥에서 응답하므로 {@link WebErrorCode#FORBIDDEN}을 실은
- * {@link ProblemDetail}을 주입된 Jackson {@link ObjectMapper}로 직접 직렬화하고 상태·{@code application/problem+json}·
- * charset을 수동 지정한다. 응답 본문은 전역 핸들러의 403과 {@code $.code}·content-type·status 계약이 같다.
+ * <p>응답 본문은 전역 핸들러의 403과 {@code $.code}·content-type·status 계약이 같다.
  */
 public final class RestAccessDeniedHandler implements AccessDeniedHandler {
 
@@ -30,6 +28,7 @@ public final class RestAccessDeniedHandler implements AccessDeniedHandler {
     public void handle(
             HttpServletRequest request, HttpServletResponse response, AccessDeniedException accessDeniedException)
             throws IOException {
+        // @RestControllerAdvice 바깥이라 ProblemDetail을 직접 직렬화하고 상태·content-type·charset을 수동 지정한다.
         WebErrorCode errorCode = WebErrorCode.FORBIDDEN;
         ProblemDetail body = ProblemDetail.forStatus(errorCode.status());
         body.setDetail(errorCode.message());

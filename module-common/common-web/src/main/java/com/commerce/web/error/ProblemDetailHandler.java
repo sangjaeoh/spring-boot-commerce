@@ -23,14 +23,7 @@ import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
-/**
- * 경계에 도달한 예외를 RFC 9457 {@link ProblemDetail}로 변환하는 전역 핸들러다.
- *
- * <p>{@link BaseException}은 실린 {@link ErrorCode}의 상태·코드·메시지로, Bean Validation 실패는
- * 400과 필드 오류로, 낙관락 충돌은 409로, 그 밖의 예외는 500으로 매핑한다. 표준 스프링 MVC 예외
- * (405·415·본문 파싱 오류 등)는 {@link ResponseEntityExceptionHandler}가 각자의 상태로 처리하므로
- * 500 폴백이 이를 삼키지 않는다.
- */
+/** 경계에 도달한 예외를 RFC 9457 {@link ProblemDetail}로 변환하는 전역 핸들러다. */
 @RestControllerAdvice
 public class ProblemDetailHandler extends ResponseEntityExceptionHandler {
 
@@ -59,12 +52,9 @@ public class ProblemDetailHandler extends ResponseEntityExceptionHandler {
         return respond(exception, body, HttpStatus.CONFLICT, request);
     }
 
-    /**
-     * 메서드 시큐리티({@code @PreAuthorize})가 컨트롤러에서 던지는 접근 거부를 403으로 매핑한다. URL 기반 거부는
-     * 필터에서 던져져 접근거부 핸들러가 처리하지만, 컨트롤러에서 던져지는 이 예외는 MVC 경계에 도달하므로 여기서
-     * 같은 FORBIDDEN 계약으로 응답해 아래 500 폴백이 삼키지 않게 한다. 미인증 익명은 URL 규칙이 먼저 401로 거부하므로
-     * 여기 도달하는 것은 인증된 권한 부족뿐이다.
-     */
+    /** 메서드 시큐리티({@code @PreAuthorize})가 컨트롤러에서 던지는 접근 거부를 403으로 매핑한다. */
+    // URL 기반 거부는 필터에서 던져져 접근거부 핸들러가 응답하고, MVC 경계에 도달하는 것은 인증된 권한
+    // 부족뿐이다. 여기서 잡지 않으면 아래 500 폴백이 삼킨다.
     @ExceptionHandler(AccessDeniedException.class)
     protected ResponseEntity<Object> handleAccessDenied(AccessDeniedException exception, WebRequest request) {
         WebErrorCode errorCode = WebErrorCode.FORBIDDEN;
@@ -78,6 +68,8 @@ public class ProblemDetailHandler extends ResponseEntityExceptionHandler {
      * 매핑되지 않은 예외를 500으로 매핑한다. 호출자 보장 선행조건 위반이 경계로 새어 나온 서버 버그
      * ({@link IllegalArgumentException} 등)가 여기에 온다.
      */
+    // 표준 스프링 MVC 예외(405·415·본문 파싱 오류 등)는 ResponseEntityExceptionHandler가 각자의 상태로
+    // 먼저 처리하므로 이 폴백이 삼키지 않는다.
     @ExceptionHandler(Exception.class)
     protected ResponseEntity<Object> handleUnexpected(Exception exception, WebRequest request) {
         logger.error("처리되지 않은 예외가 경계에 도달했다", exception);
@@ -86,6 +78,7 @@ public class ProblemDetailHandler extends ResponseEntityExceptionHandler {
         return respond(exception, body, HttpStatus.INTERNAL_SERVER_ERROR, request);
     }
 
+    /** 요청 본문 Bean Validation 실패를 400과 필드별 오류 목록으로 매핑한다. */
     @Override
     protected ResponseEntity<Object> handleMethodArgumentNotValid(
             MethodArgumentNotValidException exception, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
@@ -102,6 +95,7 @@ public class ProblemDetailHandler extends ResponseEntityExceptionHandler {
         return Objects.requireNonNull(handleExceptionInternal(exception, body, headers, status, request));
     }
 
+    /** 컨트롤러 파라미터 Bean Validation 실패를 400과 파라미터별 오류 목록으로 매핑한다. */
     @Override
     protected ResponseEntity<Object> handleHandlerMethodValidationException(
             HandlerMethodValidationException exception,
@@ -123,10 +117,12 @@ public class ProblemDetailHandler extends ResponseEntityExceptionHandler {
         return Objects.requireNonNull(handleExceptionInternal(exception, body, headers, status, request));
     }
 
+    /** 필드명과 메시지를 응답 오류 항목으로 만든다. */
     private static Map<String, String> violation(String field, @Nullable String message) {
         return Map.of("field", field, "message", Objects.requireNonNullElse(message, INVALID_VALUE));
     }
 
+    /** 본문·상태를 상위 핸들러의 응답 조립 경로로 넘겨 응답을 만든다. */
     private ResponseEntity<Object> respond(
             Exception exception, ProblemDetail body, HttpStatusCode status, WebRequest request) {
         // 응답 미커밋 컨텍스트라 handleExceptionInternal은 non-null이다(커밋 시에만 null 반환).

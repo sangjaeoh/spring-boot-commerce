@@ -11,12 +11,7 @@ import org.springframework.web.context.request.NativeWebRequest;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.method.support.ModelAndViewContainer;
 
-/**
- * {@link AuthUser} 컨트롤러 파라미터를 시큐리티 컨텍스트의 인증 주체로 해석하는 리졸버다.
- *
- * <p>파라미터 선언 자체가 인증 강제다 — 컨텍스트에 인증 주체가 없으면(미인증 요청) 401로 매핑되는
- * {@link UnauthenticatedException}을 던진다.
- */
+/** {@link AuthUser} 컨트롤러 파라미터를 시큐리티 컨텍스트의 인증 주체로 해석하는 리졸버다. */
 public final class AuthUserArgumentResolver implements HandlerMethodArgumentResolver {
 
     @Override
@@ -24,6 +19,11 @@ public final class AuthUserArgumentResolver implements HandlerMethodArgumentReso
         return AuthUser.class.equals(parameter.getParameterType());
     }
 
+    /**
+     * 시큐리티 컨텍스트의 인증 주체를 해석해 반환한다. 파라미터 선언 자체가 인증 강제다.
+     *
+     * @throws UnauthenticatedException 컨텍스트에 인증 주체가 없으면(미인증 요청)
+     */
     @Override
     public Object resolveArgument(
             MethodParameter parameter,

@@ -4,10 +4,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 
-/**
- * 공용 페이지 파라미터 요청이다. 클라이언트 계약은 페이지 번호가 1부터 시작하고, 도메인 계층은 0-based
- * {@code Pageable}을 쓰므로 {@link #zeroBasedPage()}가 유일한 변환 지점이다.
- */
 @Schema(description = "페이지 파라미터. 페이지 번호는 1부터 시작한다.")
 public record PaginationRequest(
         @Schema(description = "페이지 번호(1부터 시작, 생략 시 1)", defaultValue = "1") @Min(1)
@@ -22,7 +18,7 @@ public record PaginationRequest(
         size = size == null ? 20 : size;
     }
 
-    /** 도메인 0-based 페이지 번호를 반환한다. */
+    /** 1-based 페이지 번호를 도메인 {@code Pageable}이 쓰는 0-based 번호로 바꿔 반환한다. */
     public int zeroBasedPage() {
         return page - 1;
     }

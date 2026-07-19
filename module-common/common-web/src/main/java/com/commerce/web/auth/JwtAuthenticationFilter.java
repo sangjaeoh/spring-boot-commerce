@@ -20,13 +20,13 @@ import org.springframework.web.filter.OncePerRequestFilter;
 /**
  * {@code Authorization: Bearer} 토큰이 유효하면 인증 주체({@link AuthUser})를 시큐리티 컨텍스트에 싣는 필터다.
  *
- * <p>fail-open이다 — 토큰이 없거나 유효하지 않으면 컨텍스트를 비운 채(익명) 통과시킨다. 요청 거부는 하지 않고
- * 인증·인가 강제는 시큐리티 필터 체인이 한다(미인증 익명은 진입점 401, 권한 부족은 접근거부 핸들러 403). 역할은
- * {@code ROLE_{역할}} 권한으로 매핑해 {@code hasRole('ADMIN')}이 {@code ROLE_ADMIN}을 요구하게 한다.
+ * <p>fail-open이다 — 토큰이 없거나 유효하지 않으면 컨텍스트를 비운 채(익명) 통과시킨다. 역할 클레임은
+ * {@code ROLE_{역할}} 권한으로 매핑한다.
  */
 public final class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private static final String BEARER_PREFIX = "Bearer ";
+    // hasRole('ADMIN')이 ROLE_ADMIN 권한을 요구하므로 역할 앞에 이 접두사를 붙인다.
     private static final String ROLE_PREFIX = "ROLE_";
     private static final String ROLE_CLAIM = "role";
 
@@ -46,6 +46,7 @@ public final class JwtAuthenticationFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
+    /** 역할 클레임이 있으면 인증 주체를 만들어 시큐리티 컨텍스트에 싣는다. */
     private void authenticate(TokenClaims claims) {
         String role = claims.claims().get(ROLE_CLAIM);
         if (role == null) {

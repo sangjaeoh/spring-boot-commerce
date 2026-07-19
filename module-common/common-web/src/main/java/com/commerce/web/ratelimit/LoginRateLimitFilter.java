@@ -18,8 +18,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * <p>한 창 안에서 한도를 넘는 요청은 {@code 429} problem+json으로 거부하고 {@code Retry-After}에 창 길이를
  * 싣는다. 키는 소비자가 준 {@link RateLimitScope}의 접두사에 소켓 원격 주소를 이은 값이며 프록시 헤더
  * ({@code X-Forwarded-For})는 신뢰하지 않는다. POST가 아닌 요청은 검사 없이 통과한다. 저장소에 접근할 수 없으면
- * 시도를 통과시키지 않고 {@code 503}으로 거부한다(fail-closed). 어느 경로에 붙일지·표면별 카운터 키·거부 응답
- * 문구는 이 필터의 소비자가 등록 시점에 정한다 — 이 필터 자신은 경로를 알지 못한다.
+ * 시도를 통과시키지 않고 {@code 503}으로 거부한다(fail-closed).
  */
 public final class LoginRateLimitFilter extends OncePerRequestFilter {
 
@@ -62,6 +61,7 @@ public final class LoginRateLimitFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
+    /** 거부 응답을 problem+json 본문으로 쓴다. */
     private static void writeProblem(HttpServletResponse response, HttpStatus status, String code, String detail)
             throws IOException {
         response.setStatus(status.value());

@@ -17,13 +17,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
-/**
- * JWT 액세스 토큰을 HS256 단일 대칭 키로 발급·검증한다.
- *
- * <p>토큰은 주체를 {@code sub} 클레임으로, 호출자가 넘긴 커스텀 클레임을 그대로 싣는다. 검증은
- * 서명·만료·주체를 모두 통과해야 주체와 커스텀 클레임을 반환하며, 어떤 실패든 원인을 구분하지 않고 빈
- * 결과로 응답한다. 역할 등 도메인 어휘는 코덱이 모르며 호출자가 클레임으로 싣고 읽는다.
- */
+/** JWT 액세스 토큰을 HS256 단일 대칭 키로 발급·검증한다. */
 public final class JwtTokenCodec {
 
     // MACSigner(HS256)의 최소 키 길이. 미달 키는 배선 시점에 실패시켜 약한 키 운용을 막는다.
