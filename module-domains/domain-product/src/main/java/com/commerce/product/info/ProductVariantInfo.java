@@ -18,6 +18,7 @@ public record ProductVariantInfo(
         Instant createdAt,
         Instant updatedAt) {
 
+    /** 변형 엔티티에서 조회 모델을 만든다. */
     public static ProductVariantInfo from(ProductVariant variant) {
         return new ProductVariantInfo(
                 variant.getId(),

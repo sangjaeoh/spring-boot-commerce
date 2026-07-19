@@ -23,6 +23,7 @@ public class ProductModifier {
     /**
      * 상품을 노출한다.
      *
+     * @throws ProductNotFoundException 활성 상품이 없으면
      * @throws ProductStatusException 숨김 상태가 아니면
      */
     @Transactional
@@ -33,6 +34,7 @@ public class ProductModifier {
     /**
      * 상품을 숨긴다.
      *
+     * @throws ProductNotFoundException 활성 상품이 없으면
      * @throws ProductStatusException 노출 상태가 아니면
      */
     @Transactional
@@ -40,18 +42,27 @@ public class ProductModifier {
         find(productId).hide();
     }
 
-    /** 상품명을 바꾼다. */
+    /**
+     * 상품명을 바꾼다.
+     *
+     * @throws ProductNotFoundException 활성 상품이 없으면
+     */
     @Transactional
     public void rename(UUID productId, String newName) {
         find(productId).rename(newName);
     }
 
-    /** 상세 설명을 바꾼다. */
+    /**
+     * 상세 설명을 바꾼다.
+     *
+     * @throws ProductNotFoundException 활성 상품이 없으면
+     */
     @Transactional
     public void changeDescription(UUID productId, @Nullable String newDescription) {
         find(productId).changeDescription(newDescription);
     }
 
+    /** 활성 상품을 찾고 없으면 거부한다. */
     private Product find(UUID productId) {
         return productRepository
                 .findByIdAndDeletedAtIsNull(productId)

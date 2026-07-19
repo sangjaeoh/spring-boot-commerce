@@ -32,13 +32,6 @@ public class ProductVariantAppender {
     /**
      * 변형을 비활성 상태로 생성하고 새 변형 ID를 반환한다.
      *
-     * <ol>
-     *   <li>소속 상품 존재 검사
-     *   <li>옵션 정규화
-     *   <li>비-RETIRED 옵션 조합 중복 검사
-     *   <li>변형 저장
-     * </ol>
-     *
      * @throws ProductNotFoundException 활성 상품이 없으면
      * @throws DuplicateVariantOptionException 비-RETIRED 변형과 옵션 조합이 겹칠 때
      * @throws InvalidVariantException 옵션이 올바르지 않거나 판매가가 최소가(1원) 미만이면

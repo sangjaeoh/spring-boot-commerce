@@ -23,9 +23,14 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
 
     List<Product> findByIdInAndDeletedAtIsNull(Collection<UUID> ids);
 
-    // UUIDv7이 시간순이라 id desc가 최신 등록순이다. 노출 필터(status·변형) 없이 미삭제 상품 전부(숨김 포함).
+    // UUIDv7이 시간순이라 id desc가 최신 등록순이다.
     Page<Product> findByDeletedAtIsNullOrderByIdDesc(Pageable pageable);
 
+    /**
+     * 주어진 상품 상태이면서 미삭제이고 주어진 상태의 변형을 1개 이상 가진 상품 페이지를 최신 등록순으로
+     * 조회한다. 페이지 크기·총건수는 이 노출 집합 기준이다.
+     */
+    // 노출 술어를 파사드 후필터가 아니라 쿼리에 둬야 페이지 크기·총건수가 노출 집합과 어긋나지 않는다.
     // UUIDv7이 시간순이라 id desc가 최신 등록순이다.
     @Query("""
             select p

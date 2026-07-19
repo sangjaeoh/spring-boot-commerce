@@ -15,6 +15,7 @@ public record ProductInfo(
         Instant createdAt,
         Instant updatedAt) {
 
+    /** 상품 엔티티에서 조회 모델을 만든다. */
     public static ProductInfo from(Product product) {
         return new ProductInfo(
                 product.getId(),

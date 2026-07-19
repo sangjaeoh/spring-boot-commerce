@@ -17,35 +17,39 @@ import jakarta.persistence.Table;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
-/**
- * 상품 변형(판매·재고 단위) 애그리거트 루트다. 소속 상품은 {@code productId}로 참조한다.
- *
- * <p>최초 상태는 {@code DISABLED}이며 재고 시딩 후 {@code enable()}로 판매 제공한다. 옵션 조합은
- * 생성 시 확정·불변이다.
- */
+/** 상품 변형(variant) 애그리거트 루트다. 판매가와 옵션 조합을 소유하는 판매·재고 단위다. */
 @Entity
 @Table(schema = "product", name = "product_variant")
 public class ProductVariant extends BaseTimeEntity<UUID> {
 
     private static final Money MIN_PRICE = Money.of(1L);
 
+    /** 변형 식별자. 생성 시각 순서를 담은 UUIDv7. */
     @Id
     private UUID id;
 
+    /** 소속 상품 식별자. 애그리거트 루트 간 ID 참조. */
     @Column(name = "product_id")
     private UUID productId;
 
+    /** 변형 판매가. 1원 이상. */
     @Convert(converter = MoneyConverter.class)
     @Column(name = "price")
     private Money price;
 
+    /** 카탈로그 상태. */
     @Enumerated(EnumType.STRING)
     @Column(name = "status")
     private ProductVariantStatus status;
 
+    /** 옵션 조합 정규화 키. 옵션명 기준 정렬·케이스 폴딩해 대조에 쓰는 값이며, 옵션이 없으면 {@code ""}. */
     @Column(name = "option_signature")
     private String optionSignature;
 
+    /**
+     * 옵션 조합 표시 라벨({@code Red / L}). 값을 입력 순서·대소문자 그대로 조인해 화면에 쓰는 값이며,
+     * 옵션이 없는 변형에는 없다.
+     */
     @Column(name = "option_label")
     @Nullable
     private String optionLabel;
@@ -121,6 +125,7 @@ public class ProductVariant extends BaseTimeEntity<UUID> {
         this.price = newPrice;
     }
 
+    /** 판매가가 최소가 미만이면 거부한다. */
     private static void requireMinimumPrice(Money price) {
         if (price.isLessThan(MIN_PRICE)) {
             throw new InvalidVariantException(ProductErrorCode.INVALID_PRICE);
