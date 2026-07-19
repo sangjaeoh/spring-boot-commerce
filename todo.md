@@ -57,7 +57,7 @@
 - 범위: 소.
 
 ### 2. app-api 나머지 파사드
-- 상태: 대기
+- 상태: 완료
 - 목표: 아직 손대지 않은 파사드 7개에 요약 의무를 채우고 타입 doc을 "무엇인지"로 축약한다.
 - 스캔 대상: `CartViewFacade`·`ProductRegistrationFacade`·`ProductDetailFacade`·`ProductCatalogFacade`·`CouponIssuanceFacade`·`CartCommandFacade`·`MemberWithdrawalFacade`, 그리고 같은 패키지의 View record(`ProductView`·`ProductSummaryView`·`ProductVariantView`·`CartView`·`CartLineView`).
 - 완료 기준: 타입 doc이 "무엇인지"만 남음(전이 규칙·동시성·설계 근거 잔존 0). 모든 메서드에 요약(면제 제외). 조율 메서드 중 단계가 셋 이상이고 순서가 의미를 가지는 것에 번호 주석. 삭제분 소유처 근거 보고. 독립 리뷰가 파일별 확인.
@@ -99,6 +99,7 @@
 ### 8. domain-product
 - 상태: 대기
 - 스캔 대상: `module-domains/domain-product/src/main/java` 전체(25파일, 엔티티 2·enum 3). `NormalizedOptions` 포함.
+- 인계 사항(슬라이스 2 독립 리뷰 발견): `ProductRepository.findExposedPage`는 `@Query`를 달고도 요약이 없다(`docs/coding-conventions.md`의 "`@Query`가 붙으면 요약을 둔다" 위반, main의 기존 잔여). 이 요약이 노출 술어를 파사드 후필터가 아니라 쿼리에 두는 근거(페이지 크기·총계가 노출 집합과 일치)의 소유처가 된다 — 슬라이스 2가 `ProductCatalogFacade` 타입 doc에서 지운 유일한 무소유 내용이다.
 - 완료 기준: 공통.
 - 범위: 중.
 
