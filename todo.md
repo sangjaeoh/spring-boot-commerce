@@ -64,7 +64,7 @@
 - 범위: 중.
 
 ### 3. app-api 비파사드 (config·auth·exception·listener)
-- 상태: 대기
+- 상태: 완료
 - 목표: 파사드 밖 app-api 코드에 규칙을 적용한다.
 - 스캔 대상: `config/` 7개, `web/auth/` 3개, `exception/` 2개, `event/listener/` 1개, `ApiApplication`, `package-info`.
 - 주의: 컨트롤러 15개와 web request/response DTO 49개는 `@Operation`·`@Schema`가 계약을 소유하는 면제 대상이다. 요약을 새로 달지 말고, 애노테이션과 중복되는 Javadoc이 남아 있으면 제거만 한다.
@@ -113,6 +113,7 @@
 - 상태: 대기
 - 스캔 대상: `module-common/common-core`(5)·`common-jpa`(5)·`common-auth`(3)·`common-messaging`(3)·`common-web`(20), `module-apps/app-migration`(2). 총 38파일.
 - 주의: `common-core`의 `Money`·`ErrorCode`, `common-jpa`의 `BaseTimeEntity`·컨버터는 전 도메인이 참조하는 재사용 타입이다. 재사용 타입 doc에는 그 타입 자신의 의미만 적고, 어느 도메인이 어떻게 쓰는지는 적지 않는다.
+- 인계 사항(슬라이스 3 판정): `MigrationApplication.main`에는 요약을 달지 않는다. 슬라이스 3이 `ApiApplication.main`을 같은 판정으로 두었다 — 호출자가 JVM이고 바로 위 타입 doc이 그 앱이 무엇인지 이미 말해, 요약이 이름 되풀이가 된다. 규칙의 면제 7종에 명시되진 않은 판정이므로 두 앱을 같게 간다.
 - 완료 기준: 공통.
 - 범위: 중.
 
