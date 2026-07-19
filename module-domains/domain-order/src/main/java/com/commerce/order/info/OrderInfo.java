@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
-/** 주문 조회 경계 모델이다. 결제·이행 축 상태와 이력 시각·사유·운송장 기록을 함께 싣는다. */
+/** 주문 조회 경계 모델이다. */
 public record OrderInfo(
         UUID id,
         String orderNumber,

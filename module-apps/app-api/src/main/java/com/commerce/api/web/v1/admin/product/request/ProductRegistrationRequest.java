@@ -11,7 +11,6 @@ import jakarta.validation.constraints.Size;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
 
-/** 옵션 목록은 비어 있을 수 있다(옵션 없는 단일 변형). */
 @Schema(description = "상품 등록 요청(첫 변형·초기 재고 시딩 포함)")
 public record ProductRegistrationRequest(
         @Schema(description = "상품명") @NotBlank String name,

@@ -10,9 +10,7 @@ import jakarta.validation.constraints.PositiveOrZero;
 import java.time.Instant;
 import org.jspecify.annotations.Nullable;
 
-/**
- * 발급 가능 기간은 {@code validFrom < validUntil}이며 도메인이 검증한다. 발급 한도는 없으면 무제한이다.
- */
+/** 발급 가능 기간은 {@code validFrom < validUntil}이며 도메인이 검증한다. */
 @Schema(description = "쿠폰 정책 생성 요청")
 public record CouponCreationRequest(
         @Schema(description = "쿠폰명") @NotBlank String name,

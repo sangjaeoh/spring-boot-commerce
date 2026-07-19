@@ -5,7 +5,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
-/** 변형 현재가·소계와 주문 가능(orderable) 파생을 싣는다. */
 @Schema(description = "장바구니 라인 응답")
 public record CartLineResponse(
         @Schema(description = "상품 변형 ID") UUID variantId,
