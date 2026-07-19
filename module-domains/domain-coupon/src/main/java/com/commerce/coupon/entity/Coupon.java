@@ -81,7 +81,11 @@ public class Coupon extends BaseTimeEntity<UUID> {
         this.status = CouponStatus.ACTIVE;
     }
 
-    /** 발급 가능({@code ACTIVE}) 상태로 쿠폰 정책을 생성한다. 발급 한도는 선택이며 없으면 무제한이다. */
+    /**
+     * 발급 가능({@code ACTIVE}) 상태로 쿠폰 정책을 생성한다. 발급 한도는 선택이며 없으면 무제한이다.
+     *
+     * @throws InvalidCouponException 사용 유효일수가 1 미만이거나 발급 한도가 1 미만이면
+     */
     public static Coupon create(
             String name,
             Discount discount,
@@ -99,7 +103,11 @@ public class Coupon extends BaseTimeEntity<UUID> {
                 UuidV7Generator.generate(), name, discount, minOrderAmount, validity, usageValidDays, maxIssuance);
     }
 
-    /** 발급을 중지한다. */
+    /**
+     * 발급을 중지한다.
+     *
+     * @throws CouponStatusException 발급 가능 상태가 아니면
+     */
     public void disable() {
         if (status != CouponStatus.ACTIVE) {
             throw new CouponStatusException(CouponErrorCode.INVALID_COUPON_STATE_TRANSITION);
@@ -107,7 +115,11 @@ public class Coupon extends BaseTimeEntity<UUID> {
         this.status = CouponStatus.DISABLED;
     }
 
-    /** 발급을 재개한다. */
+    /**
+     * 발급을 재개한다.
+     *
+     * @throws CouponStatusException 발급 중지 상태가 아니면
+     */
     public void enable() {
         if (status != CouponStatus.DISABLED) {
             throw new CouponStatusException(CouponErrorCode.INVALID_COUPON_STATE_TRANSITION);

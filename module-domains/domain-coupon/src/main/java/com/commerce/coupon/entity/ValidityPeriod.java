@@ -22,6 +22,11 @@ public record ValidityPeriod(
         }
     }
 
+    /**
+     * 발급 가능 기간을 만든다.
+     *
+     * @throws InvalidCouponException 시작 시각이 종료 시각보다 앞서지 않으면
+     */
     public static ValidityPeriod of(Instant validFrom, Instant validUntil) {
         return new ValidityPeriod(validFrom, validUntil);
     }

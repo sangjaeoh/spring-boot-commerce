@@ -57,14 +57,29 @@ public record Discount(
         }
     }
 
+    /**
+     * 정액 할인 정책을 만든다.
+     *
+     * @throws InvalidCouponException 정액 할인액이 1원 미만이면
+     */
     public static Discount fixed(Money amount) {
         return new Discount(DiscountType.FIXED, amount, null, null);
     }
 
+    /**
+     * 정률 할인 정책을 만든다.
+     *
+     * @throws InvalidCouponException 정률 퍼센트가 1..100 밖이면
+     */
     public static Discount rate(int percent) {
         return new Discount(DiscountType.RATE, null, percent, null);
     }
 
+    /**
+     * 상한을 둔 정률 할인 정책을 만든다.
+     *
+     * @throws InvalidCouponException 정률 퍼센트가 1..100 밖이거나 상한이 0원 이하이면
+     */
     public static Discount rate(int percent, Money maxCap) {
         return new Discount(DiscountType.RATE, null, percent, maxCap);
     }

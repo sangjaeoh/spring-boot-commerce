@@ -75,7 +75,11 @@ public class Member extends BaseTimeEntity<UUID> {
         return new Member(UuidV7Generator.generate(), email, name, passwordHash, role);
     }
 
-    /** 회원을 정지하고 사유를 기록한다. */
+    /**
+     * 회원을 정지하고 사유를 기록한다.
+     *
+     * @throws MemberStatusException 활성 상태가 아니면
+     */
     public void suspend(SuspensionReason reason) {
         if (status != MemberStatus.ACTIVE) {
             throw new MemberStatusException(MemberErrorCode.INVALID_STATUS_TRANSITION);
@@ -84,7 +88,11 @@ public class Member extends BaseTimeEntity<UUID> {
         this.suspensionReason = reason;
     }
 
-    /** 정지를 해제하고 사유를 지운다. */
+    /**
+     * 정지를 해제하고 사유를 지운다.
+     *
+     * @throws MemberStatusException 정지 상태가 아니면
+     */
     public void reinstate() {
         if (status != MemberStatus.SUSPENDED) {
             throw new MemberStatusException(MemberErrorCode.INVALID_STATUS_TRANSITION);

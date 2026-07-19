@@ -4,6 +4,7 @@ import com.commerce.member.entity.Email;
 import com.commerce.member.entity.Member;
 import com.commerce.member.entity.MemberRole;
 import com.commerce.member.exception.DuplicateEmailException;
+import com.commerce.member.exception.InvalidEmailException;
 import com.commerce.member.exception.InvalidPasswordException;
 import com.commerce.member.exception.MemberErrorCode;
 import com.commerce.member.repository.MemberRepository;
@@ -36,6 +37,7 @@ public class MemberAppender {
      *
      * @throws DuplicateEmailException 활성 회원 사이에서 이메일이 이미 쓰일 때
      * @throws InvalidPasswordException 패스워드가 정책(8자 이상 72바이트 이하)에 어긋날 때
+     * @throws InvalidEmailException 이메일 형식이 올바르지 않으면
      */
     @Transactional
     public UUID register(String email, String name, String rawPassword) {
@@ -47,6 +49,7 @@ public class MemberAppender {
      *
      * @throws DuplicateEmailException 활성 회원 사이에서 이메일이 이미 쓰일 때
      * @throws InvalidPasswordException 패스워드가 정책(8자 이상 72바이트 이하)에 어긋날 때
+     * @throws InvalidEmailException 이메일 형식이 올바르지 않으면
      */
     @Transactional
     public UUID registerAdmin(String email, String name, String rawPassword) {

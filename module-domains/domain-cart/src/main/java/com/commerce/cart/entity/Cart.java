@@ -2,6 +2,7 @@ package com.commerce.cart.entity;
 
 import com.commerce.cart.exception.CartErrorCode;
 import com.commerce.cart.exception.CartItemNotFoundException;
+import com.commerce.cart.exception.InvalidCartItemException;
 import com.commerce.core.id.UuidV7Generator;
 import com.commerce.jpa.entity.BaseTimeEntity;
 import jakarta.persistence.CascadeType;
@@ -46,7 +47,11 @@ public class Cart extends BaseTimeEntity<UUID> {
         return new Cart(UuidV7Generator.generate(), memberId);
     }
 
-    /** 변형을 담는다. 같은 변형이 있으면 수량을 합산한다. */
+    /**
+     * 변형을 담는다. 같은 변형이 있으면 수량을 합산한다.
+     *
+     * @throws InvalidCartItemException 수량이 1 미만이거나 합산 수량이 한도를 넘으면
+     */
     public void addItem(UUID variantId, int quantity) {
         findItem(variantId)
                 .ifPresentOrElse(
@@ -58,6 +63,7 @@ public class Cart extends BaseTimeEntity<UUID> {
      * 라인 수량을 바꾼다.
      *
      * @throws CartItemNotFoundException 해당 변형 라인이 없으면
+     * @throws InvalidCartItemException 수량이 1 미만이면
      */
     public void changeItemQuantity(UUID variantId, int quantity) {
         requireItem(variantId).changeQuantity(quantity);

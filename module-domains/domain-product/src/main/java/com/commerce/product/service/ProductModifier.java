@@ -3,6 +3,7 @@ package com.commerce.product.service;
 import com.commerce.product.entity.Product;
 import com.commerce.product.exception.ProductErrorCode;
 import com.commerce.product.exception.ProductNotFoundException;
+import com.commerce.product.exception.ProductStatusException;
 import com.commerce.product.repository.ProductRepository;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -19,13 +20,21 @@ public class ProductModifier {
         this.productRepository = productRepository;
     }
 
-    /** 상품을 노출한다. */
+    /**
+     * 상품을 노출한다.
+     *
+     * @throws ProductStatusException 숨김 상태가 아니면
+     */
     @Transactional
     public void show(UUID productId) {
         find(productId).show();
     }
 
-    /** 상품을 숨긴다. */
+    /**
+     * 상품을 숨긴다.
+     *
+     * @throws ProductStatusException 노출 상태가 아니면
+     */
     @Transactional
     public void hide(UUID productId) {
         find(productId).hide();

@@ -61,13 +61,21 @@ public class ProductVariant extends BaseTimeEntity<UUID> {
         this.optionLabel = options.label();
     }
 
-    /** 비활성({@code DISABLED}) 상태로 변형을 생성한다. */
+    /**
+     * 비활성({@code DISABLED}) 상태로 변형을 생성한다.
+     *
+     * @throws InvalidVariantException 판매가가 최소가(1원) 미만이면
+     */
     public static ProductVariant create(UUID productId, Money price, NormalizedOptions options) {
         requireMinimumPrice(price);
         return new ProductVariant(UuidV7Generator.generate(), productId, price, options);
     }
 
-    /** 변형을 판매 제공한다. */
+    /**
+     * 변형을 판매 제공한다.
+     *
+     * @throws ProductVariantStatusException 비활성 상태가 아니면
+     */
     public void enable() {
         if (status != ProductVariantStatus.DISABLED) {
             throw new ProductVariantStatusException(ProductErrorCode.INVALID_VARIANT_STATE_TRANSITION);
@@ -75,7 +83,11 @@ public class ProductVariant extends BaseTimeEntity<UUID> {
         this.status = ProductVariantStatus.ACTIVE;
     }
 
-    /** 변형 판매 제공을 중단한다. */
+    /**
+     * 변형 판매 제공을 중단한다.
+     *
+     * @throws ProductVariantStatusException 판매 제공 상태가 아니면
+     */
     public void disable() {
         if (status != ProductVariantStatus.ACTIVE) {
             throw new ProductVariantStatusException(ProductErrorCode.INVALID_VARIANT_STATE_TRANSITION);
@@ -83,7 +95,11 @@ public class ProductVariant extends BaseTimeEntity<UUID> {
         this.status = ProductVariantStatus.DISABLED;
     }
 
-    /** 변형을 은퇴시킨다. */
+    /**
+     * 변형을 은퇴시킨다.
+     *
+     * @throws ProductVariantStatusException 이미 은퇴한 변형이면
+     */
     public void retire() {
         if (status == ProductVariantStatus.RETIRED) {
             throw new ProductVariantStatusException(ProductErrorCode.INVALID_VARIANT_STATE_TRANSITION);
@@ -91,7 +107,12 @@ public class ProductVariant extends BaseTimeEntity<UUID> {
         this.status = ProductVariantStatus.RETIRED;
     }
 
-    /** 판매가를 바꾼다. */
+    /**
+     * 판매가를 바꾼다.
+     *
+     * @throws ProductVariantStatusException 은퇴한 변형이면
+     * @throws InvalidVariantException 판매가가 최소가(1원) 미만이면
+     */
     public void changePrice(Money newPrice) {
         if (status == ProductVariantStatus.RETIRED) {
             throw new ProductVariantStatusException(ProductErrorCode.INVALID_VARIANT_STATE_TRANSITION);

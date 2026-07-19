@@ -94,7 +94,11 @@ public class Payment extends BaseTimeEntity<UUID> {
         return new Payment(UuidV7Generator.generate(), orderId, amount, method);
     }
 
-    /** PG 승인 성공을 반영한다. */
+    /**
+     * PG 승인 성공을 반영한다.
+     *
+     * @throws PaymentStatusException 요청 상태가 아니면
+     */
     public void approve(String pgTransactionId, Instant now) {
         requireRequested();
         this.status = PaymentStatus.APPROVED;
@@ -102,14 +106,22 @@ public class Payment extends BaseTimeEntity<UUID> {
         this.approvedAt = now;
     }
 
-    /** PG를 생략하고 자동 승인한다(전액 할인). */
+    /**
+     * PG를 생략하고 자동 승인한다(전액 할인).
+     *
+     * @throws PaymentStatusException 요청 상태가 아니면
+     */
     public void approveWithoutGateway(Instant now) {
         requireRequested();
         this.status = PaymentStatus.APPROVED;
         this.approvedAt = now;
     }
 
-    /** PG 승인 실패를 반영한다. */
+    /**
+     * PG 승인 실패를 반영한다.
+     *
+     * @throws PaymentStatusException 요청 상태가 아니면
+     */
     public void fail(FailureReason failureReason) {
         requireRequested();
         this.status = PaymentStatus.FAILED;
