@@ -240,9 +240,7 @@ public class CheckoutFacade {
                 stockModifier.deduct(line.variantId(), line.quantity());
                 deducted.add(line);
             }
-            // 차감 완료 증거는 전 라인 차감 뒤에만 기록한다 — 마커가 있으면 차감이 완료됐음이 보장돼,
-            // 스윕·리컨실 보상이 이 증거 없이는 재고를 복원하지 않는다(차감 안 된 라인의 과복원 차단).
-            // 마커 기록 실패는 아래 catch가 동기 보상한다(이 시점엔 전 라인이 차감돼 전량 복원이 정확하다).
+            // 마커가 곧 전 라인 차감 완료 증거라 루프 뒤에만 기록한다.
             orderModifier.markStockDeducted(orderId);
         } catch (RuntimeException e) {
             orderModifier.cancel(orderId, CancellationReason.STOCK_SHORTAGE);

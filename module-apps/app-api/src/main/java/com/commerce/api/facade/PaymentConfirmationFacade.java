@@ -75,7 +75,6 @@ public class PaymentConfirmationFacade {
         this.issuedCouponModifier = issuedCouponModifier;
         this.staleAfter = staleAfter;
         this.clock = clock;
-        // 조용한 잔존·보상 실패를 수치로 관측한다 — 확정 처리·실패 건수와 증거 없는 복원 생략(운영 대사 대상).
         this.processedPayments = meterRegistry.counter("reconcile.payments.processed");
         this.failedPayments = meterRegistry.counter("reconcile.payments.failed");
         this.skippedStockRestores = meterRegistry.counter("compensation.stock_restore.skipped");
@@ -83,10 +82,7 @@ public class PaymentConfirmationFacade {
 
     /** 유예가 지난 REQUESTED 결제를 주기적으로 리컨실한다. 노드 간 동시 스윕은 분산 락이 하나로 줄인다. */
     @Scheduled(fixedDelayString = "${payment.reconciliation.fixed-delay}")
-    // lockAtMostFor는 스윕 소요 상한이다 — 평시 대상 0~수 건 × (PG 조회 + 확정 트랜잭션)으로 초 단위지만
-    // 장애 복구 직후 적체를 감안해 10분을 둔다. 크래시로 남은 락은 10분 뒤 회수되고, 상한 초과로 락이 풀려
-    // 실행이 겹쳐도 확정이 멱등이라 무해하다. 락 획득 실패는 정상 건너뜀이고 다음 주기가 재시도한다.
-    // 락의 목적·기각 대안은 REQUIREMENTS.md 제약·전제가 소유한다.
+    // lockAtMostFor는 스윕 소요 상한이다 — 평시 초 단위지만 장애 복구 직후 적체를 감안해 10분을 둔다.
     @SchedulerLock(name = LOCK_NAME, lockAtMostFor = "PT10M")
     public void reconcileStaleRequested() {
         reconcile(clock.instant().minus(staleAfter));
@@ -222,10 +218,7 @@ public class PaymentConfirmationFacade {
         if (issuedCouponId != null) {
             issuedCouponModifier.restoreUse(issuedCouponId, order.id());
         }
-        // 3. 재고 복원 — 차감 완료 마커가 게이트한다
-        // payment 행은 체크아웃이 마커 커밋 뒤에만 만들므로 여기 도달한 주문은 증거가 있는 게 정상이지만,
-        // 그 보장은 체크아웃 단계 순서라는 비국소 불변식이라 복원 지점마다 같은 게이트로 지역 강제한다 —
-        // 증거 없으면 복원을 생략한다(과복원 대신 팬텀 품절, 운영 대사).
+        // 3. 재고 복원
         if (order.stockDeductedAt() == null) {
             skippedStockRestores.increment();
             log.warn(
