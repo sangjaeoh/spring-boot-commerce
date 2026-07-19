@@ -9,7 +9,6 @@ import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import java.util.List;
 
-/** 옵션 목록은 비어 있을 수 있다(옵션 없는 단일 변형). */
 @Schema(description = "추가 변형 등록 요청(재고 시딩 포함)")
 public record VariantRegistrationRequest(
         @Schema(description = "판매가(원 단위, 1 이상)") @NotNull @Positive
