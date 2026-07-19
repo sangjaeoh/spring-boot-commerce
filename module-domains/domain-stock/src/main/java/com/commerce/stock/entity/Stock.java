@@ -14,28 +14,29 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.util.UUID;
 
-/**
- * 변형별 재고 애그리거트 루트다. 변형당 1행이고, 동시 차감 경합이 실재해 낙관락({@code @Version})을 둔다.
- *
- * <p>소진(quantity=0)은 상태가 아니라 수량에서 파생 판정한다. 최초 상태는 {@code SELLABLE}이다.
- */
+/** 변형(variant)별 재고 애그리거트 루트다. 변형당 한 행이며 가용 수량과 판매 가능 상태를 소유한다. */
 @Entity
 @Table(schema = "stock", name = "stock")
 public class Stock extends BaseTimeEntity<UUID> {
 
+    /** 재고 식별자. 생성 시각 순서를 담은 UUIDv7. */
     @Id
     private UUID id;
 
+    /** 재고 대상 변형 식별자. product 도메인 논리 참조. 변형당 유니크하다. */
     @Column(name = "variant_id")
     private UUID variantId;
 
+    /** 가용 수량. 0 이상. */
     @Column(name = "quantity")
     private int quantity;
 
+    /** 판매 가능 상태. */
     @Enumerated(EnumType.STRING)
     @Column(name = "status")
     private StockStatus status;
 
+    /** 낙관락 버전. */
     @Version
     @Column(name = "version")
     private long version;
@@ -125,6 +126,7 @@ public class Stock extends BaseTimeEntity<UUID> {
         this.status = StockStatus.DISCONTINUED;
     }
 
+    /** 수량이 1 미만이면 거부한다. */
     private static void requirePositive(int amount) {
         if (amount < 1) {
             throw new IllegalArgumentException("수량은 1 이상이어야 한다: " + amount);

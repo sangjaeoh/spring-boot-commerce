@@ -76,6 +76,7 @@ public class StockModifier {
         find(variantId).discontinue();
     }
 
+    /** 변형의 재고를 찾고 없으면 거부한다. */
     private Stock find(UUID variantId) {
         return stockRepository
                 .findByVariantId(variantId)
