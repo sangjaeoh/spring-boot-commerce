@@ -52,11 +52,7 @@ public class OrderReader {
         return OrderInfo.from(order);
     }
 
-    /**
-     * 회원에게 미배송 결제완료 주문(PAID이면서 아직 DELIVERED가 아닌 주문)이 있는지 본다.
-     *
-     * <p>회원 탈퇴 가드가 소비한다. PAID는 취소분을 제외하므로 미취소 조건을 함께 만족한다.
-     */
+    /** 회원에게 미배송 결제완료 주문(PAID이면서 아직 DELIVERED가 아닌 주문)이 있는지 본다. */
     @Transactional(readOnly = true)
     public boolean hasUndeliveredPaidOrder(UUID memberId) {
         return orderRepository.existsByMemberIdAndStatusAndFulfillmentStatusNot(
@@ -76,7 +72,7 @@ public class OrderReader {
      * 결제·이행 축 상태로 주문 목록을 최신순 페이지로 조회한다. 없으면 빈 페이지다. 같은 생성 시각은 id로
      * 결정적 순서를 둔다.
      *
-     * <p>관리자 운영 표면(출고·환불 대상 발견)이 소비한다. 소유 회원을 거르지 않으므로 관리자 가드 뒤에서만 부른다.
+     * <p>소유 회원을 거르지 않으므로 관리자 가드 뒤에서만 부른다.
      */
     @Transactional(readOnly = true)
     public Page<OrderInfo> getOrdersByStatus(
@@ -88,8 +84,7 @@ public class OrderReader {
     /**
      * 기준 시각 이전에 생성돼 아직 PENDING인 주문을 조회한다. 없으면 빈 목록이다.
      *
-     * <p>PENDING 주문 스윕(payment 행 없는 미결제 주문의 보상 종결)이 대상 선별로 소비한다. 소유 회원을 거르지
-     * 않으므로 시스템 스윕에서만 부른다.
+     * <p>소유 회원을 거르지 않으므로 시스템 스윕에서만 부른다.
      */
     @Transactional(readOnly = true)
     public List<OrderInfo> findPendingBefore(Instant cutoff) {
@@ -98,6 +93,7 @@ public class OrderReader {
                 .toList();
     }
 
+    /** ID 페이지로 주문을 페치해 총건수를 유지한 Info 페이지로 옮긴다. */
     private Page<OrderInfo> toOrderPage(Page<UUID> idPage, Pageable pageable) {
         List<OrderInfo> orders = orderRepository.findByIdInOrderByCreatedAtDescIdDesc(idPage.getContent()).stream()
                 .map(OrderInfo::from)

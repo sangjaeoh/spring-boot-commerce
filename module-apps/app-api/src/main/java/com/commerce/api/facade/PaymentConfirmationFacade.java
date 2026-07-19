@@ -30,26 +30,9 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * 응답 유실로 미확정(REQUESTED)에 머문 결제를 PG 거래 상태 조회로 확정하고, 종결 기록된(비REQUESTED) 결제가
- * 남긴 주문측 잔여를 마저 종결한다 — 주기 리컨실과 웹훅 통지가 공용하는 확정 경로다. 동기 체크아웃이 정상
- * 종결한 결제는 여기 도달하지 않는다.
+ * 미확정(REQUESTED) 결제를 PG 거래 상태 조회로 확정하고, 종결 기록된 결제가 남긴 주문측 잔여를 마저 종결한다.
  *
- * <p>웹훅 페이로드의 결과를 신뢰하지 않는다. 통지는 대상 결제를 지목하는 트리거일 뿐 확정 근거는 항상 PG
- * 상태 조회라 페이로드 위조가 상태를 왜곡하지 못한다. 이미 종결된 결제·주문 쌍은 조용히 통과하므로 중복
- * 전달·반복 스윕에 멱등하다. 생성 후 유예({@code payment.reconciliation.stale-after})가 지나지 않은 결제도
- * 손대지 않는다 — 동기 체크아웃이 아직 소유 중일 수 있어, 이 유예가 확정 경로와 동기 경로의 경합을 차단한다.
- *
- * <p>주기 스윕은 REQUESTED 결제만 선별한다. 종결 기록된 결제 × 미종결 주문 잔여(승인 커밋 후 결제완료 전
- * 중단, 거절 기록 후 보상 취소 실패)는 결제 상태만으로는 정상 종결과 구분할 수 없어 PENDING 주문 스윕
- * ({@link PendingOrderSweepFacade})이 발견해 위임하고, 웹훅 재전달도 같은 종결 경로에 닿는다.
- *
- * <p>결제 상태 기록을 주문측 효과(결제완료·보상) 뒤 마지막에 둔다. 중간에 중단돼도 결제가 REQUESTED로 남아
- * 다음 스윕이 같은 분기를 재실행하고, 주문측 효과는 상태 가드로 재실행을 건너뛴다. 고아 청구 환불도 PG
- * 환불을 선행하고 승인·취소 기록을 한 커밋으로 남겨 같은 자기복구를 유지한다. 보상의 재고·쿠폰 복원은
- * 주문 취소의 1회성 전이 뒤에만 태워 반복 실행이 이중 복원하지 않고, 재고 복원은 체크아웃의 차감 완료
- * 마커가 추가로 게이트한다 — 증거 없으면 복원을 생략해 과복원(재고 증식)을 차단한다. 라인 복원의 일시
- * 낙관락 충돌은 라인 단위 재시도가 흡수하므로, 취소 커밋 후 복원 유실의 잔여 트리거는 중단(크래시)과
- * 재시도 소진이다(DOMAIN_MODEL.md 미확정 결제 리컨실 절 참조).
+ * <p>주기 리컨실과 웹훅 통지가 공용하는 확정 경로다. 동기 체크아웃이 정상 종결한 결제는 여기 도달하지 않는다.
  */
 @Component
 public class PaymentConfirmationFacade {
@@ -138,6 +121,7 @@ public class PaymentConfirmationFacade {
         confirm(payment);
     }
 
+    /** 결제 상태로 확정 경로를 가른다. */
     private void confirm(PaymentInfo payment) {
         if (payment.status() == PaymentStatus.REQUESTED) {
             confirmFromGateway(payment);
@@ -158,6 +142,7 @@ public class PaymentConfirmationFacade {
         }
     }
 
+    /** PG 승인을 주문 상태별로 확정한다. 종결된 주문에 지연 승인된 청구는 고아 청구로 환불한다. */
     private void confirmApproval(PaymentInfo payment, OrderInfo order, String pgTransactionId) {
         switch (order.status()) {
             case PENDING -> {
@@ -172,6 +157,7 @@ public class PaymentConfirmationFacade {
         }
     }
 
+    /** PG 거절·미도달을 실패로 확정하고, 미결제 주문이면 보상 종결한다. */
     private void confirmFailure(PaymentInfo payment, OrderInfo order, FailureReason failureReason) {
         if (order.status() == OrderStatus.PAID) {
             // 모델상 도달 불가(PAID는 PG 승인 후에만) — PG 응답이 모순이므로 손대지 않고 다음 스윕에 남긴다.
@@ -198,6 +184,7 @@ public class PaymentConfirmationFacade {
         // CANCELLED(환불 완결)의 주문측 잔여(PAID 주문 취소 실패)는 취소 파사드의 재시도가 소유한다 — 손대지 않는다.
     }
 
+    /** 승인 기록된 결제의 주문측 잔여를 주문 상태별로 종결한다. */
     private void settleApprovedResidue(PaymentInfo payment, OrderInfo order) {
         switch (order.status()) {
             // 승인 커밋과 결제완료 전이 사이 중단 잔여 — 돈은 이미 빠졌으므로 주문을 결제완료로 완결한다.
@@ -209,6 +196,7 @@ public class PaymentConfirmationFacade {
         }
     }
 
+    /** 실패 기록된 결제의 주문측 잔여를 보상 종결한다. */
     private void settleFailedResidue(PaymentInfo payment, OrderInfo order) {
         if (order.status() == OrderStatus.PAID) {
             // 모델상 도달 불가(PAID는 PG 승인 후에만) — 기록이 모순이므로 손대지 않는다.
@@ -221,15 +209,23 @@ public class PaymentConfirmationFacade {
         }
     }
 
+    /**
+     * 미결제 주문을 취소하고 쿠폰·재고를 복원한다.
+     *
+     * <p>취소를 복원 앞에 두어 반복 실행에도 복원이 정확히 한 번이다.
+     */
     private void compensatePendingOrder(OrderInfo order) {
+        // 1. 주문 취소
         orderModifier.cancel(order.id(), CancellationReason.PAYMENT_FAILED);
+        // 2. 쿠폰 복원
         UUID issuedCouponId = order.issuedCouponId();
         if (issuedCouponId != null) {
             issuedCouponModifier.restoreUse(issuedCouponId, order.id());
         }
-        // 재고 복원은 차감 완료 마커가 게이트한다. payment 행은 체크아웃이 마커 커밋 뒤에만 만들므로 여기
-        // 도달한 주문은 증거가 있는 게 정상이지만, 그 보장은 체크아웃 단계 순서라는 비국소 불변식이라 복원
-        // 지점마다 같은 게이트로 지역 강제한다 — 증거 없으면 복원을 생략한다(과복원 대신 팬텀 품절, 운영 대사).
+        // 3. 재고 복원 — 차감 완료 마커가 게이트한다
+        // payment 행은 체크아웃이 마커 커밋 뒤에만 만들므로 여기 도달한 주문은 증거가 있는 게 정상이지만,
+        // 그 보장은 체크아웃 단계 순서라는 비국소 불변식이라 복원 지점마다 같은 게이트로 지역 강제한다 —
+        // 증거 없으면 복원을 생략한다(과복원 대신 팬텀 품절, 운영 대사).
         if (order.stockDeductedAt() == null) {
             skippedStockRestores.increment();
             log.warn(

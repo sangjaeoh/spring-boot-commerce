@@ -44,6 +44,7 @@ public record OrderInfo(
         lines = List.copyOf(lines);
     }
 
+    /** 주문 엔티티에서 조회 모델을 만든다. */
     public static OrderInfo from(Order order) {
         return new OrderInfo(
                 order.getId(),

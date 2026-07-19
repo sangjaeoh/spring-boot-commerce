@@ -737,7 +737,35 @@
 | order(이행) | NOT_STARTED → PREPARING → SHIPPED → DELIVERED, PREPARING ↔ ON_HOLD |
 | payment | REQUESTED → APPROVED → CANCELLED, REQUESTED → FAILED |
 
-## 도메인 용어집 (예약어 divergence)
+## 도메인 용어집
+
+### 영문↔한국어
+
+주석·문서는 아래 한국어 용어만 쓴다. 같은 영문 개념을 다른 한국어로 부르지 않는다.
+
+| 영문 | 한국어 | 나타나는 곳 |
+|---|---|---|
+| fulfillment | 이행 | `fulfillmentStatus`·`FulfillmentStatus`·`holdFulfillment` |
+| variant | 변형(SKU) | `ProductVariant`·`variantId` |
+| issued coupon | 발급분 | `IssuedCoupon` |
+| checkout | 체크아웃 | 크로스 도메인 조율 |
+| sweep | 스윕 | PENDING 주문 정리 |
+| reconcile | 리컨실 | 결제 상태 확정 |
+| catalog | 카탈로그 | 노출 상품 조회 |
+| snapshot | 스냅샷 | `OrderLineSnapshot`·배송지 |
+| aggregate root | 애그리거트 루트 | `Order`·`Cart` |
+| optimistic lock | 낙관락 | `@Version` |
+| soft delete | 소프트삭제 | `deletedAt` |
+| hold | 보류 | `HoldReason`·`ON_HOLD` |
+| ship | 출고 | `shippedAt`·`ship()` |
+| revoke | 무효화 | `IssuedCoupon.revoke()` |
+| orderable | 주문가능 | 카탈로그·장바구니 파생 |
+| totalAmount | 라인 합계 | 할인·배송비 반영 전 |
+| payAmount | 실청구액 | 라인 합계 − 할인액 + 배송비 |
+| compensation | 보상 | 동기 보상 경로 |
+| gate | 게이트 | 전이·노출 허용 판정 |
+
+### 예약어 divergence
 
 코드마다 갈리지 않도록 표준 divergence를 등재한다. 아래 외 divergence는 임의로 만들지 않는다.
 

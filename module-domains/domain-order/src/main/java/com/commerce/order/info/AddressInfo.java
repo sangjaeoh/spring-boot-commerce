@@ -11,6 +11,7 @@ public record AddressInfo(
         @Nullable String detailAddress,
         String phone) {
 
+    /** 배송지 값 객체에서 조회 모델을 만든다. */
     public static AddressInfo from(Address address) {
         return new AddressInfo(
                 address.recipientName(),

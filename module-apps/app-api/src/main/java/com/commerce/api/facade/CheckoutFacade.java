@@ -44,14 +44,7 @@ import org.springframework.stereotype.Component;
 /**
  * 장바구니 전체를 주문·결제로 전환하는 체크아웃 흐름을 조율한다.
  *
- * <p>트랜잭션을 열지 않고 도메인 서비스를 순차 호출한다(각 서비스가 자기 트랜잭션 소유). 주문 PENDING을
- * 사가 앵커로 먼저 만들고, 재고 차감·쿠폰 확정·결제 중 실패하면 그 콜스택에서 동기 보상한다. 전 라인 재고
- * 차감이 완료되면 주문에 차감 완료 마커를 남긴다 — 스윕·리컨실 보상은 이 증거 없이 재고를 복원하지 않으므로
- * 차감 전·차감 중 중단 잔여가 재고를 증식시키지 않는다. 보상은 스윕·
- * 리컨실과 같은 순서로 주문 취소의 1회성 전이를 복원 앞에 둔다 — 취소가 실패하면 복원하지 않아 주문이
- * PENDING으로 남고, 잔여는 payment 행 상태에 따라 PENDING 스윕(행 없음은 직접 보상, 종결 기록된
- * APPROVED·FAILED는 결제 리컨실에 위임)·결제 리컨실(REQUESTED)이 인계한다(DOMAIN_MODEL.md 체크아웃 정책
- * 참조). 결제 성공 후 {@code markPaid}가 {@code OrderPaid}를 발행해 커밋 후 장바구니가 비워진다.
+ * <p>트랜잭션을 열지 않고 도메인 서비스를 순차 호출한다(각 서비스가 자기 트랜잭션 소유).
  */
 @Component
 public class CheckoutFacade {
@@ -97,7 +90,7 @@ public class CheckoutFacade {
     }
 
     /**
-     * 체크아웃을 수행하고 결제 완료된 주문 ID를 반환한다.
+     * 체크아웃을 수행하고 결제 완료된 주문 ID를 반환한다. 4단계 이후 실패는 그 콜스택에서 동기 보상한다.
      *
      * @throws ApiException 회원 자격·장바구니·주문 가능·쿠폰 적용성·결제 거절 등 크로스 도메인 정책 거부
      */
@@ -107,25 +100,34 @@ public class CheckoutFacade {
             Money shippingFee,
             @Nullable UUID issuedCouponId,
             @Nullable PaymentMethod method) {
+        // 1. 회원 자격 확인
         requireEligibleMember(memberId);
+        // 2. 장바구니를 주문 라인 스냅샷으로 변환
         List<OrderLineSnapshot> snapshots = buildOrderableSnapshots(requireNonEmptyCart(memberId));
+        // 3. 할인·실청구액 산출
         Money totalAmount = totalOf(snapshots);
         Money discountAmount =
                 issuedCouponId != null ? resolveCouponDiscount(issuedCouponId, memberId, totalAmount) : Money.ZERO;
         Money payAmount = totalAmount.minus(discountAmount).plus(shippingFee);
         PaymentMethod resolvedMethod = payAmount.isZero() ? null : requireMethod(method);
 
+        // 4. 주문 생성 — 이후 단계 실패 시 보상 앵커
         UUID orderId =
                 orderAppender.place(memberId, snapshots, shippingAddress, discountAmount, shippingFee, issuedCouponId);
+        // 5. 재고 차감
         deductStockOrCompensate(orderId, snapshots);
+        // 6. 쿠폰 사용 확정
         if (issuedCouponId != null) {
             useCouponOrCompensate(orderId, memberId, issuedCouponId, snapshots);
         }
+        // 7. 결제 승인
         approvePaymentOrCompensate(orderId, snapshots, issuedCouponId, payAmount, resolvedMethod);
+        // 8. 결제 완료 확정
         orderModifier.markPaid(orderId);
         return orderId;
     }
 
+    /** 회원이 활성 자격인지 확인한다. */
     private void requireEligibleMember(UUID memberId) {
         MemberInfo member = memberReader.getMember(memberId);
         if (member.status() != MemberStatus.ACTIVE) {
@@ -133,6 +135,7 @@ public class CheckoutFacade {
         }
     }
 
+    /** 장바구니가 비어 있지 않은지 확인하고 라인을 반환한다. */
     private List<CartItemInfo> requireNonEmptyCart(UUID memberId) {
         CartInfo cart = cartReader.getCart(memberId);
         if (cart.items().isEmpty()) {
@@ -141,6 +144,7 @@ public class CheckoutFacade {
         return cart.items();
     }
 
+    /** 장바구니 라인마다 주문 가능 게이트를 통과시키고 주문 라인 스냅샷으로 옮긴다. */
     private List<OrderLineSnapshot> buildOrderableSnapshots(List<CartItemInfo> items) {
         List<OrderLineSnapshot> snapshots = new ArrayList<>();
         for (CartItemInfo item : items) {
@@ -158,6 +162,7 @@ public class CheckoutFacade {
         return snapshots;
     }
 
+    /** 스냅샷 단가와 수량을 곱해 합산한 라인 합계를 계산한다. */
     private Money totalOf(List<OrderLineSnapshot> snapshots) {
         Money total = Money.ZERO;
         for (OrderLineSnapshot line : snapshots) {
@@ -166,6 +171,7 @@ public class CheckoutFacade {
         return total;
     }
 
+    /** 변형이 활성인지 확인한다. 미존재도 주문 불가로 합친다. */
     private ProductVariantInfo requireActiveVariant(UUID variantId) {
         ProductVariantInfo variant;
         try {
@@ -179,6 +185,7 @@ public class CheckoutFacade {
         return variant;
     }
 
+    /** 상품이 판매중인지 확인한다. 미존재도 주문 불가로 합친다. */
     private ProductInfo requireOnSaleProduct(UUID productId) {
         ProductInfo product;
         try {
@@ -192,6 +199,7 @@ public class CheckoutFacade {
         return product;
     }
 
+    /** 재고가 판매 가능하고 요청 수량을 채우는지 확인한다. */
     private void requireSellableStock(UUID variantId, int quantity) {
         StockInfo stock;
         try {
@@ -207,6 +215,7 @@ public class CheckoutFacade {
         }
     }
 
+    /** 쿠폰 적용성을 확인하고 할인액을 산출한다. */
     private Money resolveCouponDiscount(UUID issuedCouponId, UUID memberId, Money totalAmount) {
         DiscountPreviewInfo preview = issuedCouponReader.getDiscountPreview(issuedCouponId, memberId, totalAmount);
         if (!preview.applicable()) {
@@ -215,6 +224,7 @@ public class CheckoutFacade {
         return preview.discountAmount();
     }
 
+    /** 유료 주문에 결제 수단이 있는지 확인한다. */
     private PaymentMethod requireMethod(@Nullable PaymentMethod method) {
         if (method == null) {
             throw new ApiException(ApiErrorCode.PAYMENT_METHOD_REQUIRED);
@@ -222,6 +232,7 @@ public class CheckoutFacade {
         return method;
     }
 
+    /** 전 라인 재고를 차감하고 차감 완료를 기록한다. 실패하면 주문을 취소하고 차감분을 복원한다. */
     private void deductStockOrCompensate(UUID orderId, List<OrderLineSnapshot> snapshots) {
         List<OrderLineSnapshot> deducted = new ArrayList<>();
         try {
@@ -240,6 +251,7 @@ public class CheckoutFacade {
         }
     }
 
+    /** 쿠폰 사용을 확정한다. 실패하면 주문을 취소하고 재고를 복원한다. */
     private void useCouponOrCompensate(
             UUID orderId, UUID memberId, UUID issuedCouponId, List<OrderLineSnapshot> snapshots) {
         try {
@@ -251,6 +263,7 @@ public class CheckoutFacade {
         }
     }
 
+    /** 결제를 요청·승인한다. 실패하거나 승인되지 않으면 보상한다. */
     private void approvePaymentOrCompensate(
             UUID orderId,
             List<OrderLineSnapshot> snapshots,
@@ -271,6 +284,7 @@ public class CheckoutFacade {
         }
     }
 
+    /** 주문을 취소한 뒤 쿠폰·재고를 복원한다. */
     private void compensate(UUID orderId, List<OrderLineSnapshot> snapshots, @Nullable UUID issuedCouponId) {
         orderModifier.cancel(orderId, CancellationReason.PAYMENT_FAILED);
         if (issuedCouponId != null) {
@@ -279,6 +293,7 @@ public class CheckoutFacade {
         restoreStock(snapshots);
     }
 
+    /** 라인별 재고를 되돌린다. */
     private void restoreStock(List<OrderLineSnapshot> lines) {
         for (OrderLineSnapshot line : lines) {
             stockModifier.restore(line.variantId(), line.quantity());

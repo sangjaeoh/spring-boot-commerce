@@ -29,115 +29,131 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 
-/**
- * 주문 애그리거트 루트다. 라인·배송지를 주문 시점 스냅샷으로 보관한다.
- *
- * <p>결제 축({@code status})과 이행 축({@code fulfillmentStatus})은 직교하며, 모든 이행 전진은
- * {@code status == PAID}에서만 유효하다. 최초 상태는 {@code PENDING}·{@code NOT_STARTED}다.
- *
- * <p>취소·환불 전이가 재고·쿠폰 복원을 게이트하므로 동시 중복 전이를 낙관락({@code @Version})으로
- * 직렬화한다 — 겹친 취소 2건이 모두 가드를 통과해도 한쪽만 커밋되어 복원이 정확히 한 번이다. 취소 개시
- * 마커({@code cancelRequestedAt})도 같은 낙관락으로 출고와 직렬화되어 취소 진행 중 출고를 거부한다.
- */
+/** 주문 애그리거트 루트다. 라인·배송지를 주문 시점 스냅샷으로 보관한다. */
 @Entity
 @Table(schema = "ordering", name = "orders")
 public class Order extends BaseTimeEntity<UUID> {
 
+    /** 주문 식별자. 생성 시각 순서를 담은 UUIDv7. */
     @Id
     private UUID id;
 
+    /** 외부 노출용 주문 번호. */
     @Column(name = "order_number")
     private String orderNumber;
 
+    /** 주문한 회원 식별자. member 도메인 논리 참조. */
     @Column(name = "member_id")
     private UUID memberId;
 
+    /** 결제 축 상태. */
     @Enumerated(EnumType.STRING)
     @Column(name = "status")
     private OrderStatus status;
 
+    /** 이행 축 상태. */
     @Enumerated(EnumType.STRING)
     @Column(name = "fulfillment_status")
     private FulfillmentStatus fulfillmentStatus;
 
+    /** 라인 합계. 할인·배송비 반영 전. */
     @Convert(converter = MoneyConverter.class)
     @Column(name = "total_amount")
     private Money totalAmount;
 
+    /** 쿠폰 할인액. 라인 합계를 넘지 못한다. */
     @Convert(converter = MoneyConverter.class)
     @Column(name = "discount_amount")
     private Money discountAmount;
 
+    /** 배송비. */
     @Convert(converter = MoneyConverter.class)
     @Column(name = "shipping_fee")
     private Money shippingFee;
 
+    /** 실청구액. 라인 합계 − 할인액 + 배송비. */
     @Convert(converter = MoneyConverter.class)
     @Column(name = "pay_amount")
     private Money payAmount;
 
+    /** 적용한 쿠폰 발급분 식별자. 할인액이 0이면 없다. */
     @Column(name = "issued_coupon_id")
     @Nullable
     private UUID issuedCouponId;
 
+    /** 배송지. 주문 시점 스냅샷. */
     @Embedded
     private Address shippingAddress;
 
+    /** 출고 시각. */
     @Column(name = "shipped_at")
     @Nullable
     private Instant shippedAt;
 
+    /** 택배사. */
     @Column(name = "carrier")
     @Nullable
     private String carrier;
 
+    /** 운송장 번호. */
     @Column(name = "tracking_number")
     @Nullable
     private String trackingNumber;
 
+    /** 배송 완료 시각. */
     @Column(name = "delivered_at")
     @Nullable
     private Instant deliveredAt;
 
+    /** 전 라인 재고 차감 완료 시각. */
     @Column(name = "stock_deducted_at")
     @Nullable
     private Instant stockDeductedAt;
 
+    /** 결제 완료 시각. */
     @Column(name = "paid_at")
     @Nullable
     private Instant paidAt;
 
+    /** 취소 개시 요청 시각. */
     @Column(name = "cancel_requested_at")
     @Nullable
     private Instant cancelRequestedAt;
 
+    /** 취소 시각. */
     @Column(name = "cancelled_at")
     @Nullable
     private Instant cancelledAt;
 
+    /** 취소 사유. */
     @Enumerated(EnumType.STRING)
     @Column(name = "cancellation_reason")
     @Nullable
     private CancellationReason cancellationReason;
 
+    /** 이행 보류 사유. 보류 중일 때만 있다. */
     @Enumerated(EnumType.STRING)
     @Column(name = "hold_reason")
     @Nullable
     private HoldReason holdReason;
 
+    /** 환불 시각. */
     @Column(name = "refunded_at")
     @Nullable
     private Instant refundedAt;
 
+    /** 환불 사유. */
     @Enumerated(EnumType.STRING)
     @Column(name = "refund_reason")
     @Nullable
     private RefundReason refundReason;
 
+    /** 낙관락 버전. */
     @Version
     @Column(name = "version")
     private long version;
 
+    /** 주문 라인 집합. */
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<OrderLine> lines = new HashSet<>();
 
@@ -154,7 +170,7 @@ public class Order extends BaseTimeEntity<UUID> {
     }
 
     /**
-     * 주문을 생성한다. totalAmount를 자기 계산하고 할인·payAmount 불변식을 자기 강제한다.
+     * 주문을 생성한다. 라인 합계를 자기 계산하고 할인·실청구액 불변식을 자기 강제한다.
      *
      * @throws InvalidOrderException 라인이 없거나, 할인이 주문 금액을 초과하거나, 쿠폰과 할인액이 불일치하면
      */
@@ -309,10 +325,12 @@ public class Order extends BaseTimeEntity<UUID> {
         this.holdReason = null;
     }
 
+    /** 라인 금액을 합산해 라인 합계를 계산한다. */
     private Money computeTotal() {
         return lines.stream().map(OrderLine::lineAmount).reduce(Money.ZERO, Money::plus);
     }
 
+    /** 할인·쿠폰 불변식을 검사하고 할인액·쿠폰·실청구액을 채운다. */
     private void applyDiscount(Money discountAmount, @Nullable UUID issuedCouponId) {
         if (totalAmount.isLessThan(discountAmount)) {
             throw new InvalidOrderException(OrderErrorCode.DISCOUNT_EXCEEDS_TOTAL);
@@ -327,29 +345,33 @@ public class Order extends BaseTimeEntity<UUID> {
         this.payAmount = totalAmount.minus(discountAmount).plus(shippingFee);
     }
 
+    /** 출고 이후 상태인지 판정한다. */
     private boolean isShippedOrDelivered() {
         return fulfillmentStatus == FulfillmentStatus.SHIPPED || fulfillmentStatus == FulfillmentStatus.DELIVERED;
     }
 
+    /** 결제 완료 상태가 아니면 거부한다. */
     private void requirePaid() {
         if (status != OrderStatus.PAID) {
             throw new FulfillmentStatusException(OrderErrorCode.NOT_PAID);
         }
     }
 
+    /** 이행 상태가 기대값이 아니면 거부한다. */
     private void requireFulfillment(FulfillmentStatus expected) {
         if (fulfillmentStatus != expected) {
             throw new FulfillmentStatusException(OrderErrorCode.INVALID_FULFILLMENT_TRANSITION);
         }
     }
 
+    /** 주문 식별자에서 외부 노출용 주문 번호를 만든다. */
     private static String generateOrderNumber(UUID orderId) {
         // UUIDv7의 난수 꼬리(마지막 세그먼트)를 붙여 같은 밀리초 동시 생성에도 충돌하지 않게 한다.
         return "ORD-" + System.currentTimeMillis() + "-"
                 + orderId.toString().substring(24).toUpperCase(Locale.ROOT);
     }
 
-    /** 비울 장바구니 라인을 특정하기 위한 주문된 변형 집합이다. */
+    /** 비울 장바구니 라인을 특정하기 위해 주문된 변형 집합을 반환한다. */
     public Set<UUID> getOrderedVariantIds() {
         return lines.stream().map(OrderLine::getVariantId).collect(Collectors.toUnmodifiableSet());
     }

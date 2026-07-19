@@ -14,6 +14,7 @@ public record OrderLineInfo(
         Money unitPrice,
         int quantity) {
 
+    /** 주문 라인 엔티티에서 조회 모델을 만든다. */
     public static OrderLineInfo from(OrderLine line) {
         return new OrderLineInfo(
                 line.getVariantId(),

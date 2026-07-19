@@ -17,23 +17,7 @@ import com.commerce.stock.service.StockModifier;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 
-/**
- * 배송 완료 주문의 전체 반품·전액 환불 흐름을 조율한다. 관리자 액션이다.
- *
- * <p>취소 파사드와 같은 이중 가드다. 결제 취소(환불)를 먼저 하고, 성공 시 주문 환불의 1회성 전이가
- * 재고·쿠폰 복원을 게이트한다. 환불이 복원의 선행조건이라 환불 실패 시 주문은 PAID로 남고 복원하지 않는다.
- * 재고 복원은 반품 상품의 회수·재판매를 가정하고, 쿠폰 복원은 사용 기한 경과분이면 명목 복원이다(사용
- * 시점 검증이 거부).
- *
- * <p>복원은 주문 환불 전이가 이 호출에서 실제 일어났을 때만 탄다. 이미 REFUNDED인 주문은 복원 재실행 없이
- * 관용 통과시켜 재호출이 재고를 가산 증식시키거나 다른 주문에 재사용된 쿠폰을 풀지 못한다. 결제 취소 커밋 후
- * 주문 환불이 실패한 재시도는 이미 CANCELLED인 결제를 PG 재호출 없이 관용해(환불 최대 한 번) 환불·복원을
- * 완결한다. 환불 커밋과 복원 사이 중단의 복원 유실은 잔여 한계다(DOMAIN_MODEL.md 취소·환불 정책 참조).
- * 쿠폰 복원을 재고 복원 앞에 둔다.
- *
- * <p>동시 환불 2건이 겹쳐 둘 다 전이 가드를 통과해도 주문·결제 낙관락({@code @Version})이 한쪽만 커밋시켜
- * 복원이 정확히 한 번이다. 진 쪽의 충돌은 409로 응답한다(클라이언트 재시도, 재시도는 관용 통과).
- */
+/** 배송 완료 주문의 전체 반품·전액 환불 흐름을 조율한다. 관리자 액션이다. */
 @Component
 public class OrderRefundFacade {
 
@@ -62,28 +46,37 @@ public class OrderRefundFacade {
     /**
      * 배송 완료 주문을 전체 반품 환불하고 재고·쿠폰을 복원한다. 이미 환불된 주문은 복원 없이 통과한다.
      *
+     * <p>환불이 복원의 선행조건이라 환불에 실패하면 주문은 PAID로 남고 복원하지 않는다.
+     *
      * @throws ApiException 환불할 수 없는 주문 상태면
      */
     public void refund(UUID orderId, RefundReason reason) {
+        // 1. 주문 조회 — 이미 환불됐으면 복원 없이 통과
         OrderInfo order = orderReader.getOrder(orderId);
         if (order.status() == OrderStatus.REFUNDED) {
             return;
         }
+        // 2. 환불 가능 상태 확인
         requireRefundable(order);
 
+        // 3. 결제 취소(환불)
         PaymentInfo payment = paymentReader.getByOrderId(orderId);
         paymentProcessor.cancel(payment.id());
+        // 4. 주문 환불 전이 — 1회성이라 복원이 정확히 한 번이다
         orderModifier.refund(orderId, reason);
 
+        // 5. 쿠폰 복원
         UUID issuedCouponId = order.issuedCouponId();
         if (issuedCouponId != null) {
             issuedCouponModifier.restoreUse(issuedCouponId, orderId);
         }
+        // 6. 재고 복원
         for (OrderLineInfo line : order.lines()) {
             stockModifier.restore(line.variantId(), line.quantity());
         }
     }
 
+    /** 결제 완료이면서 배송 완료된 주문만 통과시킨다. */
     private void requireRefundable(OrderInfo order) {
         boolean refundable =
                 order.status() == OrderStatus.PAID && order.fulfillmentStatus() == FulfillmentStatus.DELIVERED;

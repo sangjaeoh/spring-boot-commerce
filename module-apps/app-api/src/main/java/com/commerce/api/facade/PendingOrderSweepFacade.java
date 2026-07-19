@@ -26,28 +26,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * 결제 요청 이전에 중단돼 payment 행 없이 남은 PENDING 주문을 주기 스윕이 보상 종결하고, 종결 기록된 결제가
- * 남긴 PENDING 잔여를 결제 리컨실에 위임한다.
- *
- * <p>체크아웃은 주문 PENDING을 사가 앵커로 먼저 커밋한 뒤 재고 차감·쿠폰 확정·결제 요청을 잇는다. 주문 생성
- * 이후~결제 요청 이전 구간에서 프로세스가 중단되면 PENDING 주문·차감 재고·사용 쿠폰이 남되 payment 행이
- * 없다 — 미확정 결제 리컨실({@link PaymentConfirmationFacade})은 REQUESTED 결제만 스윕하므로 이 잔여를 영원히
- * 발견하지 못한다(팬텀 품절, 자동 복구 없던 무한 잔존 경로).
- *
- * <p>관할은 payment 행 존재·상태로 가른다. 행이 없으면 이 스윕이 직접 보상한다. REQUESTED 행이 있으면
- * 미확정 결제 리컨실 관할이라 건드리지 않는다(그 리컨실의 PENDING 분기가 취소·복원을 소유한다). 종결
- * 기록된(APPROVED·FAILED) 행이 있으면 결제측 확정은 끝났는데 주문측 종결이 남은 잔여다 — 결제 스윕은
- * REQUESTED만 선별해 이를 영영 보지 못하므로 이 스윕이 발견해 결제 리컨실 확정 경로에 위임한다(APPROVED ×
- * PENDING → 결제완료 완결, FAILED × PENDING → 보상 종결). 생성 후 유예
- * ({@code order.reconciliation.stale-after})가 지난 주문만 손대 진행 중 체크아웃과 경합하지 않는다 — 유예를
- * 결제 리컨실 유예 이상으로 두어, REQUESTED 행 있는 PENDING이 결제 리컨실에 먼저 잡히고 유예 지난
- * 무-payment PENDING엔 새 payment 행이 생기지 않는다(payment 행을 쓰는 유일 경로가 그 주문의 체크아웃이다).
- *
- * <p>보상은 취소·리컨실 흐름과 같은 순서다: 주문 CANCELLED 1회성 전이 선행 → 쿠폰 복원(멱등) → 재고 복원
- * (가산). 재고 복원은 체크아웃이 전 라인 차감 후 남긴 차감 완료 마커가 게이트한다 — 증거 없는 잔여(차감 전·
- * 차감 중 중단)는 복원을 생략해 차감된 적 없는 라인의 과복원(재고 증식→오버셀)을 차단하고, 부분 차감분은
- * 팬텀 품절로 남아 운영 대사 대상이 된다. 스윕 쿼리가 PENDING만 반환하므로 반복 실행이 이미 취소된 주문을
- * 재조회하지 않아 복원이 정확히 한 번이다. 취소 전이 커밋과 복원 사이 중단의 복원 유실은 취소·리컨실 흐름과
- * 같은 잔여 한계다(무손실 복구 범위 밖). 처리 건마다 경고 로그를 남겨 잔존 발생을 관측한다.
+ * 남긴 PENDING 잔여를 결제 리컨실({@link PaymentConfirmationFacade})에 위임한다.
  */
 @Component
 public class PendingOrderSweepFacade {
@@ -125,7 +104,13 @@ public class PendingOrderSweepFacade {
         }
     }
 
+    /**
+     * payment 행이 없는 주문만 직접 보상 종결하고, 있으면 결제 리컨실 관할로 넘긴다.
+     *
+     * <p>취소를 복원 앞에 두어 반복 스윕에도 복원이 정확히 한 번이다.
+     */
     private void sweep(OrderInfo order) {
+        // 1. 관할 판정
         if (paymentReader.hasPaymentForOrder(order.id())) {
             delegateToPaymentReconciliation(order);
             return;
@@ -134,11 +119,14 @@ public class PendingOrderSweepFacade {
                 "payment 행 없는 유예 경과 PENDING 주문을 스윕이 보상 종결한다: orderId={} orderNumber={}",
                 order.id(),
                 order.orderNumber());
+        // 2. 주문 취소
         orderModifier.cancel(order.id(), CancellationReason.CHECKOUT_ABANDONED);
+        // 3. 쿠폰 복원
         UUID issuedCouponId = order.issuedCouponId();
         if (issuedCouponId != null) {
             issuedCouponModifier.restoreUse(issuedCouponId, order.id());
         }
+        // 4. 재고 복원
         restoreDeductedStock(order);
     }
 
@@ -179,6 +167,7 @@ public class PendingOrderSweepFacade {
         }
     }
 
+    /** 결제 상태로 관할을 가른다. REQUESTED는 결제 리컨실 스윕에 맡기고, 종결 기록된 결제만 확정 경로로 넘긴다. */
     private void delegateToPaymentReconciliation(OrderInfo order) {
         PaymentInfo payment = paymentReader.getByOrderId(order.id());
         if (payment.status() == PaymentStatus.REQUESTED) {

@@ -33,8 +33,6 @@ public class OrderModifier {
     /**
      * 결제를 완료하고 {@link OrderPaid}를 발행한다.
      *
-     * <p>발행은 이 트랜잭션 안에서 일어나므로 커밋 후 소비 리스너가 커밋 후에만 통지받는다.
-     *
      * @throws OrderStatusException 결제 진행 중({@code PENDING})이 아니면
      */
     @Transactional
@@ -125,6 +123,7 @@ public class OrderModifier {
         find(orderId).releaseFulfillment();
     }
 
+    /** 주문을 찾고 없으면 거부한다. */
     private Order find(UUID orderId) {
         return orderRepository
                 .findById(orderId)
