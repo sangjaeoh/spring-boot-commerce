@@ -144,9 +144,13 @@ public class CheckoutFacade {
     private List<OrderLineSnapshot> buildOrderableSnapshots(List<CartItemInfo> items) {
         List<OrderLineSnapshot> snapshots = new ArrayList<>();
         for (CartItemInfo item : items) {
+            // 1. 변형 활성 확인
             ProductVariantInfo variant = requireActiveVariant(item.variantId());
+            // 2. 변형이 속한 상품 판매중 확인
             ProductInfo product = requireOnSaleProduct(variant.productId());
+            // 3. 재고 판매 가능·수량 확인
             requireSellableStock(item.variantId(), item.quantity());
+            // 4. 주문 라인 스냅샷 적재
             snapshots.add(new OrderLineSnapshot(
                     variant.id(),
                     product.id(),
