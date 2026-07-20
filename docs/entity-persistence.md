@@ -56,13 +56,12 @@ public abstract class BaseTimeEntity<ID extends Serializable> implements Persist
   - 단일 컬럼 VO(`Email`·`Money` 등 값 하나)는 `AttributeConverter` + `@Convert`로 매핑한다.
   - 다중 컬럼 VO(`Address`=우편번호+도로명 등 여러 값)는 `@Embeddable` record + `@Embedded`로 매핑한다. `AttributeConverter`로 억지로 직렬화하지 않는다 — 컬럼별 조회·인덱싱이 막힌다.
     - `@Embeddable` record는 로드 시 canonical 생성자를 호출해 compact constructor 검증이 매 조회마다 돈다. 레거시 데이터가 현재 불변식을 어기면 조회가 예외로 깨진다.
-  - 판별 유니온 VO(형이 여럿이고 형마다 필드가 다른 값, `Discount`=Fixed/Rate 등)는 단일 `@Embeddable` record로 평탄화하는 것이 기본이다 — 형 판별 enum 컬럼 + 형별 nullable 값 컬럼으로 매핑하고, 형↔필드 정합(불법 조합 배제)은 compact constructor가 강제하고 행위는 형 판별값으로 분기한다.
+  - 판별 유니온 VO(형이 여럿이고 형마다 필드가 다른 값)는 단일 `@Embeddable` record로 평탄화하는 것이 기본이다 — 형 판별 enum 컬럼 + 형별 nullable 값 컬럼으로 매핑하고, 형↔필드 정합(불법 조합 배제)은 compact constructor가 강제하고 행위는 형 판별값으로 분기한다.
     - 평탄화의 타입 안전 손실(전수성이 컴파일타임에서 런타임 검사로 이동)은 record 하나에 국소로 갇히고, 대신 컬럼이 실재해 조회·인덱싱·집계를 연다.
     - 형별 nullable 값 컬럼은 컬럼 하나가 뜻 하나이고 형 판별 컬럼이 형을 구분하므로 컬럼 오버로딩이 아니다. 앱 밖 writer(raw SQL·마이그레이션)까지 정합을 강제하려면 엔티티 테이블 레벨 DB CHECK를 얹는다.
     - sealed 하위 타입 + `AttributeConverter`(JSON 등) 직렬화는 컬럼 안에 직렬화 포맷을 소유하는 비용(스키마 진화·불투명·다형 역직렬화 설정)을 지운다. 형·필드가 많아 평탄 테이블이 넓고 희소해질 때만 감수하고, 작은 유니온에선 평탄화가 낫다.
     - sealed 계층을 그대로 쓰지 못하는 이유: 임베더블은 다형성이 없어 sealed 인터페이스를 타입 컬럼으로 매핑할 수 없고, `@Inheritance`(엔티티 상속)는 값 객체를 엔티티로 승격시킨다.
 - VO·`AttributeConverter`의 패키지 배치는 → [architecture](architecture.md)의 도메인 모듈 구조가 소유한다.
-- 경계 계약(명령 입력·포트·Info)에 등장하는 `@Embeddable` VO는 매핑 애노테이션(`@Embeddable`·`@Column`·`@Convert`)을 지녀, MSA 추출로 발행 계약을 분리할 때 이 애노테이션을 스트립한다(record 선언 한 곳에 국소한 변환). enum·순수 record는 애노테이션이 없어 무변형 발행된다.
 
 ### 상태 전이
 
@@ -91,7 +90,7 @@ public abstract class BaseTimeEntity<ID extends Serializable> implements Persist
 - 애그리거트 내부 연관은 자식→부모 `@ManyToOne` 단방향이 기본이다(자식이 FK 소유).
 - 부모→자식 캐스케이드 생명주기가 필요하면 정규형은 `mappedBy` 양방향이다(부모 `@OneToMany(mappedBy=...)`, 자식 `@ManyToOne` FK 소유).
   - 단방향 `@OneToMany` + `@JoinColumn`은 쓰지 않는다 — 자식 INSERT 후 FK UPDATE가 추가로 발생하고 NOT NULL 제약과 충돌한다.
-  - 자식이 부모를 읽지 않는 애그리거트에서 FK 소유 필드(`@ManyToOne`)는 매핑·`mappedBy` 대상 전용이라 자바 코드가 읽지 않아 Error Prone `UnusedVariable`이 지적한다. 프레임워크가 리플렉션으로 읽는다는 사실을 필드에 `@Keep`으로 표기하고, getter를 더해 상향 탐색을 열지 않는다.
+  - 자식이 부모를 읽지 않는 애그리거트에서 FK 소유 필드(`@ManyToOne`)는 매핑·`mappedBy` 대상 전용이라 자바 코드가 읽지 않는다. 미사용 필드 정적 분석(예: Error Prone `UnusedVariable`)이 지적하면 프레임워크가 리플렉션으로 읽는다는 사실을 필드에 마커로 표기하고(예: Error Prone `@Keep`), getter를 더해 상향 탐색을 열지 않는다.
     - 마커(사실 선언)가 `@SuppressWarnings`(검사 억제)보다 낫다 — 억제는 "이 검사를 끈다"는 습관을 퍼뜨려 진짜 미사용 코드까지 덮게 만든다.
 - `@OneToMany` 컬렉션 필드는 `Set`으로 선언한다. 순서가 도메인 의미면 `@OrderColumn`으로 명시한다.
   - `List`는 자식 일부 삭제 시 delete-all-reinsert를 유발하고, 두 개 이상 `List` 연관을 동시 fetch join하면 `MultipleBagFetchException`이 난다.
@@ -104,10 +103,7 @@ public abstract class BaseTimeEntity<ID extends Serializable> implements Persist
 
 - 낙관락을 기본으로 두지 않는다(last-write-wins). 경합 민감 상태전이(잔액 차감·좌석 예약)만 `@Version`으로 승격한다.
   - `@Version` 필드에는 `version`(`BIGINT`, default 0) 컬럼을 Flyway로 추가한다 — `ddl-auto=validate`라 컬럼이 없으면 기동이 스키마 불일치로 실패한다.
-  - 충돌 시 `ObjectOptimisticLockingFailureException`은 409로 응답한다(서버 자동 재시도 없음, 클라이언트 재시도).
-    - 서버 재시도를 두지 않는 이유: 409 재시도 규약이 멱등 필터(`Idempotency-Key`)와 정합하고, 재시도 중 사가 보상(재고·쿠폰 복원·주문 취소)의 재진입 복잡도를 피한다. 도입한다면 범위를 차감 지점 하나로 한정한다.
-    - 예외: 클라이언트가 없는 백그라운드 보상 루프(스윕·리컨실)의 가산 복원(`restore`)은 라인 단위 유한 재시도를 허용한다 — 재시도할 클라이언트가 없어 409 규약이 적용되지 않고, 전이 게이트가 정확히-1회를 보장하며 충돌한 시도는 트랜잭션째 롤백되므로 재시도가 이중 가산하지 않는다.
-    - 재시도 폭주가 실측되면 비관락으로 승격한다.
+  - 충돌 시 `ObjectOptimisticLockingFailureException`은 409로 응답한다(서버 자동 재시도 없음, 클라이언트 재시도). 재시도 폭주가 실측되면 비관락으로 승격한다.
 
 ### 소프트삭제
 
