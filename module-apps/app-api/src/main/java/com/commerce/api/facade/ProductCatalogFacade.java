@@ -18,11 +18,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 
-/**
- * 카탈로그 상품 목록 조회를 ACTIVE 변형·재고와 합성해 대표가·품절을 파생한다.
- *
- * <p>트랜잭션을 열지 않고 도메인 Reader를 조립한다(각 Reader가 자기 트랜잭션 소유).
- */
+/** 카탈로그 상품 목록 조회를 ACTIVE 변형·재고와 합성해 대표가·품절을 파생한다. */
 @Component
 public class ProductCatalogFacade {
 
@@ -39,9 +35,12 @@ public class ProductCatalogFacade {
 
     /** 노출 상품 페이지를 대표가·품절과 함께 최신 등록순으로 반환한다. */
     public Page<ProductSummaryView> getCatalogPage(Pageable pageable) {
+        // 1. 노출 상품 페이지 조회
         Page<ProductInfo> products = productReader.getExposedPage(pageable);
+        // 2. 합성 재료 수집 — ACTIVE 변형·재고
         Map<UUID, List<ProductVariantInfo>> activeVariantsByProduct = activeVariantsByProduct(products.getContent());
         Set<UUID> orderableVariantIds = orderableVariantIds(activeVariantsByProduct);
+        // 3. 상품별 대표가·품절 파생
         return products.map(product ->
                 summarize(product, activeVariantsByProduct.getOrDefault(product.id(), List.of()), orderableVariantIds));
     }

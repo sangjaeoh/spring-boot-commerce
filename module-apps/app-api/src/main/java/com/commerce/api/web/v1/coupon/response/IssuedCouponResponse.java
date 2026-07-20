@@ -27,6 +27,7 @@ public record IssuedCouponResponse(
         @Schema(description = "무효화 사유", nullable = true) @Nullable
         String revokeReason) {
 
+    /** 발급 쿠폰 조회 모델에서 응답을 만든다. */
     public static IssuedCouponResponse from(IssuedCouponInfo issued) {
         return new IssuedCouponResponse(
                 issued.id(),

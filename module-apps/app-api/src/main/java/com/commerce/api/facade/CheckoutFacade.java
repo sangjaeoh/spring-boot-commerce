@@ -41,11 +41,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 
-/**
- * 장바구니 전체를 주문·결제로 전환하는 체크아웃 흐름을 조율한다.
- *
- * <p>트랜잭션을 열지 않고 도메인 서비스를 순차 호출한다(각 서비스가 자기 트랜잭션 소유).
- */
+/** 장바구니 전체를 주문·결제로 전환하는 체크아웃 흐름을 조율한다. */
 @Component
 public class CheckoutFacade {
 
@@ -236,11 +232,12 @@ public class CheckoutFacade {
     private void deductStockOrCompensate(UUID orderId, List<OrderLineSnapshot> snapshots) {
         List<OrderLineSnapshot> deducted = new ArrayList<>();
         try {
+            // 1. 라인별 재고 차감
             for (OrderLineSnapshot line : snapshots) {
                 stockModifier.deduct(line.variantId(), line.quantity());
                 deducted.add(line);
             }
-            // 마커가 곧 전 라인 차감 완료 증거라 루프 뒤에만 기록한다.
+            // 2. 차감 완료 기록 — 마커가 곧 전 라인 차감 완료 증거라 루프 뒤에만 기록한다.
             orderModifier.markStockDeducted(orderId);
         } catch (RuntimeException e) {
             orderModifier.cancel(orderId, CancellationReason.STOCK_SHORTAGE);
@@ -269,6 +266,7 @@ public class CheckoutFacade {
             Money payAmount,
             @Nullable PaymentMethod method) {
         PaymentInfo payment;
+        // 1. 결제 요청·PG 승인
         try {
             UUID paymentId = paymentAppender.request(orderId, payAmount, method);
             payment = paymentProcessor.approve(paymentId);
@@ -276,6 +274,7 @@ public class CheckoutFacade {
             compensate(orderId, snapshots, issuedCouponId);
             throw e;
         }
+        // 2. 거절 판정 — PG가 정상 응답한 거절은 예외가 아니라 FAILED 상태로 돌아온다.
         if (payment.status() != PaymentStatus.APPROVED) {
             compensate(orderId, snapshots, issuedCouponId);
             throw new ApiException(ApiErrorCode.PAYMENT_DECLINED);
@@ -284,10 +283,13 @@ public class CheckoutFacade {
 
     /** 주문을 취소한 뒤 쿠폰·재고를 복원한다. */
     private void compensate(UUID orderId, List<OrderLineSnapshot> snapshots, @Nullable UUID issuedCouponId) {
+        // 1. 주문 취소
         orderModifier.cancel(orderId, CancellationReason.PAYMENT_FAILED);
+        // 2. 쿠폰 복원
         if (issuedCouponId != null) {
             issuedCouponModifier.restoreUse(issuedCouponId, orderId);
         }
+        // 3. 재고 복원
         restoreStock(snapshots);
     }
 

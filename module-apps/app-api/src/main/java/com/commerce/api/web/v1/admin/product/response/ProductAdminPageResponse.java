@@ -15,6 +15,7 @@ public record ProductAdminPageResponse(
         products = List.copyOf(products);
     }
 
+    /** 상품 조회 페이지에서 응답을 만든다. */
     public static ProductAdminPageResponse from(Page<ProductInfo> page) {
         return new ProductAdminPageResponse(
                 page.getContent().stream().map(ProductAdminResponse::from).toList(), PaginationResponse.from(page));

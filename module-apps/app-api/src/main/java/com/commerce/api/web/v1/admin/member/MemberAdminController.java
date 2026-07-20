@@ -25,11 +25,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * 회원 지정 조회·이메일 검색·관리(정지·해제)의 관리자 엔드포인트다.
- *
- * <p>정지와 탈퇴는 독립 축이라 정지 회원도 탈퇴할 수 있다.
- */
+/** 회원 지정 조회·이메일 검색·관리(정지·해제)의 관리자 엔드포인트다. */
 @Tag(name = "회원 관리", description = "회원 지정 조회·이메일 검색·정지·해제")
 @Admin
 @RestController

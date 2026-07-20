@@ -15,6 +15,7 @@ public record AddressResponse(
 
         @Schema(description = "수령인 연락처") String phone) {
 
+    /** 배송지 조회 모델에서 응답을 만든다. */
     public static AddressResponse from(AddressInfo address) {
         return new AddressResponse(
                 address.recipientName(),

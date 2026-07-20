@@ -17,6 +17,7 @@ public record CartLineResponse(
         @Schema(description = "라인 소계(단가×수량)") long subtotal,
         @Schema(description = "주문 가능 여부") boolean orderable) {
 
+    /** 장바구니 라인 뷰에서 응답을 만든다. */
     public static CartLineResponse from(CartLineView line) {
         return new CartLineResponse(
                 line.variantId(),

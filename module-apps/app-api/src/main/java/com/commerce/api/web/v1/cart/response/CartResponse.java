@@ -15,6 +15,7 @@ public record CartResponse(
         lines = List.copyOf(lines);
     }
 
+    /** 장바구니 뷰에서 응답을 만든다. */
     public static CartResponse from(CartView cart) {
         return new CartResponse(
                 cart.memberId(),

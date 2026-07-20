@@ -7,6 +7,7 @@ import java.util.UUID;
 public record ProductRegistrationResponse(
         @Schema(description = "등록된 상품 ID") String productId) {
 
+    /** 등록된 상품 ID에서 응답을 만든다. */
     public static ProductRegistrationResponse from(UUID productId) {
         return new ProductRegistrationResponse(productId.toString());
     }

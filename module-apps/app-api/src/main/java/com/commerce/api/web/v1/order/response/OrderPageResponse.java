@@ -15,6 +15,7 @@ public record OrderPageResponse(
         orders = List.copyOf(orders);
     }
 
+    /** 주문 조회 페이지에서 응답을 만든다. */
     public static OrderPageResponse from(Page<OrderInfo> page) {
         return new OrderPageResponse(
                 page.getContent().stream().map(OrderResponse::from).toList(), PaginationResponse.from(page));

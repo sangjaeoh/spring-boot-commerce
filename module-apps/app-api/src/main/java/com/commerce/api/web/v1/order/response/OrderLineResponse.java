@@ -17,6 +17,7 @@ public record OrderLineResponse(
         @Schema(description = "단가(원 단위, 주문 시점 스냅샷)") long unitPrice,
         @Schema(description = "수량") int quantity) {
 
+    /** 주문 라인 조회 모델에서 응답을 만든다. */
     public static OrderLineResponse from(OrderLineInfo line) {
         return new OrderLineResponse(
                 line.variantId(),

@@ -19,11 +19,7 @@ import com.commerce.product.service.ProductVariantReader;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 
-/**
- * 장바구니 쓰기를 조율하며 담기·증량에 주문 자격 게이트를 적용한다.
- *
- * <p>트랜잭션을 열지 않고 도메인 서비스를 조립한다(각 서비스가 자기 트랜잭션 소유).
- */
+/** 장바구니 쓰기를 조율하며 담기·증량에 주문 자격 게이트를 적용한다. */
 @Component
 public class CartCommandFacade {
 
@@ -55,7 +51,9 @@ public class CartCommandFacade {
      * @throws ApiException 회원 자격 비활성; 주문 불가(변형 비활성·상품 HIDDEN·삭제)
      */
     public void addItem(UUID memberId, UUID variantId, int quantity) {
+        // 1. 주문 자격 게이트
         requireAddable(memberId, variantId);
+        // 2. 장바구니 담기
         cartAppender.addItem(memberId, variantId, quantity);
     }
 
@@ -65,9 +63,11 @@ public class CartCommandFacade {
      * @throws ApiException 증량 시 회원 자격 비활성; 주문 불가(변형 비활성·상품 HIDDEN·삭제)
      */
     public void changeItemQuantity(UUID memberId, UUID variantId, int quantity) {
+        // 1. 증량이면 담기와 같은 주문 자격 게이트
         if (isIncrease(memberId, variantId, quantity)) {
             requireAddable(memberId, variantId);
         }
+        // 2. 라인 수량 변경
         cartModifier.changeItemQuantity(memberId, variantId, quantity);
     }
 
@@ -83,8 +83,11 @@ public class CartCommandFacade {
 
     /** 회원 자격·변형·상품 게이트를 모두 통과시킨다. */
     private void requireAddable(UUID memberId, UUID variantId) {
+        // 1. 회원 자격 확인
         requireEligibleMember(memberId);
+        // 2. 변형 활성 확인
         ProductVariantInfo variant = requireActiveVariant(variantId);
+        // 3. 변형이 속한 상품 판매중 확인
         requireOnSaleProduct(variant.productId());
     }
 

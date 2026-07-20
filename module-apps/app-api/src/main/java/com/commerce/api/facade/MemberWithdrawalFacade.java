@@ -26,9 +26,11 @@ public class MemberWithdrawalFacade {
      * @throws ApiException 미배송 결제 주문이 있어 탈퇴가 막히면
      */
     public void withdraw(UUID memberId, WithdrawalReason reason) {
+        // 1. 미배송 결제 주문 가드
         if (orderReader.hasUndeliveredPaidOrder(memberId)) {
             throw new ApiException(ApiErrorCode.WITHDRAWAL_BLOCKED);
         }
+        // 2. 회원 탈퇴
         memberRemover.delete(memberId, reason);
     }
 }
