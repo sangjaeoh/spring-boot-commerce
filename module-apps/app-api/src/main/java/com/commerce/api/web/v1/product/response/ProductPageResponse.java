@@ -1,6 +1,6 @@
 package com.commerce.api.web.v1.product.response;
 
-import com.commerce.api.facade.ProductSummaryView;
+import com.commerce.api.facade.view.ProductSummaryView;
 import com.commerce.web.paging.PaginationResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;

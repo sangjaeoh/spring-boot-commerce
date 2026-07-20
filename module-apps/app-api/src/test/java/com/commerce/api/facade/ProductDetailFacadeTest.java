@@ -8,6 +8,7 @@ import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import com.commerce.api.facade.view.ProductView;
 import com.commerce.core.money.Money;
 import com.commerce.product.entity.ProductOption;
 import com.commerce.product.entity.ProductStatus;

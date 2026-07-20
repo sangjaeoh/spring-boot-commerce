@@ -2,6 +2,7 @@ package com.commerce.api.facade;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.commerce.api.facade.view.ProductSummaryView;
 import com.commerce.core.money.Money;
 import com.commerce.product.entity.ProductOption;
 import com.commerce.product.service.ProductModifier;

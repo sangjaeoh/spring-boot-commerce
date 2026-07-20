@@ -2,6 +2,8 @@ package com.commerce.api.facade;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.commerce.api.facade.view.CartLineView;
+import com.commerce.api.facade.view.CartView;
 import com.commerce.cart.service.CartAppender;
 import com.commerce.core.money.Money;
 import com.commerce.member.service.MemberAppender;

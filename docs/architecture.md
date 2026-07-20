@@ -86,6 +86,7 @@
 - 페이징 GET은 파라미터를 common-web `PaginationRequest`(`@Valid @ParameterObject`)로 받고, 페이지 응답 DTO는 목록 옆에 common-web `PaginationResponse`를 `page` 컴포넌트로 싣는다. 도메인 `Pageable`은 0-based를 유지하며 요청 변환은 `zeroBasedPage()`, 응답 +1 보정은 `PaginationResponse.from(Page)`가 소유한다.
   - 페이지 번호 계약이 요청·응답 대칭으로 1부터 시작하고, 0/1-based 변환·페이지 메타 필드가 web 경계의 두 타입에만 갇힌다.
   - `facade` — 도메인 조립·크로스 도메인 조율.
+    - 파사드가 합성해 web으로 내보내는 `*View` record는 `facade/view`가 소유한다.
   - `event/listener` — 크로스 도메인 이벤트 소비.
   - `infrastructure/query`(admin) · `infrastructure/reader`(batch) — 엔티티 의존을 허용하는 격리 구역. canonical 경로는 `app.admin.infrastructure.query` · `app.batch.infrastructure.reader`다.
 
