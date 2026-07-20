@@ -3,13 +3,13 @@ package com.commerce.api.facade;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.commerce.api.facade.view.ProductSummaryView;
-import com.commerce.core.money.Money;
 import com.commerce.product.entity.ProductOption;
 import com.commerce.product.service.ProductModifier;
 import com.commerce.product.service.ProductRemover;
 import com.commerce.product.service.ProductVariantAppender;
 import com.commerce.product.service.ProductVariantModifier;
 import com.commerce.product.service.ProductVariantReader;
+import com.commerce.shared.entity.Money;
 import com.commerce.stock.service.StockAppender;
 import java.util.Comparator;
 import java.util.List;

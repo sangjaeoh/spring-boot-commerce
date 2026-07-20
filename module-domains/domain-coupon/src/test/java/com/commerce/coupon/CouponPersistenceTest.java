@@ -3,7 +3,6 @@ package com.commerce.coupon;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.commerce.core.money.Money;
 import com.commerce.coupon.entity.Discount;
 import com.commerce.coupon.entity.IssuedCoupon;
 import com.commerce.coupon.entity.IssuedCouponStatus;
@@ -17,6 +16,7 @@ import com.commerce.coupon.service.CouponAppender;
 import com.commerce.coupon.service.IssuedCouponAppender;
 import com.commerce.coupon.service.IssuedCouponModifier;
 import com.commerce.coupon.service.IssuedCouponReader;
+import com.commerce.shared.entity.Money;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;

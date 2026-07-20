@@ -1,9 +1,9 @@
 package com.commerce.coupon.entity;
 
-import com.commerce.core.money.Money;
 import com.commerce.coupon.exception.CouponErrorCode;
 import com.commerce.coupon.exception.InvalidCouponException;
-import com.commerce.jpa.converter.MoneyConverter;
+import com.commerce.shared.entity.Money;
+import com.commerce.shared.entity.MoneyConverter;
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
 import jakarta.persistence.Embeddable;

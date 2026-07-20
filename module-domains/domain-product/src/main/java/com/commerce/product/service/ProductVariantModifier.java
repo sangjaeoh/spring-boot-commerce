@@ -1,12 +1,12 @@
 package com.commerce.product.service;
 
-import com.commerce.core.money.Money;
 import com.commerce.product.entity.ProductVariant;
 import com.commerce.product.exception.InvalidVariantException;
 import com.commerce.product.exception.ProductErrorCode;
 import com.commerce.product.exception.ProductVariantNotFoundException;
 import com.commerce.product.exception.ProductVariantStatusException;
 import com.commerce.product.repository.ProductVariantRepository;
+import com.commerce.shared.entity.Money;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

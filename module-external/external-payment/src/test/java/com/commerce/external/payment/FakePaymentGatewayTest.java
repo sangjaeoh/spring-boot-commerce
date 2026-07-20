@@ -3,12 +3,12 @@ package com.commerce.external.payment;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.commerce.core.money.Money;
 import com.commerce.external.payment.exception.FakeGatewayTimeoutException;
 import com.commerce.payment.entity.FailureReason;
 import com.commerce.payment.entity.PaymentMethod;
 import com.commerce.payment.port.GatewayTransactionStatus;
 import com.commerce.payment.port.PaymentApproval;
+import com.commerce.shared.entity.Money;
 import java.util.Objects;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;

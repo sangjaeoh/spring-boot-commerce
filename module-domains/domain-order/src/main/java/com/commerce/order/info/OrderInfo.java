@@ -1,12 +1,12 @@
 package com.commerce.order.info;
 
-import com.commerce.core.money.Money;
 import com.commerce.order.entity.CancellationReason;
 import com.commerce.order.entity.FulfillmentStatus;
 import com.commerce.order.entity.HoldReason;
 import com.commerce.order.entity.Order;
 import com.commerce.order.entity.OrderStatus;
 import com.commerce.order.entity.RefundReason;
+import com.commerce.shared.entity.Money;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;

@@ -3,8 +3,8 @@ package com.commerce.coupon.entity;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.commerce.core.money.Money;
 import com.commerce.coupon.exception.InvalidCouponException;
+import com.commerce.shared.entity.Money;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

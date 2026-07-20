@@ -1,7 +1,7 @@
 package com.commerce.payment.port;
 
-import com.commerce.core.money.Money;
 import com.commerce.payment.entity.PaymentMethod;
+import com.commerce.shared.entity.Money;
 import java.util.UUID;
 
 /** 결제 승인·취소·거래 상태 조회를 위임하는 벤더 중립 포트다. */

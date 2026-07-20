@@ -1,6 +1,6 @@
 package com.commerce.order.entity;
 
-import com.commerce.core.money.Money;
+import com.commerce.shared.entity.Money;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 

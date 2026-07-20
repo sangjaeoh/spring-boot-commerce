@@ -3,7 +3,6 @@ package com.commerce.api.facade;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.commerce.cart.service.CartAppender;
-import com.commerce.core.money.Money;
 import com.commerce.coupon.entity.Discount;
 import com.commerce.coupon.entity.IssuedCouponStatus;
 import com.commerce.coupon.entity.ValidityPeriod;
@@ -18,6 +17,7 @@ import com.commerce.order.info.OrderInfo;
 import com.commerce.order.service.OrderReader;
 import com.commerce.payment.entity.PaymentMethod;
 import com.commerce.product.service.ProductVariantReader;
+import com.commerce.shared.entity.Money;
 import com.commerce.stock.service.StockReader;
 import java.time.Instant;
 import java.util.ArrayList;

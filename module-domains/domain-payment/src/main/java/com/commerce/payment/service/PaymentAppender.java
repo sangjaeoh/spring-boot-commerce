@@ -1,11 +1,11 @@
 package com.commerce.payment.service;
 
-import com.commerce.core.money.Money;
 import com.commerce.payment.entity.Payment;
 import com.commerce.payment.entity.PaymentMethod;
 import com.commerce.payment.exception.DuplicatePaymentException;
 import com.commerce.payment.exception.PaymentErrorCode;
 import com.commerce.payment.repository.PaymentRepository;
+import com.commerce.shared.entity.Money;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DataIntegrityViolationException;

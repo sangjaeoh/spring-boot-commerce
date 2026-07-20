@@ -1,10 +1,10 @@
 package com.commerce.payment.info;
 
-import com.commerce.core.money.Money;
 import com.commerce.payment.entity.FailureReason;
 import com.commerce.payment.entity.Payment;
 import com.commerce.payment.entity.PaymentMethod;
 import com.commerce.payment.entity.PaymentStatus;
+import com.commerce.shared.entity.Money;
 import java.time.Instant;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;

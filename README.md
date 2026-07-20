@@ -17,7 +17,7 @@
 ```mermaid
 graph TD
     apps["module-apps<br/>app-api · app-migration"]
-    domains["module-domains<br/>member · product · stock · cart · coupon · order · payment"]
+    domains["module-domains<br/>member · product · stock · cart · coupon · order · payment · shared(공용 값 객체)"]
     external["module-external<br/>external-payment"]
     infra["module-infra<br/>infra-messaging · infra-redis"]
     common["module-common<br/>core · jpa · messaging · auth · web"]

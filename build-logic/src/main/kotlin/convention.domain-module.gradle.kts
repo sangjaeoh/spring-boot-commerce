@@ -7,6 +7,7 @@ val libsCatalog = extensions.getByType<VersionCatalogsExtension>().named("libs")
 restrictProjectDependencies("domain-module") { dependencyPath ->
     dependencyPath in
         setOf(
+            ":module-domains:domain-shared",
             ":module-common:common-core",
             ":module-common:common-jpa",
             ":module-common:common-messaging",

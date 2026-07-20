@@ -3,7 +3,6 @@ package com.commerce.product;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.commerce.core.money.Money;
 import com.commerce.product.entity.ProductOption;
 import com.commerce.product.entity.ProductVariantStatus;
 import com.commerce.product.exception.DuplicateVariantOptionException;
@@ -12,6 +11,7 @@ import com.commerce.product.service.ProductAppender;
 import com.commerce.product.service.ProductVariantAppender;
 import com.commerce.product.service.ProductVariantModifier;
 import com.commerce.product.service.ProductVariantReader;
+import com.commerce.shared.entity.Money;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;

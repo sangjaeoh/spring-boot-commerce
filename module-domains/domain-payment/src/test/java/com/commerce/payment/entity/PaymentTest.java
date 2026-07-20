@@ -3,8 +3,8 @@ package com.commerce.payment.entity;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.commerce.core.money.Money;
 import com.commerce.payment.exception.PaymentStatusException;
+import com.commerce.shared.entity.Money;
 import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;

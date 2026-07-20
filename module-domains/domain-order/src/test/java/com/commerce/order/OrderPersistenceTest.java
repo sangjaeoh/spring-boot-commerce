@@ -2,7 +2,6 @@ package com.commerce.order;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.commerce.core.money.Money;
 import com.commerce.messaging.publish.MessagePublisher;
 import com.commerce.order.entity.Address;
 import com.commerce.order.entity.CancellationReason;
@@ -14,6 +13,7 @@ import com.commerce.order.info.OrderInfo;
 import com.commerce.order.service.OrderAppender;
 import com.commerce.order.service.OrderModifier;
 import com.commerce.order.service.OrderReader;
+import com.commerce.shared.entity.Money;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;

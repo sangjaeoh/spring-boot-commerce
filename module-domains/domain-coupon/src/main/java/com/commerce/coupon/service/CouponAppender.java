@@ -1,11 +1,11 @@
 package com.commerce.coupon.service;
 
-import com.commerce.core.money.Money;
 import com.commerce.coupon.entity.Coupon;
 import com.commerce.coupon.entity.Discount;
 import com.commerce.coupon.entity.ValidityPeriod;
 import com.commerce.coupon.exception.InvalidCouponException;
 import com.commerce.coupon.repository.CouponRepository;
+import com.commerce.shared.entity.Money;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;

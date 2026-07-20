@@ -1,6 +1,5 @@
-package com.commerce.jpa.converter;
+package com.commerce.shared.entity;
 
-import com.commerce.core.money.Money;
 import jakarta.persistence.AttributeConverter;
 import jakarta.persistence.Converter;
 import org.jspecify.annotations.Nullable;

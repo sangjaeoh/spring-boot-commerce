@@ -1,9 +1,9 @@
 package com.commerce.order.entity;
 
 import com.commerce.core.id.UuidV7Generator;
-import com.commerce.core.money.Money;
-import com.commerce.jpa.converter.MoneyConverter;
 import com.commerce.jpa.entity.BaseTimeEntity;
+import com.commerce.shared.entity.Money;
+import com.commerce.shared.entity.MoneyConverter;
 import com.google.errorprone.annotations.Keep;
 import jakarta.persistence.Column;
 import jakarta.persistence.ConstraintMode;

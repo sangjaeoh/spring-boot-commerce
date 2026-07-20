@@ -1,12 +1,12 @@
 package com.commerce.api.facade;
 
 import com.commerce.api.facade.view.ProductSummaryView;
-import com.commerce.core.money.Money;
 import com.commerce.product.entity.ProductVariantStatus;
 import com.commerce.product.info.ProductInfo;
 import com.commerce.product.info.ProductVariantInfo;
 import com.commerce.product.service.ProductReader;
 import com.commerce.product.service.ProductVariantReader;
+import com.commerce.shared.entity.Money;
 import com.commerce.stock.entity.StockStatus;
 import com.commerce.stock.info.StockInfo;
 import com.commerce.stock.service.StockReader;

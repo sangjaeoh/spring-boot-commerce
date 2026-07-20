@@ -1,8 +1,8 @@
 package com.commerce.product.info;
 
-import com.commerce.core.money.Money;
 import com.commerce.product.entity.ProductVariant;
 import com.commerce.product.entity.ProductVariantStatus;
+import com.commerce.shared.entity.Money;
 import java.time.Instant;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;

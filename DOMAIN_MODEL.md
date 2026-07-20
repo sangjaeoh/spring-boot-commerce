@@ -16,7 +16,7 @@
 - 크로스 도메인·애그리거트 참조: 순수 `UUID xxxId` 값만 보관한다. 물리 FK·객체 연관 없음(같은 애그리거트 내부만 객체 연관).
 - 시각: `createdAt`·`updatedAt`은 JPA Auditing이 채운다(엔티티가 직접 선언하지 않음).
 - 삭제: 논리삭제 기본. 삭제 지원 엔티티는 nullable `deletedAt`을 두고 활성 조회에서 제외한다.
-- 금액: `Money`(원 단위 정수, 0 이상). `Money`는 프레임워크 의존 없는 범용 값 타입이라 `common-core`가 소유하고(도메인 지식 아님), JPA 변환기(`MoneyConverter`)는 `common-jpa`에 단 하나 둔다. 통화는 KRW 단일로 가정한다.
+- 금액: `Money`(원 단위 정수, 0 이상). 여러 도메인이 공유하는 값 객체라 `domain-shared`가 `Money`와 JPA 변환기(`MoneyConverter`)를 함께 소유한다. 통화는 KRW 단일로 가정한다.
 - 수량: 정수. 별도 명시가 없으면 1 이상.
 - 낙관락: 기본으로 두지 않는다. 실 경합이 있는 재고 차감·쿠폰 사용과, 복원을 게이트해 동시 중복이 이중 복원·이중 환불이 되는 주문 취소·환불/결제 취소 전이, 그리고 동시 합산이 유실되는 장바구니 라인에만 `@Version`을 둔다.
 - 상태: enum(문자열 저장). 상태 변경은 의도 동사 메서드 + 허용 전이 가드로만 한다(setter 없음). 상태는 실세계 전이·정책으로 정당화되면 선제적으로 둔다(소비자가 아직 없어도 근거 있는 현실 상태는 모델에 둔다). 근거 없이 아무도 전이시키지 않는 "죽은 상태"만 피한다.
@@ -24,7 +24,7 @@
 
 ## 공용 값 객체 (Money)
 
-`Money`는 여러 도메인(product·coupon·order·payment)이 공유하는 값 객체라 `common-core`가 소유한다. 도메인 전용 값 객체(`Email`·`Address`)는 각 도메인 절에 명시한다.
+`Money`는 여러 도메인(product·coupon·order·payment)이 공유하는 값 객체라 `domain-shared`가 소유한다. 도메인 전용 값 객체(`Email`·`Address`)는 각 도메인 절에 명시한다.
 
 | 필드 | 타입 | 필수 | 제약·설명 |
 |---|---|---|---|
@@ -800,7 +800,7 @@
 - 결제: `@Version`(동시 취소 전이 직렬화 — 사용자 취소·리컨실·웹훅 확정이 겹칠 수 있다), 주문당 1행, `PaymentMethod{CARD, EASY_PAY, BANK_TRANSFER}`(동기 수단, `amount>0 ⇔ method≠null`), FAILED 사유 `failureReason`, 승인·취소 거래 ID 분리(`pgTransactionId`/`pgCancelTransactionId`), 업무 시각 `approvedAt`/`cancelledAt`, 0원은 PG 생략 자동 승인, 도메인 이벤트 없음. 응답 유실로 REQUESTED에 남은 결제는 유예 후 리컨실·웹훅 확정 경로가 PG 상태 조회(가맹점 참조 키)로 확정한다.
 - 정합: 핵심은 파사드 동기 조율 + 동기 보상, 주문 PENDING을 사가 앵커로 먼저 생성(order-first), 유일 이벤트는 `OrderPaid → 장바구니 비우기`.
 - 표기: 각 도메인에 오퍼레이션 카탈로그(연산·입력·강제 불변식·거부[도메인 표현])를 두고, 반환 형상·ErrorCode·HTTP status·동시성 메커니즘은 `docs/`가 소유(참조).
-- Money: `common-core` 순수 값 타입, 컨버터는 `common-jpa` 단일. 배송지 `Address`는 `@Embeddable`.
+- Money: `domain-shared` 소유 값 타입, 컨버터도 같은 모듈에 단 하나. 배송지 `Address`는 `@Embeddable`.
 
 ## 명시적 범위 밖
 
