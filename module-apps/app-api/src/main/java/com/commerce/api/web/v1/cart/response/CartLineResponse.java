@@ -1,6 +1,6 @@
 package com.commerce.api.web.v1.cart.response;
 
-import com.commerce.api.facade.CartLineView;
+import com.commerce.api.facade.view.CartLineView;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;

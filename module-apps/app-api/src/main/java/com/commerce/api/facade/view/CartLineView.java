@@ -1,4 +1,4 @@
-package com.commerce.api.facade;
+package com.commerce.api.facade.view;
 
 import com.commerce.core.money.Money;
 import java.util.UUID;

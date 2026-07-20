@@ -1,5 +1,7 @@
 package com.commerce.api.facade;
 
+import com.commerce.api.facade.view.CartLineView;
+import com.commerce.api.facade.view.CartView;
 import com.commerce.cart.info.CartInfo;
 import com.commerce.cart.info.CartItemInfo;
 import com.commerce.cart.service.CartReader;

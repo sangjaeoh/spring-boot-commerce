@@ -1,5 +1,6 @@
 package com.commerce.api.facade;
 
+import com.commerce.api.facade.view.ProductSummaryView;
 import com.commerce.core.money.Money;
 import com.commerce.product.entity.ProductVariantStatus;
 import com.commerce.product.info.ProductInfo;
