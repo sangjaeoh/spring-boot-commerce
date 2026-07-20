@@ -1,12 +1,12 @@
 package com.commerce.product.entity;
 
 import com.commerce.core.id.UuidV7Generator;
-import com.commerce.core.money.Money;
-import com.commerce.jpa.converter.MoneyConverter;
 import com.commerce.jpa.entity.BaseTimeEntity;
 import com.commerce.product.exception.InvalidVariantException;
 import com.commerce.product.exception.ProductErrorCode;
 import com.commerce.product.exception.ProductVariantStatusException;
+import com.commerce.shared.entity.Money;
+import com.commerce.shared.entity.MoneyConverter;
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;

@@ -1,11 +1,11 @@
 package com.commerce.payment.entity;
 
 import com.commerce.core.id.UuidV7Generator;
-import com.commerce.core.money.Money;
-import com.commerce.jpa.converter.MoneyConverter;
 import com.commerce.jpa.entity.BaseTimeEntity;
 import com.commerce.payment.exception.PaymentErrorCode;
 import com.commerce.payment.exception.PaymentStatusException;
+import com.commerce.shared.entity.Money;
+import com.commerce.shared.entity.MoneyConverter;
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;

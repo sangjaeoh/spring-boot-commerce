@@ -4,9 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.commerce.core.money.Money;
 import com.commerce.coupon.exception.CouponStatusException;
 import com.commerce.coupon.exception.InvalidCouponException;
+import com.commerce.shared.entity.Money;
 import java.time.Instant;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

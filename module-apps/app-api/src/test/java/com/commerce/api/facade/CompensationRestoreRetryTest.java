@@ -5,7 +5,6 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 
-import com.commerce.core.money.Money;
 import com.commerce.member.service.MemberAppender;
 import com.commerce.order.entity.Address;
 import com.commerce.order.entity.OrderLineSnapshot;
@@ -19,6 +18,7 @@ import com.commerce.payment.service.PaymentAppender;
 import com.commerce.payment.service.PaymentProcessor;
 import com.commerce.product.info.ProductVariantInfo;
 import com.commerce.product.service.ProductVariantReader;
+import com.commerce.shared.entity.Money;
 import com.commerce.stock.service.StockModifier;
 import com.commerce.stock.service.StockReader;
 import java.time.Instant;

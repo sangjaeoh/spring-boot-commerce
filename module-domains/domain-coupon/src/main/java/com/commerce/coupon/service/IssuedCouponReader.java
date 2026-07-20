@@ -1,6 +1,5 @@
 package com.commerce.coupon.service;
 
-import com.commerce.core.money.Money;
 import com.commerce.coupon.entity.Coupon;
 import com.commerce.coupon.entity.IssuedCoupon;
 import com.commerce.coupon.exception.CouponErrorCode;
@@ -10,6 +9,7 @@ import com.commerce.coupon.info.DiscountPreviewInfo;
 import com.commerce.coupon.info.IssuedCouponInfo;
 import com.commerce.coupon.repository.CouponRepository;
 import com.commerce.coupon.repository.IssuedCouponRepository;
+import com.commerce.shared.entity.Money;
 import java.time.Clock;
 import java.util.List;
 import java.util.UUID;

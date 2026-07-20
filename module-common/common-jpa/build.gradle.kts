@@ -6,7 +6,6 @@ dependencies {
     implementation(
         platform("org.springframework.boot:spring-boot-dependencies:${libs.versions.spring.boot.get()}"),
     )
-    implementation(project(":module-common:common-core"))
     implementation(libs.spring.boot.starter.data.jpa)
 
     // SchemaFlywayFactory가 Flyway API로 컴파일되게 한다. 런타임 flyway는 이 팩토리의 소비자

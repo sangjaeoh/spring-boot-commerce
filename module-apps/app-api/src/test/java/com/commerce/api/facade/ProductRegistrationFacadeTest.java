@@ -3,7 +3,6 @@ package com.commerce.api.facade;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.commerce.core.money.Money;
 import com.commerce.product.entity.ProductOption;
 import com.commerce.product.entity.ProductStatus;
 import com.commerce.product.entity.ProductVariantStatus;
@@ -12,6 +11,7 @@ import com.commerce.product.info.ProductVariantInfo;
 import com.commerce.product.service.ProductReader;
 import com.commerce.product.service.ProductVariantAppender;
 import com.commerce.product.service.ProductVariantReader;
+import com.commerce.shared.entity.Money;
 import com.commerce.stock.service.StockAppender;
 import com.commerce.stock.service.StockReader;
 import java.util.List;

@@ -6,7 +6,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.commerce.api.facade.ProductRegistrationFacade;
 import com.commerce.api.web.v1.WebIntegrationTest;
-import com.commerce.core.money.Money;
 import com.commerce.member.service.MemberAppender;
 import com.commerce.order.entity.Address;
 import com.commerce.order.entity.OrderLineSnapshot;
@@ -21,6 +20,7 @@ import com.commerce.payment.service.PaymentAppender;
 import com.commerce.payment.service.PaymentReader;
 import com.commerce.product.info.ProductVariantInfo;
 import com.commerce.product.service.ProductVariantReader;
+import com.commerce.shared.entity.Money;
 import com.commerce.stock.service.StockModifier;
 import java.nio.charset.StandardCharsets;
 import java.util.HexFormat;

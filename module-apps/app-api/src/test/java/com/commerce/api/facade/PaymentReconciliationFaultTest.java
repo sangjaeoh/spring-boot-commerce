@@ -8,7 +8,6 @@ import static org.mockito.Mockito.doCallRealMethod;
 import static org.mockito.Mockito.doThrow;
 
 import com.commerce.cart.service.CartAppender;
-import com.commerce.core.money.Money;
 import com.commerce.member.service.MemberAppender;
 import com.commerce.order.entity.Address;
 import com.commerce.order.entity.OrderStatus;
@@ -21,6 +20,7 @@ import com.commerce.payment.info.PaymentInfo;
 import com.commerce.payment.port.PaymentGateway;
 import com.commerce.payment.service.PaymentReader;
 import com.commerce.product.service.ProductVariantReader;
+import com.commerce.shared.entity.Money;
 import com.commerce.stock.service.StockReader;
 import java.time.Instant;
 import java.util.List;

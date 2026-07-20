@@ -9,7 +9,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.commerce.api.facade.view.ProductView;
-import com.commerce.core.money.Money;
 import com.commerce.product.entity.ProductOption;
 import com.commerce.product.entity.ProductStatus;
 import com.commerce.product.exception.ProductNotFoundException;
@@ -17,6 +16,7 @@ import com.commerce.product.service.ProductModifier;
 import com.commerce.product.service.ProductVariantAppender;
 import com.commerce.product.service.ProductVariantModifier;
 import com.commerce.product.service.ProductVariantReader;
+import com.commerce.shared.entity.Money;
 import com.commerce.stock.service.StockAppender;
 import com.commerce.stock.service.StockModifier;
 import com.commerce.stock.service.StockReader;

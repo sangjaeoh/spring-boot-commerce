@@ -1,11 +1,11 @@
 package com.commerce.order.service;
 
-import com.commerce.core.money.Money;
 import com.commerce.order.entity.Address;
 import com.commerce.order.entity.Order;
 import com.commerce.order.entity.OrderLineSnapshot;
 import com.commerce.order.exception.InvalidOrderException;
 import com.commerce.order.repository.OrderRepository;
+import com.commerce.shared.entity.Money;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;

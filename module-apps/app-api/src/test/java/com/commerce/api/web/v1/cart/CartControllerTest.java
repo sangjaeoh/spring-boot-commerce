@@ -8,10 +8,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.commerce.api.facade.ProductRegistrationFacade;
 import com.commerce.api.web.v1.WebIntegrationTest;
 import com.commerce.cart.service.CartAppender;
-import com.commerce.core.money.Money;
 import com.commerce.member.service.MemberAppender;
 import com.commerce.product.service.ProductVariantModifier;
 import com.commerce.product.service.ProductVariantReader;
+import com.commerce.shared.entity.Money;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;

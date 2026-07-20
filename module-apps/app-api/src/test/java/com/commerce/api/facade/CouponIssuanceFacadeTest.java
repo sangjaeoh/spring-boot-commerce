@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.commerce.api.exception.ApiErrorCode;
 import com.commerce.api.exception.ApiException;
-import com.commerce.core.money.Money;
 import com.commerce.coupon.entity.Discount;
 import com.commerce.coupon.entity.IssuedCouponStatus;
 import com.commerce.coupon.entity.ValidityPeriod;
@@ -24,6 +23,7 @@ import com.commerce.member.exception.MemberNotFoundException;
 import com.commerce.member.service.MemberAppender;
 import com.commerce.member.service.MemberModifier;
 import com.commerce.member.service.MemberRemover;
+import com.commerce.shared.entity.Money;
 import java.time.Instant;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;

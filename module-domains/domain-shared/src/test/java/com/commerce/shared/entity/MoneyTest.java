@@ -1,4 +1,4 @@
-package com.commerce.core.money;
+package com.commerce.shared.entity;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;

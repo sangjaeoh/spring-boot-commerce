@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 
-import com.commerce.core.money.Money;
 import com.commerce.payment.entity.Payment;
 import com.commerce.payment.entity.PaymentMethod;
 import com.commerce.payment.entity.PaymentStatus;
@@ -15,6 +14,7 @@ import com.commerce.payment.info.PaymentInfo;
 import com.commerce.payment.repository.PaymentRepository;
 import com.commerce.payment.service.PaymentAppender;
 import com.commerce.payment.service.PaymentProcessor;
+import com.commerce.shared.entity.Money;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;

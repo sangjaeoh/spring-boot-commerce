@@ -1,13 +1,13 @@
 package com.commerce.order.entity;
 
 import com.commerce.core.id.UuidV7Generator;
-import com.commerce.core.money.Money;
-import com.commerce.jpa.converter.MoneyConverter;
 import com.commerce.jpa.entity.BaseTimeEntity;
 import com.commerce.order.exception.FulfillmentStatusException;
 import com.commerce.order.exception.InvalidOrderException;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderStatusException;
+import com.commerce.shared.entity.Money;
+import com.commerce.shared.entity.MoneyConverter;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;

@@ -2,7 +2,6 @@ package com.commerce.api.facade;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.commerce.core.money.Money;
 import com.commerce.coupon.entity.Discount;
 import com.commerce.coupon.entity.IssuedCouponStatus;
 import com.commerce.coupon.entity.ValidityPeriod;
@@ -29,6 +28,7 @@ import com.commerce.payment.service.PaymentProcessor;
 import com.commerce.payment.service.PaymentReader;
 import com.commerce.product.info.ProductVariantInfo;
 import com.commerce.product.service.ProductVariantReader;
+import com.commerce.shared.entity.Money;
 import com.commerce.stock.service.StockModifier;
 import com.commerce.stock.service.StockReader;
 import io.micrometer.core.instrument.MeterRegistry;

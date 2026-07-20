@@ -1,10 +1,10 @@
 package com.commerce.coupon.info;
 
-import com.commerce.core.money.Money;
 import com.commerce.coupon.entity.Coupon;
 import com.commerce.coupon.entity.CouponStatus;
 import com.commerce.coupon.entity.Discount;
 import com.commerce.coupon.entity.ValidityPeriod;
+import com.commerce.shared.entity.Money;
 import java.time.Instant;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;

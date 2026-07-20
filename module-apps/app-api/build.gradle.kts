@@ -10,6 +10,7 @@ dependencies {
     // 컨트롤러가 인증 주체(AuthUser)를 코드 참조한다. 경계 웹 빈(ProblemDetail 핸들러·인증/멱등 필터·
     // 아규먼트 리졸버)은 스테레오타입 스캔으로 조립된다.
     implementation(project(":module-common:common-web"))
+    implementation(project(":module-domains:domain-shared"))
     implementation(project(":module-domains:domain-member"))
     implementation(project(":module-domains:domain-product"))
     implementation(project(":module-domains:domain-stock"))

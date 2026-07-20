@@ -15,13 +15,13 @@
   - 규칙이 `build.gradle.kts`마다 복붙되면 드리프트한다. 도구 배선(Spotless·NullAway·Error Prone)을 담는 플러그인은 → [code-quality](code-quality.md)
 - 플러그인은 `build-logic/src/main/kotlin/convention.{name}.gradle.kts`로 둔다.
 
-  | 플러그인                     | 적용 대상       | 소유 규칙                                                       |
-  | ---------------------------- | --------------- | -------------------------------------------------------------- |
-  | `convention.domain-module`   | `domain-{name}` | JPA + 허용 의존 화이트리스트(common-core·jpa·messaging) |
-  | `convention.app-module`      | `app-{name}`    | Spring Boot 실행 조립 — domains·infra·external·common 의존 허용 |
-  | `convention.infra-module`    | `infra-{tech}`  | common만 의존                                                   |
-  | `convention.external-module` | `external-{name}` | 구현 대상 domain + common만 의존                             |
-  | `convention.common-module`   | `common-{role}` | core 방향 단방향(web→auth만 허용), core는 의존 제로            |
+  | 플러그인                     | 적용 대상       | 소유 규칙                                                             |
+  | ---------------------------- | --------------- | --------------------------------------------------------------------- |
+  | `convention.domain-module`   | `domain-{name}` | JPA + 허용 의존 화이트리스트(domain-shared·common-core·jpa·messaging) |
+  | `convention.app-module`      | `app-{name}`    | Spring Boot 실행 조립 — domains·infra·external·common 의존 허용       |
+  | `convention.infra-module`    | `infra-{tech}`  | common만 의존                                                         |
+  | `convention.external-module` | `external-{name}` | 구현 대상 domain + common만 의존                                      |
+  | `convention.common-module`   | `common-{role}` | core 방향 단방향(web→auth만 허용), core는 의존 제로                   |
 
 - 계층 컨벤션 플러그인은 `convention.java-base`(Spotless·NullAway·Error Prone)와 `convention.java-common`(금지 의존성 차단)을 apply한다. 따라서 모듈은 계층 플러그인 하나만 적용해도 품질 게이트가 딸려온다(도구 상세는 → [code-quality](code-quality.md)).
 - 모듈 간 의존은 `implementation`이 기본이다. `api`는 그 타입이 자기 모듈 공개 시그니처에 등장해 소비자 재노출이 의도된 때만 쓴다.
@@ -33,14 +33,14 @@
 - 모듈은 아래 계층 경계와 의존 방향을 지킨다. 의존은 항상 한 방향으로만 흐른다(앱 → 도메인·인프라 → 공용).
   - 경계를 컴파일 의존성 자체로 강제한다 — 단일 모듈 패키지 분리는 리뷰로만 지켜져 타 도메인 참조가 조용히 새므로 기각한다. 도메인이 비대해지면 내부 코드 수정 없이 독립 MSA로 빌드·배포하는 것이 목표다.
 
-  | 계층               | 역할                                                                  | 의존 가능 대상                                             |
-  | ------------------ | --------------------------------------------------------------------- | ---------------------------------------------------------- |
-  | `module-apps/`     | 실행 Spring Boot 앱. 조립·오케스트레이션·표현                         | domains, infra, external, common 전부                      |
-  | `module-domains/`  | 도메인 로직·엔티티·리포지토리. 타 도메인·infra·external·web 의존 금지 | common-core, common-jpa, common-messaging                  |
-  | `module-infra/`    | 기술 구현체(Redis, 메시징 transport)                                  | common                                                     |
-  | `module-external/` | 외부 시스템 어댑터(PG·알림) — 도메인 소유 포트를 구현                 | 구현 대상 domain, common                                   |
-  | `module-common/`   | 공용 계층 — core(순수)·jpa·messaging·auth·web                         | core는 제로 의존, 나머지는 core 방향 단방향(web→auth 허용) |
-  | `module-tests/`    | 아키텍처 테스트 등 크로스 모듈 검증                                    | 전 모듈(테스트 전용, 아무도 의존 안 함)                     |
+  | 계층               | 역할                                                                                        | 의존 가능 대상                                             |
+  | ------------------ | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+  | `module-apps/`     | 실행 Spring Boot 앱. 조립·오케스트레이션·표현                                               | domains, infra, external, common 전부                      |
+  | `module-domains/`  | 도메인 로직·엔티티·리포지토리. 타 도메인(`domain-shared` 제외)·infra·external·web 의존 금지 | domain-shared, common-core, common-jpa, common-messaging   |
+  | `module-infra/`    | 기술 구현체(Redis, 메시징 transport)                                                        | common                                                     |
+  | `module-external/` | 외부 시스템 어댑터(PG·알림) — 도메인 소유 포트를 구현                                       | 구현 대상 domain, common                                   |
+  | `module-common/`   | 공용 계층 — core(순수)·jpa·messaging·auth·web                                               | core는 제로 의존, 나머지는 core 방향 단방향(web→auth 허용) |
+  | `module-tests/`    | 아키텍처 테스트 등 크로스 모듈 검증                                                         | 전 모듈(테스트 전용, 아무도 의존 안 함)                     |
 
 - 모듈 경계는 빌드가 컴파일·테스트 시점에 강제한다(강제 대상 전체 목록은 아래 빌드가 강제하는 불변식).
 - `module-tests/`는 이 의존 흐름 밖의 테스트 전용 계층이다.
@@ -101,7 +101,9 @@
   - `event` — 도메인 이벤트 record.
   - `exception` — `{Name}ErrorCode` + 예외.
   - 그 외 모듈 소유: `db/migration/{name}/`. 마이그레이션은 `V{n}__{설명}.sql`로 명명하고 1변경 1파일로 쓴다(적용된 파일은 수정하지 않고 새 버전을 추가한다).
-- 도메인마다 PostgreSQL 스키마 하나를 소유한다.
+- `domain-shared`는 둘 이상의 도메인이 쓰는 값 객체와 그 `AttributeConverter`를 소유한다. 엔티티·리포지토리·마이그레이션은 두지 않는다.
+- 소비 도메인이 하나뿐인 값 객체는 그 도메인의 `entity`가 소유한다.
+- 엔티티를 두는 도메인마다 PostgreSQL 스키마 하나를 소유한다.
   - 도메인 경계가 스키마로 드러나 크로스 도메인 조인·FK 유혹이 구조적으로 차단되고, MSA 분리 시 떼어낼 조인이 없다. 단일 스키마 공유는 분리 시 떼어낼 조인이 남아 기각한다.
   - 새 도메인은 `db/migration/{name}/`에 스키마 생성 + 테이블 DDL을 두고, 그 스키마의 Flyway 인스턴스를 `SchemaFlywayFactory`(common-jpa)에 등록해 `app-migration`이 스키마별로 실행한다. 누락하면 빌드는 green인데 `ddl-auto=validate` 기동이 스키마 불일치로 실패한다.
 

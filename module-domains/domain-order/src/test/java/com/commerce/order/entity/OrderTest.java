@@ -3,11 +3,11 @@ package com.commerce.order.entity;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.commerce.core.money.Money;
 import com.commerce.order.exception.FulfillmentStatusException;
 import com.commerce.order.exception.InvalidOrderException;
 import com.commerce.order.exception.OrderErrorCode;
 import com.commerce.order.exception.OrderStatusException;
+import com.commerce.shared.entity.Money;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;

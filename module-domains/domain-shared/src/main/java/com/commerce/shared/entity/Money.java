@@ -1,4 +1,4 @@
-package com.commerce.core.money;
+package com.commerce.shared.entity;
 
 /**
  * 원 단위 정수 금액을 나타내는 값 객체다.

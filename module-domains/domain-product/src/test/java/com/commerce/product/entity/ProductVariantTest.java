@@ -3,9 +3,9 @@ package com.commerce.product.entity;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.commerce.core.money.Money;
 import com.commerce.product.exception.InvalidVariantException;
 import com.commerce.product.exception.ProductVariantStatusException;
+import com.commerce.shared.entity.Money;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;

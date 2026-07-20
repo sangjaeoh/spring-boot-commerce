@@ -1,7 +1,7 @@
 package com.commerce.api.facade.view;
 
-import com.commerce.core.money.Money;
 import com.commerce.product.entity.ProductStatus;
+import com.commerce.shared.entity.Money;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;

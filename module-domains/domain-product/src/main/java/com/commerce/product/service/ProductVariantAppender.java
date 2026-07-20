@@ -1,6 +1,5 @@
 package com.commerce.product.service;
 
-import com.commerce.core.money.Money;
 import com.commerce.product.entity.NormalizedOptions;
 import com.commerce.product.entity.ProductOption;
 import com.commerce.product.entity.ProductVariant;
@@ -11,6 +10,7 @@ import com.commerce.product.exception.ProductErrorCode;
 import com.commerce.product.exception.ProductNotFoundException;
 import com.commerce.product.repository.ProductRepository;
 import com.commerce.product.repository.ProductVariantRepository;
+import com.commerce.shared.entity.Money;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;

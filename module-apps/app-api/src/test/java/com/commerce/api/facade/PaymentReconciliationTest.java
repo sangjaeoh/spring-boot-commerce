@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.commerce.cart.service.CartAppender;
-import com.commerce.core.money.Money;
 import com.commerce.coupon.entity.Discount;
 import com.commerce.coupon.entity.IssuedCouponStatus;
 import com.commerce.coupon.entity.ValidityPeriod;
@@ -30,6 +29,7 @@ import com.commerce.payment.service.PaymentAppender;
 import com.commerce.payment.service.PaymentReader;
 import com.commerce.product.info.ProductVariantInfo;
 import com.commerce.product.service.ProductVariantReader;
+import com.commerce.shared.entity.Money;
 import com.commerce.stock.service.StockModifier;
 import com.commerce.stock.service.StockReader;
 import java.time.Instant;

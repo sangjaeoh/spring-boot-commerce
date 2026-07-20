@@ -1,12 +1,12 @@
 package com.commerce.external.payment;
 
-import com.commerce.core.money.Money;
 import com.commerce.external.payment.exception.FakeGatewayTimeoutException;
 import com.commerce.payment.entity.FailureReason;
 import com.commerce.payment.entity.PaymentMethod;
 import com.commerce.payment.port.GatewayTransactionStatus;
 import com.commerce.payment.port.PaymentApproval;
 import com.commerce.payment.port.PaymentGateway;
+import com.commerce.shared.entity.Money;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;

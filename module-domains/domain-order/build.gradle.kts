@@ -3,6 +3,8 @@ plugins {
 }
 
 dependencies {
+    // Money가 이 모듈의 경계 시그니처(Info·명령 입력)에 등장해 소비자에게 재노출된다.
+    api(project(":module-domains:domain-shared"))
     implementation(project(":module-common:common-core"))
     implementation(project(":module-common:common-jpa"))
     implementation(project(":module-common:common-messaging"))

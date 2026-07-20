@@ -1,6 +1,6 @@
 package com.commerce.coupon.info;
 
-import com.commerce.core.money.Money;
+import com.commerce.shared.entity.Money;
 import org.jspecify.annotations.Nullable;
 
 /**
