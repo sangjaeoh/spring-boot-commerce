@@ -15,7 +15,7 @@
 - 타입은 역할에 따라 아래 표대로 선언한다.
 
   | 대상 | 선언 | 근거 |
-    |---|---|---|
+  |---|---|---|
   | JPA 엔티티 | class — 명시적 getter, `protected` 기본 생성자, setter 금지 | JPA 프록시·dirty checking, 불변식 보호 |
   | Info(경계 조회 모델) | record + `from(entity)` 정적 팩토리 | 불변 — 캐시 안전 |
   | 도메인 이벤트 | record | 불변 페이로드 |
@@ -66,7 +66,7 @@
 - 서비스는 아래 고정 접미사만 쓴다. 새 접미사는 사람 승인이 필요하다.
 
   | 접미사 | 역할 |
-    |---|---|
+  |---|---|
   | `Reader` | 조회 |
   | `Appender` | 생성 |
   | `Modifier` | 수정 |
@@ -78,7 +78,7 @@
 - 조회·생성·업데이트 메서드는 계층별로 아래 표대로 이름 짓는다.
 
   | 작업 | 리포지토리 | 도메인 서비스(Reader·Appender·Modifier) | 엔티티 |
-    |---|---|---|---|
+  |---|---|---|---|
   | 조회 | `find*`=`Optional`, `get*`=없으면 `*NotFoundException`, `exists*`·`count*`; 파생은 `findBy{조건}` | `get*`·`find*` → `Info` 반환 | — |
   | 생성 | Spring Data `save` | 도메인 의도 동사(`register`·`place`·`issue`) → 새 ID 반환 | 정적 팩토리 `create(...)` |
   | 업데이트 | dirty checking(명시 `save` 금지) | 도메인 의도 동사(`cancel`·`rename`·`relocate`) → 최소한의 결과 | 의도 동사 메서드(`activate()`·`delete()`) |
@@ -94,7 +94,7 @@
 - 클래스는 아래 고정표 접미사만 쓴다.
 
   | 접미사 | 대상 |
-    |---|---|
+  |---|---|
   | `Controller` | 컨트롤러 |
   | `Facade` | 파사드 |
   | `Repository` | 리포지토리 |
