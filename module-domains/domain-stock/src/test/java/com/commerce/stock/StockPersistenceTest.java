@@ -28,7 +28,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
 /**
- * stock 도메인의 영속 이음새를 실 PostgreSQL로 검증한다.
+ * stock 도메인의 영속 이음새를 실 PostgreSQL로 검증하는 테스트다.
  *
  * <p>{@code ddl-auto=validate} 정합, variant_id 유니크, 낙관락({@code @Version}) 증가를 확인한다.
  */

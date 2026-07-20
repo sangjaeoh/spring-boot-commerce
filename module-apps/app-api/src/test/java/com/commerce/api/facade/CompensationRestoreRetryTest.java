@@ -33,7 +33,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 /**
  * 스윕·리컨실 보상의 재고 복원이 일시 낙관락 충돌(동시 체크아웃 경합)을 라인 단위 재시도로 흡수해, 취소
- * 전이 커밋 후 남은 라인의 복원이 유실되지 않음을 결함 주입으로 검증한다.
+ * 전이 커밋 후 남은 라인의 복원이 유실되지 않음을 결함 주입으로 검증하는 테스트다.
  *
  * <p>충돌은 {@code StockModifier.restore}에 주입한다 — 실 경합의 재현이 아니라 재시도 경로의 특성화다.
  * 재시도 상한(3회) 안의 연속 충돌 2회를 주입해 상한 경계까지 확인한다.

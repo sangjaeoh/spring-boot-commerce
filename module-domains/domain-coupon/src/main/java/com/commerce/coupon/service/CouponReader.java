@@ -7,7 +7,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 쿠폰 정책 조회를 담당한다. */
+/** 쿠폰 정책 조회를 담당하는 서비스다. */
 @Service
 public class CouponReader {
 

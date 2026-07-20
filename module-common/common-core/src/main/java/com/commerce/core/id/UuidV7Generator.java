@@ -3,7 +3,7 @@ package com.commerce.core.id;
 import java.security.SecureRandom;
 import java.util.UUID;
 
-/** 시간 정렬(time-ordered) UUIDv7을 생성한다(RFC 9562). */
+/** 시간 정렬(time-ordered) UUIDv7(RFC 9562) 생성기다. */
 public final class UuidV7Generator {
 
     private static final SecureRandom RANDOM = new SecureRandom();

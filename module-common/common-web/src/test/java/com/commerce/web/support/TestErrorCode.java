@@ -2,7 +2,7 @@ package com.commerce.web.support;
 
 import com.commerce.core.exception.ErrorCode;
 
-/** 핸들러 검증용 테스트 에러 코드. 422 상태로 {@link ErrorCode} 계약을 태운다. */
+/** 핸들러 검증용 테스트 에러 코드다. 422 상태로 {@link ErrorCode} 계약을 태운다. */
 public enum TestErrorCode implements ErrorCode {
     SAMPLE("TEST_SAMPLE", "샘플 도메인 오류다.", 422);
 

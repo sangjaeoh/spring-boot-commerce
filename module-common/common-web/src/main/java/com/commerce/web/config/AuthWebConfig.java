@@ -6,7 +6,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
-/** 인증 주체 아규먼트 리졸버를 MVC에 등록한다. */
+/** 인증 주체 아규먼트 리졸버를 MVC에 등록하는 설정이다. */
 @Configuration
 public class AuthWebConfig implements WebMvcConfigurer {
 

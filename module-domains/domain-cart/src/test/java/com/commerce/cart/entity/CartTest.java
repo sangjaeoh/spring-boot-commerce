@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 
 class CartTest {
 
+    /** 주어진 변형 라인의 수량을 돌려준다. */
     private int quantityOf(Cart cart, UUID variantId) {
         return cart.getItems().stream()
                 .filter(item -> item.getVariantId().equals(variantId))

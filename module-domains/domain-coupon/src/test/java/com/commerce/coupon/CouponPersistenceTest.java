@@ -36,9 +36,9 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
 /**
- * coupon 도메인의 영속 이음새를 실 PostgreSQL로 검증한다.
+ * coupon 도메인의 영속 이음새를 실 PostgreSQL로 검증하는 테스트다.
  *
- * <p>판별 유니온 {@code Discount}·다중 컬럼 {@code ValidityPeriod}의 @Embedded 왕복,
+ * <p>판별 유니온 {@link Discount}·다중 컬럼 {@link ValidityPeriod}의 {@code @Embedded} 왕복,
  * {@code ddl-auto=validate} 정합, 회원당 발급 유니크를 확인한다.
  */
 @DataJpaTest(

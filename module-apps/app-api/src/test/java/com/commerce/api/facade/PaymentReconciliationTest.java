@@ -42,7 +42,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.TestConstructor;
 
 /**
- * 응답 유실 결제의 리컨실 확정 경로를 검증한다.
+ * 응답 유실 결제의 리컨실 확정 경로를 검증하는 테스트다.
  *
  * <p>동기 체크아웃이 결과를 기록하지 못한 채 중단된 상태(주문 PENDING·재고 차감·결제 REQUESTED)를 도메인
  * 서비스 직접 호출로 재현하고 — PG 응답 유실은 포트 승인을 부른 뒤 반환을 버리는 것으로 재현한다 — PG측

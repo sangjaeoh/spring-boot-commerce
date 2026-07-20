@@ -36,7 +36,7 @@ import org.springframework.test.context.TestConstructor;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
- * PG 웹훅 수신의 서명 검증·확정·중복 전달 무해를 검증한다.
+ * PG 웹훅 수신의 서명 검증·확정·중복 전달 무해를 검증하는 테스트다.
  *
  * <p>fake PG는 웹훅을 발신하지 않으므로 실 PG가 보낼 요청을 MockMvc로 직접 재현한다. 확정 대상 결제는
  * 유예({@code stale-after})가 지나야 하므로 생성 시각을 SQL로 과거로 되돌려 재현한다.

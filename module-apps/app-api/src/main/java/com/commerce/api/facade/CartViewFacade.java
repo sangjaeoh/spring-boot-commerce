@@ -27,7 +27,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 
-/** 장바구니 조회를 변형·상품·재고와 합성해 라인별 소계·주문가능(orderable)을 파생한다. */
+/** 장바구니 조회를 변형·상품·재고와 합성해 라인별 소계·주문가능(orderable)을 파생하는 파사드다. */
 @Component
 public class CartViewFacade {
 

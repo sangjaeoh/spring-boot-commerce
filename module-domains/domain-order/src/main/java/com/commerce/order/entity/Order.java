@@ -209,7 +209,7 @@ public class Order extends BaseTimeEntity<UUID> {
     }
 
     /**
-     * 전 라인 재고 차감 완료를 기록한다. 이 증거가 스윕·리컨실 보상의 재고 복원을 게이트한다.
+     * 전 라인 재고 차감 완료를 기록한다.
      *
      * @throws OrderStatusException 결제 진행 중({@code PENDING})이 아니면
      */
@@ -371,7 +371,7 @@ public class Order extends BaseTimeEntity<UUID> {
                 + orderId.toString().substring(24).toUpperCase(Locale.ROOT);
     }
 
-    /** 비울 장바구니 라인을 특정하기 위해 주문된 변형 집합을 반환한다. */
+    /** 주문된 변형 집합을 변경 불가 뷰로 반환한다. */
     public Set<UUID> getOrderedVariantIds() {
         return lines.stream().map(OrderLine::getVariantId).collect(Collectors.toUnmodifiableSet());
     }
@@ -469,6 +469,7 @@ public class Order extends BaseTimeEntity<UUID> {
         return refundReason;
     }
 
+    /** 주문 라인 집합을 변경 불가 뷰로 반환한다. */
     public Set<OrderLine> getLines() {
         return Collections.unmodifiableSet(lines);
     }

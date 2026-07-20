@@ -10,7 +10,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** 장바구니 담기를 담당한다. */
+/** 장바구니 담기를 담당하는 서비스다. */
 @Service
 public class CartAppender {
 

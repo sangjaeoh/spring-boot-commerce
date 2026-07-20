@@ -4,7 +4,7 @@ import com.commerce.shared.entity.Money;
 import org.jspecify.annotations.Nullable;
 
 /**
- * 발급 쿠폰 할인 미리보기 경계 모델이다.
+ * 발급분 할인 미리보기 경계 모델이다.
  *
  * @param applicable 조회 시점 기준 적용 가능 여부
  * @param reason 적용 불가 사유(적용 가능하면 없음)

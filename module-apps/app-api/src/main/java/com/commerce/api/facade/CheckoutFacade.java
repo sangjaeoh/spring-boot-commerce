@@ -41,7 +41,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 
-/** 장바구니 전체를 주문·결제로 전환하는 체크아웃 흐름을 조율한다. */
+/** 장바구니 전체를 주문·결제로 전환하는 체크아웃 흐름을 조율하는 파사드다. */
 @Component
 public class CheckoutFacade {
 
@@ -86,7 +86,7 @@ public class CheckoutFacade {
     }
 
     /**
-     * 체크아웃을 수행하고 결제 완료된 주문 ID를 반환한다. 4단계 이후 실패는 그 콜스택에서 동기 보상한다.
+     * 체크아웃을 수행하고 결제 완료된 주문 ID를 반환한다. 실패하면 그 콜스택에서 동기 보상한다.
      *
      * @throws ApiException 회원 자격·장바구니·주문 가능·쿠폰 적용성·결제 거절 등 크로스 도메인 정책 거부
      */
@@ -241,7 +241,8 @@ public class CheckoutFacade {
                 stockModifier.deduct(line.variantId(), line.quantity());
                 deducted.add(line);
             }
-            // 2. 차감 완료 기록 — 마커가 곧 전 라인 차감 완료 증거라 루프 뒤에만 기록한다.
+            // 2. 차감 완료 기록
+            // 마커가 곧 전 라인 차감 완료 증거라 루프 뒤에만 기록한다.
             orderModifier.markStockDeducted(orderId);
         } catch (RuntimeException e) {
             orderModifier.cancel(orderId, CancellationReason.STOCK_SHORTAGE);
@@ -278,7 +279,8 @@ public class CheckoutFacade {
             compensate(orderId, snapshots, issuedCouponId);
             throw e;
         }
-        // 2. 거절 판정 — PG가 정상 응답한 거절은 예외가 아니라 FAILED 상태로 돌아온다.
+        // 2. 거절 판정
+        // PG가 정상 응답한 거절은 예외가 아니라 FAILED 상태로 돌아온다.
         if (payment.status() != PaymentStatus.APPROVED) {
             compensate(orderId, snapshots, issuedCouponId);
             throw new ApiException(ApiErrorCode.PAYMENT_DECLINED);

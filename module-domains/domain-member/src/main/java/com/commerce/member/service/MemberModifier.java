@@ -10,7 +10,7 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 회원 상태 전이·표시 이름 변경을 담당한다. */
+/** 회원 상태 전이·표시 이름 변경을 담당하는 서비스다. */
 @Service
 public class MemberModifier {
 

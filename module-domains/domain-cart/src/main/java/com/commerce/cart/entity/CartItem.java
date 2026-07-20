@@ -26,7 +26,7 @@ public class CartItem extends BaseTimeEntity<UUID> {
     @Id
     private UUID id;
 
-    /** 부모 장바구니. {@code Cart.items}의 mappedBy 대상이자 컬럼 {@code cart_id} 소유 필드다. */
+    /** 부모 장바구니. */
     // Hibernate가 리플렉션으로 읽으나 자바 코드에선 읽지 않는다.
     @Keep
     @ManyToOne(fetch = FetchType.LAZY)

@@ -8,7 +8,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import org.jspecify.annotations.Nullable;
 
-/** 판별 형 정액({@code FIXED})·정률({@code RATE})을 평탄한 nullable 필드로 싣는다. */
+/** 판별 형 정액({@code FIXED})·정률({@code RATE})을 평탄한 nullable 필드로 싣는 요청이다. */
 @Schema(description = "쿠폰 할인 정책 요청")
 public record DiscountRequest(
         @Schema(description = "할인 형(정액 FIXED·정률 RATE)") @NotNull

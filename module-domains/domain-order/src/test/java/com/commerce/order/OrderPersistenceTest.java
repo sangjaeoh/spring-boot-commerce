@@ -39,7 +39,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
 /**
- * order 도메인의 영속 이음새를 실 PostgreSQL로 검증한다.
+ * order 도메인의 영속 이음새를 실 PostgreSQL로 검증하는 테스트다.
  *
  * <p>두 테이블 {@code ddl-auto=validate} 정합, Address 임베디드·Money 컬럼 왕복, 라인 캐스케이드, 이행 전이를 확인한다.
  */

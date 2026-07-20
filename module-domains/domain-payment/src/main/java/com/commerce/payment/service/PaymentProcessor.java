@@ -20,7 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** 결제 승인·취소와 리컨실 확정 기록을 조율한다. PG 호출은 포트에 위임한다. */
+/** 결제 승인·취소와 리컨실 확정 기록을 조율하는 서비스다. PG 호출은 포트에 위임한다. */
 @Service
 public class PaymentProcessor {
 

@@ -15,7 +15,7 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 상품 변형 조회를 담당한다. */
+/** 상품 변형 조회를 담당하는 서비스다. */
 @Service
 public class ProductVariantReader {
 
@@ -46,7 +46,7 @@ public class ProductVariantReader {
                 .toList();
     }
 
-    /** 같은 옵션 조합의 비-RETIRED 변형을 조회한다. 중복 검사와 같은 시그니처 정규화를 쓴다. */
+    /** 같은 옵션 조합의 비-{@code RETIRED} 변형을 조회한다. 중복 검사와 같은 시그니처 정규화를 쓴다. */
     @Transactional(readOnly = true)
     public Optional<ProductVariantInfo> findNonRetiredByOptions(UUID productId, List<ProductOption> options) {
         String signature = NormalizedOptions.of(options).signature();

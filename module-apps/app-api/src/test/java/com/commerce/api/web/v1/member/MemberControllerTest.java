@@ -187,13 +187,14 @@ class MemberControllerTest extends WebIntegrationTest {
         String loginBody = objectMapper.writeValueAsString(
                 new LoginRequest("nobody-" + UUID.randomUUID() + "@example.com", "password-123!"));
 
-        // 같은 IP로 로그인 카운터를 한도 초과까지 채운다.
+        // 1. 같은 IP의 로그인 카운터 한도 초과 소진
         for (int attempt = 0; attempt < MAX_ATTEMPTS_PER_WINDOW; attempt++) {
             mvc.perform(postFrom(LOGIN_PATH, clientIp, loginBody)).andExpect(status().isUnauthorized());
         }
         mvc.perform(postFrom(LOGIN_PATH, clientIp, loginBody)).andExpect(status().isTooManyRequests());
 
-        // 같은 IP의 가입은 별도 카운터라 정상 201로 통과한다.
+        // 2. 같은 IP의 가입 요청
+        // 가입은 별도 카운터라 로그인 소진에 영향받지 않는다.
         mvc.perform(postFrom(SIGNUP_PATH, clientIp, uniqueRegistration())).andExpect(status().isCreated());
     }
 

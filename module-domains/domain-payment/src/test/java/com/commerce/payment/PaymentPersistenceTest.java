@@ -39,7 +39,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
 /**
- * payment 도메인의 영속 이음새와 PG 조율을 실 PostgreSQL로 검증한다.
+ * payment 도메인의 영속 이음새와 PG 조율을 실 PostgreSQL로 검증하는 테스트다.
  *
  * <p>{@code ddl-auto=validate} 정합, 주문당 결제 유니크, 승인·거절·PG 생략·환불·환불 생략 분기를 확인한다.
  */
@@ -213,7 +213,7 @@ class PaymentPersistenceTest {
                 .when(paymentRepository)
                 .findById(paymentId);
         assertThatThrownBy(() -> paymentProcessor.cancel(paymentId)).isInstanceOf(IllegalStateException.class);
-        assertThat(gateway.refundCount).isEqualTo(1); // 환불은 실제로 한 번 일어났다
+        assertThat(gateway.refundCount).isEqualTo(1);
 
         // 영속이 롤백돼 결제 행은 APPROVED로 남고 창이 열려 있다. 스텁을 걷어내고 실제 리포지토리로 되읽는다.
         Mockito.reset(paymentRepository);

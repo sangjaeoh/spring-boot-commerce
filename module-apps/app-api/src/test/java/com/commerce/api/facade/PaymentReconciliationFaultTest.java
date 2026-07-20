@@ -33,7 +33,7 @@ import org.springframework.test.context.TestConstructor;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 /**
- * 결제 리컨실 사각지대를 크래시 주입으로 재현하고 다음 스윕 수렴을 검증한다.
+ * 결제 리컨실 사각지대를 크래시 주입으로 재현하고 다음 스윕 수렴을 검증하는 테스트다.
  *
  * <p>(1) 결제 승인 커밋과 주문 결제완료({@code markPaid}) 사이 중단 — payment=APPROVED·order=PENDING 잔여를
  * PENDING 스윕이 발견해 결제 리컨실이 결제완료로 완결한다. (2) 고아 청구 환불의 PG 환불 실패 — 승인 기록이

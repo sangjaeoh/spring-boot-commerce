@@ -10,7 +10,7 @@ import org.springframework.test.context.TestConstructor;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
- * 관측 최소셋의 노출을 검증한다 — 메트릭 엔드포인트(커넥션 풀 포함)와 요청 상관관계 ID 헤더.
+ * 관측 최소셋의 노출을 검증하는 테스트다 — 메트릭 엔드포인트(커넥션 풀 포함)와 요청 상관관계 ID 헤더.
  */
 @TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 class ActuatorExposureTest extends WebIntegrationTest {

@@ -10,7 +10,7 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 장바구니 라인 수량 변경·제거를 담당한다. */
+/** 장바구니 라인 수량 변경·제거를 담당하는 서비스다. */
 @Service
 public class CartModifier {
 

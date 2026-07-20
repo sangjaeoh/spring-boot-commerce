@@ -5,7 +5,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import java.util.UUID;
 
-/** 담는 회원은 토큰 주체에서 도출한다. */
+/** 장바구니 담기 요청이다. 담는 회원은 토큰 주체에서 도출한다. */
 @Schema(description = "장바구니 담기 요청")
 public record AddCartItemRequest(
         @Schema(description = "담을 상품 변형 ID") @NotNull UUID variantId,

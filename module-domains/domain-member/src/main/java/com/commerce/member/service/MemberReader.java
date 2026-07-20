@@ -10,7 +10,7 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 회원 조회를 담당한다. */
+/** 회원 조회를 담당하는 서비스다. */
 @Service
 public class MemberReader {
 
@@ -35,8 +35,6 @@ public class MemberReader {
 
     /**
      * 이메일 정확 일치로 활성 회원을 조회한다. 정지 회원·정지 사유를 포함한다.
-     *
-     * <p>관리자 회원 검색 표면이 소비한다(대상 회원 ID 발견).
      *
      * @throws MemberNotFoundException 해당 이메일의 활성 회원이 없으면
      * @throws com.commerce.member.exception.InvalidEmailException 이메일 형식이 올바르지 않으면

@@ -20,10 +20,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 /**
- * 미존재·탈퇴 경로의 타이밍 등화를 구조적으로 검증한다.
+ * 미존재·탈퇴 경로의 타이밍 등화를 구조적으로 검증하는 테스트다.
  *
  * <p>실측 타이밍이 아니라 인코더 호출·거부 불변으로 확인한다. 미존재·탈퇴는 이 계층에서 모두 저장소 빈
- * {@code Optional}로 나타난다(탈퇴 실배선은 {@code MemberPersistenceTest}가 커버).
+ * {@code Optional}로 나타난다(탈퇴 실배선은 {@link com.commerce.member.MemberPersistenceTest MemberPersistenceTest}가 커버).
  */
 class MemberCredentialValidatorTest {
 
@@ -67,6 +67,7 @@ class MemberCredentialValidatorTest {
         assertThat(passwordEncoder.matchedHashes).containsExactly("$stored-hash$");
     }
 
+    /** 비교에 쓰인 해시를 기록하고 일치 결과를 고정하는 {@link PasswordEncoder} 스텁이다. */
     private static final class RecordingPasswordEncoder implements PasswordEncoder {
 
         private final String dummyHash = "$dummy-equalization-hash$";

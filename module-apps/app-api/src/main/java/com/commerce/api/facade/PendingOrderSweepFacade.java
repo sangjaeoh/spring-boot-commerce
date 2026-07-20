@@ -26,7 +26,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * 결제 요청 이전에 중단돼 payment 행 없이 남은 PENDING 주문을 주기 스윕이 보상 종결하고, 종결 기록된 결제가
- * 남긴 PENDING 잔여를 결제 리컨실({@link PaymentConfirmationFacade})에 위임한다.
+ * 남긴 PENDING 잔여를 결제 리컨실({@link PaymentConfirmationFacade})에 위임하는 파사드다.
  */
 @Component
 public class PendingOrderSweepFacade {
@@ -163,7 +163,8 @@ public class PendingOrderSweepFacade {
     private void delegateToPaymentReconciliation(OrderInfo order) {
         // 1. 결제 상태 조회
         PaymentInfo payment = paymentReader.getByOrderId(order.id());
-        // 2. 미확정은 결제 리컨실 스윕이 PG 상태 조회로 확정한다 — 이중 개입하지 않는다
+        // 2. 미확정 결제 위임 보류
+        // 결제 리컨실 스윕이 PG 상태 조회로 확정하므로 이중 개입하지 않는다
         if (payment.status() == PaymentStatus.REQUESTED) {
             return;
         }

@@ -11,7 +11,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 쿠폰 정책 생성을 담당한다. */
+/** 쿠폰 정책 생성을 담당하는 서비스다. */
 @Service
 public class CouponAppender {
 

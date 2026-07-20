@@ -19,7 +19,7 @@ import com.commerce.product.service.ProductVariantReader;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 
-/** 장바구니 쓰기를 조율하며 담기·증량에 주문 자격 게이트를 적용한다. */
+/** 장바구니 쓰기를 조율하며 담기·증량에 주문 자격 게이트를 적용하는 파사드다. */
 @Component
 public class CartCommandFacade {
 

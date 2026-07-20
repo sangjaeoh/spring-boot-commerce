@@ -4,7 +4,7 @@ import java.util.List;
 import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
 
-/** 도메인 스키마별로 Flyway를 실행한다. */
+/** 도메인 스키마별로 Flyway를 실행하는 팩토리다. */
 public final class SchemaFlywayFactory {
 
     // 등록된 도메인 스키마. db/migration/{name}/ 로케이션 규약과 1:1 대응한다.

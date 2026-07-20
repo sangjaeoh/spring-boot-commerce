@@ -10,7 +10,7 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 재고 수량 차감·복원·입고와 상태 전이를 담당한다. */
+/** 재고 수량 차감·복원·입고와 상태 전이를 담당하는 서비스다. */
 @Service
 public class StockModifier {
 
@@ -39,6 +39,7 @@ public class StockModifier {
     /**
      * 재고를 재입고한다.
      *
+     * @throws StockNotFoundException 재고가 없으면
      * @throws StockStatusException 단종 재고면
      */
     @Transactional
@@ -49,6 +50,7 @@ public class StockModifier {
     /**
      * 재고를 수동 품절로 둔다.
      *
+     * @throws StockNotFoundException 재고가 없으면
      * @throws StockStatusException 판매 가능 상태가 아니면
      */
     @Transactional
@@ -59,6 +61,7 @@ public class StockModifier {
     /**
      * 재고를 판매 가능으로 되돌린다.
      *
+     * @throws StockNotFoundException 재고가 없으면
      * @throws StockStatusException 품절 상태가 아니면
      */
     @Transactional
@@ -69,6 +72,7 @@ public class StockModifier {
     /**
      * 재고를 단종한다.
      *
+     * @throws StockNotFoundException 재고가 없으면
      * @throws StockStatusException 이미 단종된 재고면
      */
     @Transactional

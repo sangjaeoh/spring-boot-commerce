@@ -6,7 +6,7 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 장바구니 조회를 담당한다. */
+/** 장바구니 조회를 담당하는 서비스다. */
 @Service
 public class CartReader {
 

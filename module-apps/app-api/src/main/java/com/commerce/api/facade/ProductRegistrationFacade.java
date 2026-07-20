@@ -15,7 +15,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 
-/** 상품 등록과 변형·초기 재고 시딩을 조율한다. */
+/** 상품 등록과 변형·초기 재고 시딩을 조율하는 파사드다. */
 @Component
 public class ProductRegistrationFacade {
 

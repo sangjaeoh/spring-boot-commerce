@@ -19,7 +19,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * 무상태 JWT 시큐리티 필터 체인의 인가 매트릭스를 한자리에서 고정한다 — 공개 경로 무토큰 통과, 인증 경로 무토큰
+ * 무상태 JWT 시큐리티 필터 체인의 인가 매트릭스를 한자리에서 고정하는 테스트다 — 공개 경로 무토큰 통과, 인증 경로 무토큰
  * 401, 어드민 URL의 buyer 403·admin 통과, POST /members 공개 vs GET /members/me 인증. 401 본문은 진입점의
  * problem+json 계약(코드·content-type·시큐리티 헤더 파리티)을 함께 검증한다.
  */

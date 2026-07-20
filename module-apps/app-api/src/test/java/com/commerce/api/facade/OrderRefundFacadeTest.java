@@ -54,7 +54,7 @@ import org.springframework.test.context.TestConstructor;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 /**
- * 배송 완료 주문의 전체 반품 환불과 그 재시도 멱등을 통합 검증한다.
+ * 배송 완료 주문의 전체 반품 환불과 그 재시도 멱등을 통합 검증하는 테스트다.
  *
  * <p>취소 파사드 테스트와 같은 롤백 없는 통합 하네스다. PaymentGateway를 spy로 감싸 PG 환불이 중복
  * 호출·재시도에 걸쳐 정확히 한 번만 일어나는지 관측한다.

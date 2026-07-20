@@ -11,7 +11,7 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 결제 조회를 담당한다. */
+/** 결제 조회를 담당하는 서비스다. */
 @Service
 public class PaymentReader {
 

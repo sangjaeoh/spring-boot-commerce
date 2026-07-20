@@ -24,7 +24,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * 관리자 계정 기동 시딩({@code AdminSeedConfig})을 검증한다. 하네스가 주입한 {@code auth.admin.*} 속성으로
+ * 관리자 계정 기동 시딩({@code AdminSeedConfig})을 검증하는 테스트다. 하네스가 주입한 {@code auth.admin.*} 속성으로
  * 컨텍스트 기동 시 시딩이 이미 실행된 상태를 전제한다.
  */
 @TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)

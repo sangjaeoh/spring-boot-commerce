@@ -53,7 +53,7 @@ public class Member extends BaseTimeEntity<UUID> {
     @Nullable
     private SuspensionReason suspensionReason;
 
-    /** 탈퇴(논리삭제) 시각. 탈퇴 여부는 status가 아니라 이 값의 존재로 나타낸다. */
+    /** 탈퇴(논리삭제) 시각. 탈퇴 여부는 {@code status}가 아니라 이 값의 존재로 나타낸다. */
     @Column(name = "deleted_at")
     @Nullable
     private Instant deletedAt;

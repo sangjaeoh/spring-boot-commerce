@@ -16,7 +16,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 주문 조회를 담당한다. */
+/** 주문 조회를 담당하는 서비스다. */
 @Service
 public class OrderReader {
 

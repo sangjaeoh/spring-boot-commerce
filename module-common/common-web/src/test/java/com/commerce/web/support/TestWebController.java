@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 핸들러·필터 검증용 테스트 엔드포인트. 각 경로가 특정 예외·경로를 재현한다. */
+/** 핸들러·필터 검증용 테스트 엔드포인트다. 각 경로가 특정 예외·경로를 재현한다. */
 @RestController
 public class TestWebController {
 

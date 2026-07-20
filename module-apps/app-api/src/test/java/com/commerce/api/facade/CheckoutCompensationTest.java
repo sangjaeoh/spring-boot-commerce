@@ -36,7 +36,7 @@ import org.springframework.test.context.TestConstructor;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 /**
- * 결제 실패 경로를 프로덕션 fake PG의 거절 트리거 금액(끝 세 자리 999)으로 태워 동기 보상을 검증한다.
+ * 결제 실패 경로를 프로덕션 fake PG의 거절 트리거 금액(끝 세 자리 999)으로 태워 동기 보상을 검증하는 테스트다.
  * 테스트 더블이 아니라 실제 조립되는 어댑터 위에서 보상이 동작함을 확인한다.
  */
 @TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)

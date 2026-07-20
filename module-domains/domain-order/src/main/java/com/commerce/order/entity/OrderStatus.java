@@ -4,7 +4,7 @@ package com.commerce.order.entity;
 public enum OrderStatus {
     /** 결제 전. 주문 생성 직후 진입한다. */
     PENDING,
-    /** 결제 완료. 이행 전진은 이 상태에서만 유효하다. */
+    /** 결제 완료. PENDING에서만 진입한다. */
     PAID,
     /** 취소 완료. PENDING·PAID 양쪽에서 진입하는 종료 상태. */
     CANCELLED,

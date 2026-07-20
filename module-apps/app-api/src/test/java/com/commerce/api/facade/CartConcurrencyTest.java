@@ -20,7 +20,7 @@ import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.context.TestConstructor;
 
 /**
- * 장바구니 쓰기 경로의 동시 담기 견고성을 검증한다.
+ * 장바구니 쓰기 경로의 동시 담기 견고성을 검증하는 테스트다.
  *
  * <p>동시 최초 담기(장바구니·라인 중복 생성 유니크 경합)는 재조회-재시도로 전부 성공해 합산이 정확해야
  * 하고, 기존 라인 동시 합산은 낙관락이 유실을 막아 어떤 실패도 유니크 위반(500 계열)이 아니라 낙관락

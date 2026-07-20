@@ -6,7 +6,7 @@ import java.time.Instant;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
-/** 발급 쿠폰 조회 경계 모델이다. */
+/** 발급분 조회 경계 모델이다. */
 public record IssuedCouponInfo(
         UUID id,
         UUID couponId,
@@ -20,7 +20,7 @@ public record IssuedCouponInfo(
         Instant createdAt,
         Instant updatedAt) {
 
-    /** 발급 쿠폰 엔티티에서 조회 모델을 만든다. */
+    /** 발급분 엔티티에서 조회 모델을 만든다. */
     public static IssuedCouponInfo from(IssuedCoupon issued) {
         return new IssuedCouponInfo(
                 issued.getId(),

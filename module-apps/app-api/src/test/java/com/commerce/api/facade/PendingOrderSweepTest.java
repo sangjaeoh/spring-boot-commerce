@@ -43,7 +43,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestConstructor;
 
 /**
- * 미결제(PENDING) 주문 스윕의 관할 분기를 검증한다 — payment 행 없는 잔여의 직접 보상 종결과, 종결
+ * 미결제(PENDING) 주문 스윕의 관할 분기를 검증하는 테스트다 — payment 행 없는 잔여의 직접 보상 종결과, 종결
  * 기록된(비REQUESTED) 결제가 남긴 잔여의 결제 리컨실 위임.
  *
  * <p>체크아웃이 중간에 중단된 상태(주문 PENDING·재고 차감·(쿠폰 확정·)payment 행 없음/기록됨)를 도메인

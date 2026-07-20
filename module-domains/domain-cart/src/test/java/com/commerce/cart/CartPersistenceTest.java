@@ -25,7 +25,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
 /**
- * cart 도메인의 영속 이음새를 실 PostgreSQL로 검증한다.
+ * cart 도메인의 영속 이음새를 실 PostgreSQL로 검증하는 테스트다.
  *
  * <p>{@code ddl-auto=validate} 정합, get-or-create·캐스케이드 저장, 같은 변형 합산, orphanRemoval 제거를 확인한다.
  */
@@ -112,6 +112,7 @@ class CartPersistenceTest {
         assertThat(item.getVersion()).isEqualTo(1L);
     }
 
+    /** 변형 식별자로 저장된 장바구니 라인을 조회한다. */
     private CartItem findItem(UUID variantId) {
         return em.getEntityManager()
                 .createQuery("select i from CartItem i where i.variantId = :variantId", CartItem.class)

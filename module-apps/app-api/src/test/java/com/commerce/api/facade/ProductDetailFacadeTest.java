@@ -65,7 +65,8 @@ class ProductDetailFacadeTest extends FacadeIntegrationTest {
     @DisplayName("ACTIVE 변형을 최저가·재고 주문가능과 함께 합성한다(대표가는 품절 변형이라도 최저가)")
     void composesActiveVariantsWithOrderabilityAndFromPrice() {
         UUID productId = productRegistrationFacade.registerProduct("셔츠", "면 100%", Money.of(10000L), List.of(), 5);
-        addActiveVariant(productId, 8000L, "블랙", 0); // 최저가지만 품절
+        // 최저가지만 품절
+        addActiveVariant(productId, 8000L, "블랙", 0);
         addActiveVariant(productId, 12000L, "화이트", 3);
 
         ProductView detail = productDetailFacade.getProductDetail(productId);

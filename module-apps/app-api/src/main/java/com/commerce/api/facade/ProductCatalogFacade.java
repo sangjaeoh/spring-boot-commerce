@@ -19,7 +19,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 
-/** 카탈로그 상품 목록 조회를 ACTIVE 변형·재고와 합성해 대표가·품절을 파생한다. */
+/** 카탈로그 상품 목록 조회를 ACTIVE 변형·재고와 합성해 대표가·품절을 파생하는 파사드다. */
 @Component
 public class ProductCatalogFacade {
 

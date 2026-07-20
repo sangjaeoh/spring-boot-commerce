@@ -3,7 +3,7 @@ package com.commerce.api.web.v1.member.request;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 
-/** 이메일·패스워드 형식을 검증하지 않는다. */
+/** 회원 가입 요청이다. 이메일·패스워드 형식을 검증하지 않는다. */
 @Schema(description = "회원 가입 요청")
 public record MemberRegistrationRequest(
         @Schema(description = "이메일") @NotBlank String email,

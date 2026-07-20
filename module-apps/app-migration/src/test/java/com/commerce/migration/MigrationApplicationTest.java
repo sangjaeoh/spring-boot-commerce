@@ -25,11 +25,13 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
 /**
- * app-migration 앱을 실 PostgreSQL 위에 부팅해 전 도메인 스키마 마이그레이션·엔티티 정합을 검증한다.
+ * app-migration 앱을 실 PostgreSQL 위에 부팅해 전 도메인 스키마 마이그레이션·엔티티 정합을 검증하는 테스트다.
  *
  * <p>부팅 자체가 실 배선(DataSource 오토컨피그 → {@code ApplicationRunner} → {@code SchemaFlywayFactory.migrateAll})을
- * 태운다. 이어 (1) 7개 스키마 대표 테이블 존재와 (2) 전 도메인 엔티티가 마이그레이션 DDL에 validate됨을 확인한다.
- * validate는 테이블·컬럼·타입 정합만 본다 — 인덱스·유니크·{@code @Version}의 의미 검증은 도메인별 슬라이스 테스트가 소유한다.
+ * 태운다.
+ *
+ * <p>validate는 테이블·컬럼·타입 정합만 본다 — 인덱스·유니크·{@code @Version}의 의미 검증은 도메인별 슬라이스
+ * 테스트가 소유한다.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @Testcontainers

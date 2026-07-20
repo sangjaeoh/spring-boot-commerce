@@ -11,7 +11,7 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 상품 변형 상태 전이·가격 변경을 담당한다. */
+/** 상품 변형 상태 전이·가격 변경을 담당하는 서비스다. */
 @Service
 public class ProductVariantModifier {
 

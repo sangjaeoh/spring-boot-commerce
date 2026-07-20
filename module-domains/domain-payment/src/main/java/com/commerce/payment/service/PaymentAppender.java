@@ -12,7 +12,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 결제 요청 생성을 담당한다. */
+/** 결제 요청 생성을 담당하는 서비스다. */
 @Service
 public class PaymentAppender {
 

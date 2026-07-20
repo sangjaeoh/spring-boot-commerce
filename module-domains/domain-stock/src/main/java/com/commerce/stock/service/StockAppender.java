@@ -9,7 +9,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 재고 생성을 담당한다. */
+/** 재고 생성을 담당하는 서비스다. */
 @Service
 public class StockAppender {
 

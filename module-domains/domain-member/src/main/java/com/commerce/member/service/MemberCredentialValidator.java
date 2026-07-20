@@ -15,7 +15,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 회원 자격증명 검증을 담당한다. */
+/** 회원 자격증명 검증을 담당하는 서비스다. */
 @Service
 public class MemberCredentialValidator {
 

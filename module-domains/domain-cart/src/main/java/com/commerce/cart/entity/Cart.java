@@ -108,6 +108,7 @@ public class Cart extends BaseTimeEntity<UUID> {
         return memberId;
     }
 
+    /** 담긴 라인 집합을 변경 불가 뷰로 반환한다. */
     public Set<CartItem> getItems() {
         return Collections.unmodifiableSet(items);
     }

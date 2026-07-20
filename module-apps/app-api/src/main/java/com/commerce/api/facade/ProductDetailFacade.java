@@ -19,7 +19,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 
-/** 상품 상세 조회를 ACTIVE 변형·재고와 합성해 주문가능(orderable)·품절·대표가를 파생한다. */
+/** 상품 상세 조회를 ACTIVE 변형·재고와 합성해 주문가능(orderable)·품절·대표가를 파생하는 파사드다. */
 @Component
 public class ProductDetailFacade {
 

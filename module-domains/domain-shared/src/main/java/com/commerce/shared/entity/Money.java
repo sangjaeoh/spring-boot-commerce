@@ -3,7 +3,9 @@ package com.commerce.shared.entity;
 /**
  * 원 단위 정수 금액을 나타내는 값 객체다.
  *
- * <p>금액은 항상 0 이상이며, 통화는 KRW 단일로 가정한다.
+ * <p>통화는 KRW 단일로 가정한다.
+ *
+ * @param amount 원 단위 금액. 0 이상
  */
 public record Money(long amount) {
 

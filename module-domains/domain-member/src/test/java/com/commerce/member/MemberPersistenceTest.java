@@ -36,7 +36,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
 /**
- * member 도메인의 영속 이음새를 실 PostgreSQL로 검증한다.
+ * member 도메인의 영속 이음새를 실 PostgreSQL로 검증하는 테스트다.
  *
  * <p>컨버터 파생 쿼리, {@code ddl-auto=validate}와 Flyway 스키마 정합, 활성 이메일 부분 유니크를 확인한다.
  */

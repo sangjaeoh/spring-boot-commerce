@@ -9,7 +9,7 @@ import com.commerce.member.service.MemberReader;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 
-/** 쿠폰 발급을 조율하며 회원 주문 자격 게이트를 적용한다. */
+/** 쿠폰 발급을 조율하며 회원 주문 자격 게이트를 적용하는 파사드다. */
 @Component
 public class CouponIssuanceFacade {
 

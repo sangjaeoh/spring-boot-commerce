@@ -34,7 +34,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.TestConstructor;
 
 /**
- * "오버셀 없음" 비기능 요구를 재고 낙관락 경합으로 검증한다.
+ * "오버셀 없음" 비기능 요구를 재고 낙관락 경합으로 검증하는 테스트다.
  *
  * <p>재고 M에 동시 체크아웃 N(&gt;M)을 태워, 성공 주문 수가 M을 넘지 않고 최종 재고가 정확히 {@code M − 성공}
  * (0 이상)으로 보존됨을 확인한다. 실패 체크아웃은 주문 생성 전 사전 재고 가드에서 걸려 주문이 남지 않거나(0건),

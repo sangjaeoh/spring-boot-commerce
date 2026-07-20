@@ -17,7 +17,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
-/** JWT 액세스 토큰을 HS256 단일 대칭 키로 발급·검증한다. */
+/** JWT 액세스 토큰을 HS256 단일 대칭 키로 발급·검증하는 코덱이다. */
 public final class JwtTokenCodec {
 
     // MACSigner(HS256)의 최소 키 길이. 미달 키는 배선 시점에 실패시켜 약한 키 운용을 막는다.
@@ -76,7 +76,7 @@ public final class JwtTokenCodec {
         }
     }
 
-    /** 등록 클레임(sub·exp·iat 등)을 뺀 커스텀 클레임만 문자열로 추린다. */
+    /** 등록 클레임({@code sub}·{@code exp}·{@code iat} 등)을 뺀 커스텀 클레임만 문자열로 추린다. */
     private static Map<String, String> customClaims(JWTClaimsSet claims) {
         Map<String, String> custom = new HashMap<>();
         claims.getClaims().forEach((name, value) -> {

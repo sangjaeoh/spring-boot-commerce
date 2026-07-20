@@ -30,7 +30,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
 /**
- * product 도메인의 영속 이음새를 실 PostgreSQL로 검증한다.
+ * product 도메인의 영속 이음새를 실 PostgreSQL로 검증하는 테스트다.
  *
  * <p>두 테이블 {@code ddl-auto=validate} 정합, Money 컬럼 왕복, 옵션 조합 부분 유니크(은퇴 후 재등록)를 확인한다.
  */

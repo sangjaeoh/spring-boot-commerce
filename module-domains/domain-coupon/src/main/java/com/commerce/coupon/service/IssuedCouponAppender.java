@@ -17,7 +17,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 쿠폰 발급을 담당한다. */
+/** 쿠폰 발급을 담당하는 서비스다. */
 @Service
 public class IssuedCouponAppender {
 

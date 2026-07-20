@@ -29,7 +29,7 @@ import org.springframework.test.context.TestConstructor;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 /**
- * 스케줄 스윕의 ShedLock 분산 락 배선을 검증한다 — 락 상태가 Redis에 있으므로 한 컨텍스트의 동시 두
+ * 스케줄 스윕의 ShedLock 분산 락 배선을 검증하는 테스트다 — 락 상태가 Redis에 있으므로 한 컨텍스트의 동시 두
  * 호출이 다중 인스턴스의 동시 실행과 같은 지점에서 경합한다. 한쪽만 스윕을 수행하고 다른 쪽은 정상
  * 건너뛰어야 한다.
  *

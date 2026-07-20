@@ -40,7 +40,7 @@ import org.springframework.test.context.TestConstructor;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 /**
- * 체크아웃 사가의 중간 실패(재고 차감·쿠폰 확정) 보상 분기를 결함 주입으로 검증한다.
+ * 체크아웃 사가의 중간 실패(재고 차감·쿠폰 확정) 보상 분기를 결함 주입으로 검증하는 테스트다.
  *
  * <p>이 두 분기는 낙관락·경합으로만 트리거돼 자연 재현이 어려우므로 도메인 서비스를 spy로 감싸 던지게 한다.
  * 취소 호출과 취소 사유, 복원 결과, 차감 완료 마커의 기록 시점(전 라인 차감 뒤 ∧ 쿠폰 확정 앞)을 확인한다.

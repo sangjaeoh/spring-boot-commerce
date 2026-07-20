@@ -11,7 +11,7 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 발급 쿠폰 사용·복원·무효화를 담당한다. */
+/** 발급분 사용·복원·무효화를 담당하는 서비스다. */
 @Service
 public class IssuedCouponModifier {
 

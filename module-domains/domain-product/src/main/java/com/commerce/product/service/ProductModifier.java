@@ -10,7 +10,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 상품 노출 전환·상품명·설명 변경을 담당한다. */
+/** 상품 노출 전환·상품명·설명 변경을 담당하는 서비스다. */
 @Service
 public class ProductModifier {
 

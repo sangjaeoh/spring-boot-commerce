@@ -17,7 +17,7 @@ import com.commerce.stock.service.StockModifier;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 
-/** 결제 완료 주문의 사용자 취소·환불 흐름을 조율한다. */
+/** 결제 완료 주문의 사용자 취소·환불 흐름을 조율하는 파사드다. */
 @Component
 public class OrderCancellationFacade {
 
@@ -60,13 +60,15 @@ public class OrderCancellationFacade {
         // 2. 취소 가능 상태 확인
         requireCancellable(order);
 
-        // 3. 취소 개시 마커 — 환불 앞에 커밋해 취소 진행 중 출고를 거부한다
+        // 3. 취소 개시 마커
+        // 환불 앞에 커밋해 취소 진행 중 출고를 거부한다
         orderModifier.requestCancellation(orderId);
 
         // 4. 결제 취소(환불)
         PaymentInfo payment = paymentReader.getByOrderId(orderId);
         paymentProcessor.cancel(payment.id());
-        // 5. 주문 취소 전이 — 1회성이라 복원이 정확히 한 번이다
+        // 5. 주문 취소 전이
+        // 1회성이라 복원이 정확히 한 번이다
         orderModifier.cancel(orderId, CancellationReason.CUSTOMER_REQUEST);
 
         // 6. 쿠폰 복원

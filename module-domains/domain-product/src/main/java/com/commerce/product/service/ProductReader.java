@@ -15,7 +15,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 상품 조회를 담당한다. */
+/** 상품 조회를 담당하는 서비스다. */
 @Service
 public class ProductReader {
 
@@ -62,7 +62,7 @@ public class ProductReader {
                 .toList();
     }
 
-    /** 카탈로그 노출 상품 페이지를 최신 등록순으로 조회한다. 노출은 판매중·미삭제·ACTIVE 변형 1개 이상인 상품이다. */
+    /** 카탈로그 노출 상품 페이지를 최신 등록순으로 조회한다. 노출은 판매중·미삭제·{@code ACTIVE} 변형 1개 이상인 상품이다. */
     @Transactional(readOnly = true)
     public Page<ProductInfo> getExposedPage(Pageable pageable) {
         return productRepository

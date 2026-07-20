@@ -17,7 +17,7 @@ import com.commerce.stock.service.StockModifier;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 
-/** 배송 완료 주문의 전체 반품·전액 환불 흐름을 조율한다. 관리자 액션이다. */
+/** 배송 완료 주문의 전체 반품·전액 환불 흐름을 조율하는 파사드다. 관리자 액션이다. */
 @Component
 public class OrderRefundFacade {
 
@@ -62,7 +62,8 @@ public class OrderRefundFacade {
         // 3. 결제 취소(환불)
         PaymentInfo payment = paymentReader.getByOrderId(orderId);
         paymentProcessor.cancel(payment.id());
-        // 4. 주문 환불 전이 — 1회성이라 복원이 정확히 한 번이다
+        // 4. 주문 환불 전이
+        // 1회성이라 복원이 정확히 한 번이다
         orderModifier.refund(orderId, reason);
 
         // 5. 쿠폰 복원

@@ -30,7 +30,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * 미확정(REQUESTED) 결제를 PG 거래 상태 조회로 확정하고, 종결 기록된 결제가 남긴 주문측 잔여를 마저 종결한다.
+ * 미확정(REQUESTED) 결제를 PG 거래 상태 조회로 확정하고, 종결 기록된 결제가 남긴 주문측 잔여를 마저 종결하는 파사드다.
  *
  * <p>주기 리컨실과 웹훅 통지가 공용하는 확정 경로다.
  */
@@ -112,7 +112,8 @@ public class PaymentConfirmationFacade {
     public void confirm(UUID paymentId) {
         // 1. 지목된 결제 조회
         PaymentInfo payment = paymentReader.getPayment(paymentId);
-        // 2. 유예 내 결제는 동기 체크아웃이 단독 소유하므로 손대지 않는다
+        // 2. 유예 내 결제 건너뛰기
+        // 동기 체크아웃이 단독 소유하므로 손대지 않는다
         if (payment.createdAt().isAfter(clock.instant().minus(staleAfter))) {
             return;
         }
@@ -161,7 +162,8 @@ public class PaymentConfirmationFacade {
 
     /** PG 거절·미도달을 실패로 확정하고, 미결제 주문이면 보상 종결한다. */
     private void confirmFailure(PaymentInfo payment, OrderInfo order, FailureReason failureReason) {
-        // 1. 모순 가드 — 모델상 도달 불가(PAID는 PG 승인 후에만)라 손대지 않고 다음 스윕에 남긴다.
+        // 1. 모순 가드
+        // 모델상 도달 불가(PAID는 PG 승인 후에만)라 손대지 않고 다음 스윕에 남긴다.
         if (order.status() == OrderStatus.PAID) {
             log.warn("PAID 주문의 결제가 PG에서 승인 아님으로 조회됐다: paymentId={} orderId={}", payment.id(), order.id());
             return;

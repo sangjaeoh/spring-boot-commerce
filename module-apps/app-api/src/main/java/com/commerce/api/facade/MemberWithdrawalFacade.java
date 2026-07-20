@@ -8,7 +8,7 @@ import com.commerce.order.service.OrderReader;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 
-/** 회원 탈퇴를 미배송 결제 주문 가드와 함께 조율한다. */
+/** 회원 탈퇴를 미배송 결제 주문 가드와 함께 조율하는 파사드다. */
 @Component
 public class MemberWithdrawalFacade {
 

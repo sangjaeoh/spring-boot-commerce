@@ -64,7 +64,7 @@ import org.springframework.test.context.TestConstructor;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 /**
- * 결제 완료 주문의 취소·복원과 그 재시도 멱등, 동시 중복 취소의 낙관락 직렬화를 통합 검증한다.
+ * 결제 완료 주문의 취소·복원과 그 재시도 멱등, 동시 중복 취소의 낙관락 직렬화를 통합 검증하는 테스트다.
  *
  * <p>롤백 없는 통합 하네스를 상속해 각 도메인 서비스가 실제로 커밋하므로, 한 메서드 안의 파사드 재시도가 시도
  * 간 실 영속 상태를 본다. 다운스트림 실패는 spy에 doThrow로 1회 주입하고 재시도 직전 {@link Mockito#reset}으로
@@ -186,7 +186,7 @@ class OrderCancellationFacadeTest extends FacadeIntegrationTest {
         cartAppender.addItem(memberId, variantId, 4);
         UUID orderId = checkoutFacade.checkout(memberId, address(), Money.ZERO, null, PaymentMethod.CARD);
 
-        // 종전 고아 인터리빙을 결정론적으로 재현한다: 취소 가드 통과 → PG 환불·결제 CANCELLED 커밋 → 주문
+        // 환불 고아 인터리빙을 결정론적으로 재현한다: 취소 가드 통과 → PG 환불·결제 CANCELLED 커밋 → 주문
         // 취소 전이 직전에 출고가 선점을 시도. 마커가 환불 앞에 커밋돼 있어 출고는 거부되고 취소가 완결된다.
         // 출고 시도는 별도 스레드(자기 트랜잭션)로 내고 완료까지 기다린다 — 호출 스레드에서 내면 진행 중
         // 취소 흐름의 트랜잭션에 합류할 수 있어 실경합(독립 커밋 경쟁) 형상이 되지 않는다.
@@ -259,7 +259,7 @@ class OrderCancellationFacadeTest extends FacadeIntegrationTest {
         assertThat(orderReader.getOrder(orderId).status()).isEqualTo(OrderStatus.PAID);
         Mockito.reset(orderModifier);
 
-        // 종전에는 이 창에서 출고가 성공해 환불 고아가 남았다 — 이제 마커가 거부한다.
+        // 환불 커밋과 주문 취소 전이 사이의 창에서도 마커가 출고를 거부한다.
         assertThatThrownBy(() -> orderModifier.ship(orderId, "CJ대한통운", "688900123456"))
                 .isInstanceOfSatisfying(
                         FulfillmentStatusException.class,

@@ -16,7 +16,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * 리컨실 유예 관계(order 유예 ≥ payment 유예)의 기동 시점 검증을 확인한다 — 역전 설정이면 스윕 파사드
+ * 리컨실 유예 관계(order 유예 ≥ payment 유예)의 기동 시점 검증을 확인하는 테스트다 — 역전 설정이면 스윕 파사드
  * 생성(빈 배선)이 실패해 애플리케이션이 뜨지 않는다.
  */
 class PendingOrderSweepStaleAfterGuardTest {

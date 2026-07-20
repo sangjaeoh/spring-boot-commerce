@@ -39,23 +39,10 @@ import org.junit.jupiter.api.Test;
 
 /**
  * docs/architecture.md의 "빌드가 강제하는 불변식" 중 컨벤션 플러그인(컴파일 시점)이 잡지 못하는 항목을
- * 컴파일된 클래스 그래프에서 검증한다. 이 모듈(module-tests/test-architecture)은 전 모듈을 의존해
- * {@code com.commerce} 전체를 임포트하므로 규칙이 모든 앱·도메인에 활성화된다. 앞 두 규칙은
- * {@code ..facade..}·{@code ..event.listener..}가 생 엔티티({@code @Entity}·{@code @MappedSuperclass})나
- * 도메인 리포지토리에 의존하면 실패한다. 세 번째 규칙은 패키지와 무관하게, 어떤 클래스든 소프트삭제 엔티티
- * 리포지토리의 base finder를 직접 호출하면 실패한다. 네 번째 규칙은 web 컨트롤러가 서로 다른 도메인의
- * service를 2개 이상 직접 의존하면 실패한다 — 크로스 도메인 조율은 facade가 소유한다(architecture.md 앱 모듈 구조).
- * 다섯째·여섯째 규칙은 web 컨트롤러 핸들러에 {@code @Operation}·{@code @ApiResponse}가, request/response 타입·컴포넌트에
- * {@code @Schema}가 없으면 실패한다 — 클라이언트 명세를 코드에 명시한다(architecture.md 표현 계층 OpenAPI 규칙).
- * 일곱째 규칙은 핸들러의 {@code @RequestParam}·{@code @PathVariable} 파라미터에 description이 비어 있지 않은
- * {@code @Parameter}가 없으면 실패한다 — 같은 OpenAPI 규칙의 파라미터 축이다.
- * 여덟째 규칙은 web 컨트롤러 핸들러가 int·Integer {@code @RequestParam}을 직접 선언하면 실패한다 — 페이징
- * 파라미터는 common-web {@code PaginationRequest}로 받는다(architecture.md 앱 모듈 구조 페이징 규칙).
- * 아홉째 규칙은 어드민 표면 정렬이다 — admin 패키지 소속·{@code *AdminController} 네이밍·클래스 레벨
- * {@code @Admin}·{@code /api/v{n}/admin/} URL 네임스페이스 네 마커는 함께만 나타나고, 어드민 컨트롤러의
- * admin·비-admin URL 혼재 매핑도 실패한다(architecture.md 앱 모듈 구조 어드민 표면 규칙). URL은 클래스·핸들러
- * 매핑(value·path 별칭 포함)을 합성한 유효 경로로 판정한다. 열째 규칙은 web 핸들러의 메서드 레벨
- * {@code @Admin} 선언을 금지한다 — 어드민 게이트는 admin 컨트롤러의 클래스 레벨 선언으로만 잠근다.
+ * 컴파일된 클래스 그래프에서 검증하는 테스트다.
+ *
+ * <p>이 모듈(module-tests/test-architecture)은 전 모듈을 의존해 {@code com.commerce} 전체를 임포트하므로
+ * 규칙이 모든 앱·도메인에 활성화된다.
  */
 class ArchitectureTest {
 

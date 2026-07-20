@@ -18,7 +18,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 발급 쿠폰 조회와 할인액 산출을 담당한다. */
+/** 발급분 조회와 할인액 산출을 담당하는 서비스다. */
 @Service
 public class IssuedCouponReader {
 
@@ -46,7 +46,7 @@ public class IssuedCouponReader {
                 .orElseThrow(() -> new IssuedCouponNotFoundException(CouponErrorCode.ISSUED_COUPON_NOT_FOUND));
     }
 
-    /** 회원의 발급 쿠폰 목록을 최신순으로 조회한다. 없으면 빈 목록이다. 같은 생성 시각은 id로 결정적 순서를 둔다. */
+    /** 회원의 발급분 목록을 최신순으로 조회한다. 없으면 빈 목록이다. 같은 생성 시각은 id로 결정적 순서를 둔다. */
     @Transactional(readOnly = true)
     public List<IssuedCouponInfo> getIssuedCouponsByMember(UUID memberId) {
         return issuedCouponRepository.findByMemberIdOrderByCreatedAtDescIdDesc(memberId).stream()
