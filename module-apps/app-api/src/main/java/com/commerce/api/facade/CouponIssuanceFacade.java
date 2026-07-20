@@ -9,11 +9,7 @@ import com.commerce.member.service.MemberReader;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 
-/**
- * 쿠폰 발급을 조율하며 회원 주문 자격 게이트를 적용한다.
- *
- * <p>트랜잭션을 열지 않고 도메인 서비스를 조립한다(발급 도메인이 자기 트랜잭션 소유).
- */
+/** 쿠폰 발급을 조율하며 회원 주문 자격 게이트를 적용한다. */
 @Component
 public class CouponIssuanceFacade {
 
@@ -31,7 +27,9 @@ public class CouponIssuanceFacade {
      * @throws ApiException 회원 자격이 활성이 아니면
      */
     public UUID issue(UUID couponId, UUID memberId) {
+        // 1. 회원 자격 확인
         requireEligibleMember(memberId);
+        // 2. 쿠폰 발급
         return issuedCouponAppender.issue(couponId, memberId);
     }
 

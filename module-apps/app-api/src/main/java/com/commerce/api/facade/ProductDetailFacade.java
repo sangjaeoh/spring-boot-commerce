@@ -17,11 +17,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 
-/**
- * 상품 상세 조회를 ACTIVE 변형·재고와 합성해 주문가능(orderable)·품절·대표가를 파생한다.
- *
- * <p>트랜잭션을 열지 않고 도메인 Reader를 조립한다(각 Reader가 자기 트랜잭션 소유).
- */
+/** 상품 상세 조회를 ACTIVE 변형·재고와 합성해 주문가능(orderable)·품절·대표가를 파생한다. */
 @Component
 public class ProductDetailFacade {
 
@@ -42,11 +38,14 @@ public class ProductDetailFacade {
      * @throws com.commerce.product.exception.ProductNotFoundException 노출 상품이 없으면(미존재·숨김·삭제 포함)
      */
     public ProductView getProductDetail(UUID productId) {
+        // 1. 노출 상품 조회
         ProductInfo product = productReader.getExposedProduct(productId);
+        // 2. ACTIVE 변형과 재고 기준 주문가능 수집
         List<ProductVariantInfo> activeVariants = variantReader.getByProductId(productId).stream()
                 .filter(variant -> variant.status() == ProductVariantStatus.ACTIVE)
                 .toList();
         Set<UUID> orderableVariantIds = orderableVariantIds(activeVariants);
+        // 3. 변형 뷰 조립 — 가격 오름차순, 대표가·품절 파생
         List<ProductVariantView> variants = new ArrayList<>();
         Money fromPrice = null;
         boolean anyOrderable = false;

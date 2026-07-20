@@ -161,11 +161,13 @@ public class PendingOrderSweepFacade {
 
     /** 결제 상태로 관할을 가른다. REQUESTED는 결제 리컨실 스윕에 맡기고, 종결 기록된 결제만 확정 경로로 넘긴다. */
     private void delegateToPaymentReconciliation(OrderInfo order) {
+        // 1. 결제 상태 조회
         PaymentInfo payment = paymentReader.getByOrderId(order.id());
+        // 2. 미확정은 결제 리컨실 스윕이 PG 상태 조회로 확정한다 — 이중 개입하지 않는다
         if (payment.status() == PaymentStatus.REQUESTED) {
-            // 미확정 결제 리컨실 스윕이 PG 상태 조회로 확정한다 — 이중 개입하지 않는다.
             return;
         }
+        // 3. 종결 기록된 결제만 확정 경로로 위임
         log.warn(
                 "종결 기록된 결제가 남긴 유예 경과 PENDING 주문을 결제 리컨실에 위임한다: orderId={} orderNumber={}"
                         + " paymentId={} paymentStatus={}",
