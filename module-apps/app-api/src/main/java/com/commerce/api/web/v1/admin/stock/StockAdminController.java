@@ -26,11 +26,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * 재고 운영(현황 조회·재입고·수동 품절/재개·단종) 엔드포인트다.
- *
- * <p>재고는 변형당 1행이라 variantId가 자연 키다.
- */
+/** 재고 운영(현황 조회·재입고·수동 품절/재개·단종) 엔드포인트다. */
 @Tag(name = "재고 관리", description = "재고 현황 조회·재입고·상태 전이")
 @Admin
 @RestController

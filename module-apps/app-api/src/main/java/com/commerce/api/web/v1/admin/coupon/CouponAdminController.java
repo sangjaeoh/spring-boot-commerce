@@ -32,11 +32,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * 쿠폰 정책 생성·목록 조회·정책별 발급분 조회·전환(중지·재개)의 관리자 엔드포인트다.
- *
- * <p>중지는 신규 발급만 막고 기발급분 사용에는 소급하지 않는다.
- */
+/** 쿠폰 정책 생성·목록 조회·정책별 발급분 조회·전환(중지·재개)의 관리자 엔드포인트다. */
 @Tag(name = "쿠폰 관리", description = "쿠폰 정책 생성·목록 조회·발급분 조회·전환")
 @Admin
 @RestController

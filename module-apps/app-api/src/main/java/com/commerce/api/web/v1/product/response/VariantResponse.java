@@ -15,6 +15,7 @@ public record VariantResponse(
         @Schema(description = "판매가(원 단위)") long price,
         @Schema(description = "주문 가능 여부(재고 기준)") boolean orderable) {
 
+    /** 상품 상세의 변형 뷰에서 응답을 만든다. */
     public static VariantResponse from(ProductVariantView variant) {
         return new VariantResponse(
                 variant.variantId(), variant.optionLabel(), variant.price().amount(), variant.orderable());

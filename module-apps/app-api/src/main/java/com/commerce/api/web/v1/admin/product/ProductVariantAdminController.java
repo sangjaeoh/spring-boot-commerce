@@ -22,11 +22,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * 상품 변형 관리(가격 변경·활성/비활성/은퇴) 엔드포인트다.
- *
- * <p>가격 변경은 기존 주문 스냅샷에 영향을 주지 않는다.
- */
+/** 상품 변형 관리(가격 변경·활성/비활성/은퇴) 엔드포인트다. */
 @Tag(name = "상품 변형 관리", description = "변형 가격 변경·판매 제공/중단·은퇴")
 @Admin
 @RestController

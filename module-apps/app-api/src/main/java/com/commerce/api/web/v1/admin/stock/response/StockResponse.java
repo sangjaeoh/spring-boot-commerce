@@ -15,6 +15,7 @@ public record StockResponse(
         @Schema(description = "생성 시각") Instant createdAt,
         @Schema(description = "수정 시각") Instant updatedAt) {
 
+    /** 재고 조회 모델에서 응답을 만든다. */
     public static StockResponse from(StockInfo stock) {
         return new StockResponse(
                 stock.id(), stock.variantId(), stock.quantity(), stock.status(), stock.createdAt(), stock.updatedAt());

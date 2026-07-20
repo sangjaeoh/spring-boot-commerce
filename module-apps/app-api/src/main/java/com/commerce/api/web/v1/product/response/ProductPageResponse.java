@@ -15,6 +15,7 @@ public record ProductPageResponse(
         products = List.copyOf(products);
     }
 
+    /** 카탈로그 상품 뷰 페이지에서 응답을 만든다. */
     public static ProductPageResponse from(Page<ProductSummaryView> page) {
         return new ProductPageResponse(
                 page.getContent().stream().map(ProductSummaryResponse::from).toList(), PaginationResponse.from(page));

@@ -7,6 +7,7 @@ import java.util.UUID;
 public record CheckoutResponse(
         @Schema(description = "결제 완료된 주문 ID(문자열)") String orderId) {
 
+    /** 결제 완료된 주문 ID에서 응답을 만든다. */
     public static CheckoutResponse from(UUID orderId) {
         return new CheckoutResponse(orderId.toString());
     }

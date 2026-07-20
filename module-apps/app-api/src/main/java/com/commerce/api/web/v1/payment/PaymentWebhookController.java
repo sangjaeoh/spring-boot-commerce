@@ -31,11 +31,7 @@ import tools.jackson.databind.ObjectMapper;
 /**
  * PG 결제 확정 통지(웹훅) 수신 엔드포인트다.
  *
- * <p>발신자가 회원이 아니라 PG 시스템이므로 토큰 인증(공개·본인·관리자 분류)에 속하지 않는다. 대신 PG와
- * 공유한 시크릿으로 요청 본문의 HMAC-SHA256 서명({@code X-Webhook-Signature}, hex)을 상수 시간 비교로
- * 검증하고, 불일치·부재는 401로 거부한다. 통지는 결제를 지목하는 트리거일 뿐 결과 확정은 파사드가 PG 상태
- * 조회로 하므로, 서명을 통과한 페이로드도 상태를 직접 쓰지 못한다. 같은 통지의 중복 전달은 무해하다(이미
- * 종결된 결제는 파사드가 무시).
+ * <p>발신자가 회원이 아니라 PG 시스템이므로 토큰 인증(공개·본인·관리자 분류)에 속하지 않는다.
  */
 @Tag(name = "결제 웹훅", description = "PG 결제 확정 통지 수신")
 @RestController
@@ -82,12 +78,14 @@ public class PaymentWebhookController {
         paymentConfirmationFacade.confirm(parse(rawBody).paymentId());
     }
 
+    /** 본문 서명이 공유 시크릿으로 만든 서명과 일치하는지 확인한다. */
     private void requireValidSignature(String rawBody, @Nullable String signature) {
         if (signature == null || !MessageDigest.isEqual(sign(rawBody), signature.getBytes(StandardCharsets.UTF_8))) {
             throw new ApiException(ApiErrorCode.WEBHOOK_SIGNATURE_INVALID);
         }
     }
 
+    /** 본문의 HMAC-SHA256 서명을 hex 문자열 바이트로 만든다. */
     private byte[] sign(String rawBody) {
         try {
             Mac mac = Mac.getInstance(HMAC_ALGORITHM);
@@ -100,6 +98,7 @@ public class PaymentWebhookController {
         }
     }
 
+    /** 웹훅 페이로드를 {@link PaymentWebhookRequest}로 해석한다. */
     private PaymentWebhookRequest parse(String rawBody) {
         try {
             return objectMapper.readValue(rawBody, PaymentWebhookRequest.class);

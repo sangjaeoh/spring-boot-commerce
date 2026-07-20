@@ -7,6 +7,7 @@ import java.util.UUID;
 public record CouponCreationResponse(
         @Schema(description = "생성된 쿠폰 ID") String couponId) {
 
+    /** 생성된 쿠폰 ID에서 응답을 만든다. */
     public static CouponCreationResponse from(UUID couponId) {
         return new CouponCreationResponse(couponId.toString());
     }

@@ -37,6 +37,7 @@ public record CouponResponse(
         @Schema(description = "생성 시각") Instant createdAt,
         @Schema(description = "수정 시각") Instant updatedAt) {
 
+    /** 쿠폰 정책 조회 모델에서 응답을 만든다. 할인 값 객체는 형별 필드로 펼쳐 싣는다. */
     public static CouponResponse from(CouponInfo coupon) {
         Discount discount = coupon.discount();
         return new CouponResponse(

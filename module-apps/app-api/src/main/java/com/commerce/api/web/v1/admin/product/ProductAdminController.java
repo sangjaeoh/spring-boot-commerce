@@ -36,11 +36,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * 상품 등록·추가 변형 등록·관리(노출·숨김·편집·논리삭제)·숨김 포함 목록 조회의 관리자 엔드포인트다.
- *
- * <p>편집은 기존 주문 스냅샷에 영향을 주지 않고, 논리삭제는 변형을 연쇄 삭제하지 않는다.
- */
+/** 상품 등록·추가 변형 등록·관리(노출·숨김·편집·논리삭제)·숨김 포함 목록 조회의 관리자 엔드포인트다. */
 @Tag(name = "상품 관리", description = "상품 등록·관리·숨김 포함 목록 조회")
 @Admin
 @RestController

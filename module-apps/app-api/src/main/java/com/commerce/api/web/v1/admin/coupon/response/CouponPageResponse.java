@@ -15,6 +15,7 @@ public record CouponPageResponse(
         coupons = List.copyOf(coupons);
     }
 
+    /** 쿠폰 정책 조회 페이지에서 응답을 만든다. */
     public static CouponPageResponse from(Page<CouponInfo> page) {
         return new CouponPageResponse(
                 page.getContent().stream().map(CouponResponse::from).toList(), PaginationResponse.from(page));

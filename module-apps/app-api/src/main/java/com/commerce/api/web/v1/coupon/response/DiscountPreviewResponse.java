@@ -13,6 +13,7 @@ public record DiscountPreviewResponse(
 
         @Schema(description = "예상 할인액(원 단위, 적용 불가면 0)") long discountAmount) {
 
+    /** 할인 미리보기 조회 모델에서 응답을 만든다. */
     public static DiscountPreviewResponse from(DiscountPreviewInfo preview) {
         return new DiscountPreviewResponse(
                 preview.applicable(), preview.reason(), preview.discountAmount().amount());

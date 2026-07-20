@@ -33,6 +33,7 @@ public record PaymentResponse(
         @Schema(description = "취소 시각", nullable = true) @Nullable
         Instant cancelledAt) {
 
+    /** 결제 조회 모델에서 응답을 만든다. */
     public static PaymentResponse from(PaymentInfo payment) {
         return new PaymentResponse(
                 payment.status(),

@@ -21,6 +21,7 @@ public record MemberResponse(
         @Schema(description = "생성 시각") Instant createdAt,
         @Schema(description = "수정 시각") Instant updatedAt) {
 
+    /** 회원 조회 모델에서 응답을 만든다. */
     public static MemberResponse from(MemberInfo member) {
         return new MemberResponse(
                 member.id(),

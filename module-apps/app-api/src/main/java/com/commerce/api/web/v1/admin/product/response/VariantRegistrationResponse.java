@@ -7,6 +7,7 @@ import java.util.UUID;
 public record VariantRegistrationResponse(
         @Schema(description = "등록된 변형 ID") String variantId) {
 
+    /** 등록된 변형 ID에서 응답을 만든다. */
     public static VariantRegistrationResponse from(UUID variantId) {
         return new VariantRegistrationResponse(variantId.toString());
     }

@@ -66,6 +66,7 @@ public record OrderResponse(
         lines = List.copyOf(lines);
     }
 
+    /** 주문 조회 모델에서 응답을 만든다. 라인은 변형 ID 오름차순으로 싣는다. */
     public static OrderResponse from(OrderInfo order) {
         return new OrderResponse(
                 order.id(),

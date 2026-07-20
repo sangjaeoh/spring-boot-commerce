@@ -15,6 +15,7 @@ public record ProductSummaryResponse(
 
         @Schema(description = "품절 여부") boolean soldOut) {
 
+    /** 카탈로그 상품 뷰에서 응답을 만든다. */
     public static ProductSummaryResponse from(ProductSummaryView product) {
         return new ProductSummaryResponse(
                 product.id(),

@@ -27,6 +27,7 @@ public record ProductDetailResponse(
         variants = List.copyOf(variants);
     }
 
+    /** 상품 상세 뷰에서 응답을 만든다. */
     public static ProductDetailResponse from(ProductView product) {
         return new ProductDetailResponse(
                 product.id(),

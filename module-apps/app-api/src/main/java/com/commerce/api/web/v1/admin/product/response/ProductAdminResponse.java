@@ -20,6 +20,7 @@ public record ProductAdminResponse(
         @Schema(description = "생성 시각") Instant createdAt,
         @Schema(description = "수정 시각") Instant updatedAt) {
 
+    /** 상품 조회 모델에서 응답을 만든다. */
     public static ProductAdminResponse from(ProductInfo product) {
         return new ProductAdminResponse(
                 product.id(),

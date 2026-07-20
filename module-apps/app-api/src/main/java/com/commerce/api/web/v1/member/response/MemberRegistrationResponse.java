@@ -7,6 +7,7 @@ import java.util.UUID;
 public record MemberRegistrationResponse(
         @Schema(description = "가입된 회원 ID") String memberId) {
 
+    /** 가입된 회원 ID에서 응답을 만든다. */
     public static MemberRegistrationResponse from(UUID memberId) {
         return new MemberRegistrationResponse(memberId.toString());
     }
