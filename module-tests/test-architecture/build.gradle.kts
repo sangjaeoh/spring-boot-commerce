@@ -1,7 +1,44 @@
+import org.gradle.api.artifacts.ProjectDependency
 import org.gradle.api.attributes.LibraryElements
 
 plugins {
     id("convention.java-common")
+}
+
+// 실행 앱별 임베드 도메인 목록을 빌드 시점에 산출한다 — 소비 커버리지 불변식 테스트가 리소스로 읽는다.
+// 임베드 = 앱 main 런타임 구성(api·implementation·runtimeOnly)에 선언된 domain-{name} 프로젝트 의존.
+val appEmbeddingsDir = layout.buildDirectory.dir("generated/app-embeddings")
+val generateAppDomainEmbeddings by tasks.registering {
+    outputs.dir(appEmbeddingsDir)
+    doLast {
+        val mainConfigurations = setOf("api", "implementation", "runtimeOnly")
+        val lines = rootProject.subprojects
+            .filter { it.path.startsWith(":module-apps:") }
+            .sortedBy { it.name }
+            .map { app ->
+                val domains = app.configurations
+                    .filter { it.name in mainConfigurations }
+                    .flatMap { it.dependencies }
+                    .filterIsInstance<ProjectDependency>()
+                    .map { it.path }
+                    .filter { it.startsWith(":module-domains:") }
+                    .map { it.removePrefix(":module-domains:") }
+                    .toSortedSet()
+                "${app.name}=${domains.joinToString(",")}"
+            }
+        appEmbeddingsDir.get().file("app-domain-embeddings.properties").asFile.apply {
+            parentFile.mkdirs()
+            writeText(lines.joinToString("\n") + "\n")
+        }
+    }
+}
+
+sourceSets.test {
+    resources.srcDir(appEmbeddingsDir)
+}
+
+tasks.named("processTestResources") {
+    dependsOn(generateAppDomainEmbeddings)
 }
 
 dependencies {
