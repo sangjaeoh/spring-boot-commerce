@@ -1,6 +1,5 @@
-package com.commerce.batch.event.listener;
+package com.commerce.cart.application;
 
-import com.commerce.cart.application.CartModifier;
 import com.commerce.event.order.OrderPaid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -9,19 +8,19 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * {@link OrderPaid}를 소비해 주문된 변형 라인을 장바구니에서 비우는 리스너다.
+ * {@link OrderPaid}를 소비해 주문된 변형 라인을 장바구니에서 비우는 소비자다.
  *
  * <p>아웃박스 릴레이가 커밋된 이벤트만 재발행하므로 커밋 후 단계 대기 없이 평 리스너로 소비하고, 소비
  * 쓰기는 자체 트랜잭션으로 커밋한다. 재전달(at-least-once)은 제거의 자연 멱등이 흡수한다.
  */
 @Component
-public class OrderPaidListener {
+class OrderPaidListener {
 
     private static final Logger log = LoggerFactory.getLogger(OrderPaidListener.class);
 
     private final CartModifier cartModifier;
 
-    public OrderPaidListener(CartModifier cartModifier) {
+    OrderPaidListener(CartModifier cartModifier) {
         this.cartModifier = cartModifier;
     }
 
