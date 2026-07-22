@@ -2,6 +2,7 @@ package com.commerce.api.facade;
 
 import com.commerce.api.exception.ApiErrorCode;
 import com.commerce.api.exception.ApiException;
+import com.commerce.api.facade.view.CheckoutPreviewView;
 import com.commerce.cart.info.CartInfo;
 import com.commerce.cart.info.CartItemInfo;
 import com.commerce.cart.service.CartReader;
@@ -41,7 +42,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 
-/** 장바구니 전체를 주문·결제로 전환하는 체크아웃 흐름을 조율하는 파사드다. */
+/** 장바구니 전체를 주문·결제로 전환하는 체크아웃 흐름과 그 금액 미리보기를 조율하는 파사드다. */
 @Component
 public class CheckoutFacade {
 
@@ -121,6 +122,24 @@ public class CheckoutFacade {
         // 8. 결제 완료 확정
         orderModifier.markPaid(orderId);
         return orderId;
+    }
+
+    /**
+     * 체크아웃과 같은 게이트·산식으로 결제 예정 금액을 계산해 반환한다. 주문·재고·쿠폰·결제에 부작용을 남기지 않는다.
+     *
+     * @throws ApiException 회원 자격·장바구니·주문 가능·쿠폰 적용성 등 크로스 도메인 정책 거부
+     */
+    public CheckoutPreviewView preview(UUID memberId, Money shippingFee, @Nullable UUID issuedCouponId) {
+        // 1. 회원 자격 확인
+        requireEligibleMember(memberId);
+        // 2. 장바구니를 주문 라인 스냅샷으로 변환
+        List<OrderLineSnapshot> snapshots = buildOrderableSnapshots(requireNonEmptyCart(memberId));
+        // 3. 할인·실청구액 산출
+        Money totalAmount = totalOf(snapshots);
+        Money discountAmount =
+                issuedCouponId != null ? resolveCouponDiscount(issuedCouponId, memberId, totalAmount) : Money.ZERO;
+        Money payAmount = totalAmount.minus(discountAmount).plus(shippingFee);
+        return new CheckoutPreviewView(totalAmount, discountAmount, shippingFee, payAmount);
     }
 
     /** 회원이 활성 자격인지 확인한다. */

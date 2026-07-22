@@ -4,7 +4,9 @@ import com.commerce.api.facade.CheckoutFacade;
 import com.commerce.api.facade.OrderCancellationFacade;
 import com.commerce.api.facade.OrderPaymentFacade;
 import com.commerce.api.web.auth.Authenticated;
+import com.commerce.api.web.v1.order.request.CheckoutPreviewRequest;
 import com.commerce.api.web.v1.order.request.CheckoutRequest;
+import com.commerce.api.web.v1.order.response.CheckoutPreviewResponse;
 import com.commerce.api.web.v1.order.response.CheckoutResponse;
 import com.commerce.api.web.v1.order.response.OrderPageResponse;
 import com.commerce.api.web.v1.order.response.OrderResponse;
@@ -34,8 +36,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 주문 체크아웃·취소·조회 엔드포인트다. */
-@Tag(name = "주문", description = "체크아웃·취소·조회")
+/** 주문 체크아웃·미리보기·취소·조회 엔드포인트다. */
+@Tag(name = "주문", description = "체크아웃·미리보기·취소·조회")
 @Authenticated
 @RestController
 @RequestMapping("/api/v1/orders")
@@ -87,6 +89,28 @@ public class OrderController {
                 request.issuedCouponId(),
                 request.method());
         return CheckoutResponse.from(orderId);
+    }
+
+    @Operation(summary = "체크아웃 미리보기", description = "체크아웃과 같은 게이트·산식으로 상품 합계·할인·배송비·결제 예정액을 계산한다. 부작용이 없다.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "결제 예정 금액"),
+        @ApiResponse(
+                responseCode = "400",
+                description = "요청 값 무효",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+        @ApiResponse(
+                responseCode = "401",
+                description = "미인증",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+        @ApiResponse(
+                responseCode = "409",
+                description = "빈 장바구니·주문 불가·재고 부족·쿠폰 적용 불가·자격 없음",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+    })
+    @PostMapping("/preview")
+    public CheckoutPreviewResponse preview(AuthUser authUser, @Valid @RequestBody CheckoutPreviewRequest request) {
+        return CheckoutPreviewResponse.from(
+                checkoutFacade.preview(authUser.memberId(), Money.of(request.shippingFee()), request.issuedCouponId()));
     }
 
     @Operation(summary = "주문 취소", description = "결제 완료된 본인 주문을 취소하고 환불·재고·쿠폰을 복원한다.")

@@ -10,6 +10,7 @@ import com.commerce.api.facade.ProductRegistrationFacade;
 import com.commerce.api.web.v1.WebIntegrationTest;
 import com.commerce.api.web.v1.admin.order.request.OrderShipRequest;
 import com.commerce.api.web.v1.order.request.AddressRequest;
+import com.commerce.api.web.v1.order.request.CheckoutPreviewRequest;
 import com.commerce.api.web.v1.order.request.CheckoutRequest;
 import com.commerce.api.web.v1.order.response.CheckoutResponse;
 import com.commerce.api.web.v1.payment.response.PaymentResponse;
@@ -114,6 +115,70 @@ class OrderControllerTest extends WebIntegrationTest {
         assertThat(order.discountAmount()).isEqualTo(Money.of(2000L));
         assertThat(order.payAmount()).isEqualTo(Money.of(21000L));
         assertThat(order.issuedCouponId()).isEqualTo(issuedId);
+    }
+
+    @Test
+    @DisplayName("미리보기가 200으로 금액 4종을 반환하고 같은 조건 체크아웃 결제금액과 일치한다")
+    void previewMatchesCheckoutPayAmount() throws Exception {
+        UUID memberId = registerMember();
+        UUID variantId = seedProduct(50);
+        cartAppender.addItem(memberId, variantId, 2);
+        UUID couponId = couponAppender.create("10% 할인", Discount.rate(10), Money.of(10000L), validity(), 30, null);
+        UUID issuedId = issuedCouponAppender.issue(couponId, memberId);
+        CheckoutPreviewRequest request = new CheckoutPreviewRequest(3000L, issuedId);
+
+        mvc.perform(post("/api/v1/orders/preview")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalAmount").value(20000))
+                .andExpect(jsonPath("$.discountAmount").value(2000))
+                .andExpect(jsonPath("$.shippingFee").value(3000))
+                .andExpect(jsonPath("$.payAmount").value(21000));
+
+        // 미리보기가 부작용을 남기지 않아 같은 장바구니·쿠폰으로 체크아웃이 그대로 성공한다.
+        UUID orderId = checkout(memberId, new CheckoutRequest(addressRequest(), 3000L, issuedId, PaymentMethod.CARD));
+        assertThat(orderReader.getOrder(orderId, memberId).payAmount()).isEqualTo(Money.of(21000L));
+    }
+
+    @Test
+    @DisplayName("빈 장바구니 미리보기는 409 API_EMPTY_CART로 거부된다")
+    void previewRejectsEmptyCart() throws Exception {
+        UUID memberId = registerMember();
+
+        mvc.perform(post("/api/v1/orders/preview")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new CheckoutPreviewRequest(0L, null))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("API_EMPTY_CART"));
+    }
+
+    @Test
+    @DisplayName("최소 주문 금액 미달 쿠폰 미리보기는 409 API_COUPON_NOT_APPLICABLE로 거부된다")
+    void previewRejectsInapplicableCoupon() throws Exception {
+        UUID memberId = registerMember();
+        cartAppender.addItem(memberId, seedProduct(50), 2);
+        UUID couponId = couponAppender.create("고액 전용", Discount.rate(10), Money.of(100000L), validity(), 30, null);
+        UUID issuedId = issuedCouponAppender.issue(couponId, memberId);
+
+        mvc.perform(post("/api/v1/orders/preview")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new CheckoutPreviewRequest(3000L, issuedId))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("API_COUPON_NOT_APPLICABLE"));
+    }
+
+    @Test
+    @DisplayName("미인증 미리보기는 401 UNAUTHENTICATED로 거부된다")
+    void previewRejectsUnauthenticated() throws Exception {
+        mvc.perform(post("/api/v1/orders/preview")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new CheckoutPreviewRequest(0L, null))))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
     }
 
     @Test
