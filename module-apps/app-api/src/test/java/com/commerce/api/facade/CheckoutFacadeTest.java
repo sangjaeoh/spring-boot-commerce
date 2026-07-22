@@ -98,7 +98,7 @@ class CheckoutFacadeTest extends FacadeIntegrationTest {
         Long outboxCount = jdbcTemplate.queryForObject(
                 "SELECT count(*) FROM messaging.outbox WHERE event_type = ? AND payload LIKE ?",
                 Long.class,
-                OrderPaid.class.getName(),
+                OrderPaid.EVENT_TYPE,
                 "%" + orderId + "%");
         assertThat(outboxCount).isEqualTo(1);
     }

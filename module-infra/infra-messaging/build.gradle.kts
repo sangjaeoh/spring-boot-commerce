@@ -16,5 +16,11 @@ dependencies {
     compileOnly(libs.jackson.databind)
 
     testImplementation(libs.spring.boot.starter.test)
+    // 아웃박스 마이그레이션(V2 전환) 검증 — 실 PostgreSQL 위에서 Flyway를 대상 버전까지 직접 실행한다.
+    testImplementation(libs.testcontainers.postgresql)
+    testImplementation(libs.testcontainers.junit.jupiter)
+    testImplementation(libs.flyway.core)
+    testRuntimeOnly(libs.flyway.database.postgresql)
+    testRuntimeOnly(libs.postgresql)
     testRuntimeOnly(libs.junit.platform.launcher)
 }

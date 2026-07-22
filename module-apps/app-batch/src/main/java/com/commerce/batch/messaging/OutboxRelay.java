@@ -3,6 +3,7 @@ package com.commerce.batch.messaging;
 import com.commerce.event.event.DomainEvent;
 import com.commerce.event.outbox.OutboxMessage;
 import com.commerce.event.outbox.OutboxStore;
+import com.commerce.event.registry.EventTypeRegistry;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,11 +30,17 @@ public class OutboxRelay {
     private final OutboxStore outboxStore;
     private final ApplicationEventPublisher eventPublisher;
     private final ObjectMapper objectMapper;
+    private final EventTypeRegistry eventTypeRegistry;
 
-    public OutboxRelay(OutboxStore outboxStore, ApplicationEventPublisher eventPublisher, ObjectMapper objectMapper) {
+    public OutboxRelay(
+            OutboxStore outboxStore,
+            ApplicationEventPublisher eventPublisher,
+            ObjectMapper objectMapper,
+            EventTypeRegistry eventTypeRegistry) {
         this.outboxStore = outboxStore;
         this.eventPublisher = eventPublisher;
         this.objectMapper = objectMapper;
+        this.eventTypeRegistry = eventTypeRegistry;
     }
 
     /** 미발행 이벤트를 생성순으로 재발행하고 발행 표시한다. 노드 간 동시 실행은 분산 락이 하나로 줄인다. */
@@ -52,14 +59,8 @@ public class OutboxRelay {
         }
     }
 
-    /** FQCN으로 이벤트 타입을 복원해 페이로드를 역직렬화한다. */
+    /** 논리 타입 키를 레지스트리로 해석해 페이로드를 역직렬화한다. */
     private DomainEvent deserialize(OutboxMessage message) {
-        try {
-            Class<? extends DomainEvent> type =
-                    Class.forName(message.eventType()).asSubclass(DomainEvent.class);
-            return objectMapper.readValue(message.payload(), type);
-        } catch (ClassNotFoundException e) {
-            throw new IllegalStateException("아웃박스 이벤트 타입을 찾을 수 없다: " + message.eventType(), e);
-        }
+        return objectMapper.readValue(message.payload(), eventTypeRegistry.resolve(message.eventType()));
     }
 }

@@ -39,7 +39,7 @@ public final class OutboxMessagePublisher implements MessagePublisher {
         jdbcTemplate.update(
                 "INSERT INTO messaging.outbox (id, event_type, payload, created_at) VALUES (?, ?, ?, ?)",
                 UuidV7Generator.generate(),
-                event.getClass().getName(),
+                event.eventType(),
                 objectMapper.writeValueAsString(event),
                 Timestamp.from(clock.instant()));
     }

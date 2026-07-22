@@ -11,7 +11,15 @@ import java.util.UUID;
  */
 public record OrderPaid(UUID orderId, UUID memberId, Set<UUID> orderedVariantIds) implements DomainEvent {
 
+    /** 논리 타입 키 — 아웃박스 행 기록과 릴레이 해석 레지스트리 배선이 공유한다. */
+    public static final String EVENT_TYPE = "order.OrderPaid";
+
     public OrderPaid {
         orderedVariantIds = Set.copyOf(orderedVariantIds);
+    }
+
+    @Override
+    public String eventType() {
+        return EVENT_TYPE;
     }
 }
