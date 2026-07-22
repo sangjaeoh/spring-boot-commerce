@@ -6,6 +6,7 @@ dependencies {
     implementation(
         platform("org.springframework.boot:spring-boot-dependencies:${libs.versions.spring.boot.get()}"),
     )
+    implementation(project(":module-common:common-auth"))
     implementation(project(":module-common:common-web"))
     implementation(libs.spring.context)
     implementation(libs.spring.boot.starter.data.redis)

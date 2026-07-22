@@ -65,6 +65,8 @@ auth:
     # HS256 대칭 서명 키(32바이트 이상). 기본값 없이 환경변수로만 주입한다(REQUIREMENTS.md 제약·전제).
     secret: ${AUTH_JWT_SECRET}
     access-token-ttl: 1h
+  # 리프레시 토큰(불투명 랜덤 토큰) 수명. Redis TTL로 강제되고 로그아웃 시 즉시 무효화된다.
+  refresh-token-ttl: 336h
 
 order:
   reconciliation:

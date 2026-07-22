@@ -24,7 +24,9 @@ public class SecurityConfig {
     private static final String[] PUBLIC_INFRA_PATHS = {
         "/error", "/actuator/**", "/v3/api-docs", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html"
     };
-    private static final String[] PUBLIC_AUTH_PATHS = {"/api/v1/auth/login"};
+    private static final String[] PUBLIC_AUTH_PATHS = {
+        "/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/auth/logout"
+    };
     private static final String[] PUBLIC_MEMBER_PATHS = {"/api/v1/members"};
     private static final String[] PUBLIC_PRODUCT_PATHS = {"/api/v1/products", "/api/v1/products/*"};
     private static final String[] PUBLIC_PAYMENT_PATHS = {"/api/v1/payments/webhook"};

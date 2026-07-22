@@ -9,7 +9,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.commerce.api.web.v1.WebIntegrationTest;
 import com.commerce.api.web.v1.member.request.LoginRequest;
+import com.commerce.api.web.v1.member.request.RefreshTokenRequest;
 import com.commerce.api.web.v1.member.response.LoginResponse;
+import com.commerce.api.web.v1.member.response.TokenRefreshResponse;
 import com.commerce.auth.token.JwtTokenCodec;
 import com.commerce.auth.token.TokenClaims;
 import com.commerce.member.entity.SuspensionReason;
@@ -171,6 +173,117 @@ class AuthControllerTest extends WebIntegrationTest {
                     request.setRemoteAddr(clientIp);
                     return request;
                 });
+    }
+
+    @Test
+    @DisplayName("로그인 응답의 리프레시 토큰으로 refresh하면 새 액세스 토큰이 발급된다")
+    void refreshIssuesNewAccessToken() throws Exception {
+        String email = "user-" + UUID.randomUUID() + "@example.com";
+        UUID memberId = memberAppender.register(email, "테스터", PASSWORD);
+        LoginResponse login = login(email);
+        assertThat(login.refreshToken()).isNotBlank();
+
+        String body = mvc.perform(post("/api/v1/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new RefreshTokenRequest(login.refreshToken()))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").exists())
+                .andExpect(jsonPath("$.tokenType").value("Bearer"))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        String accessToken =
+                objectMapper.readValue(body, TokenRefreshResponse.class).accessToken();
+        assertThat(jwtTokenCodec.verify(accessToken))
+                .contains(new TokenClaims(memberId.toString(), Map.of("role", "BUYER")));
+    }
+
+    @Test
+    @DisplayName("로그아웃 후 같은 리프레시 토큰의 refresh는 401 UNAUTHENTICATED로 거부된다")
+    void refreshRejectsLoggedOutToken() throws Exception {
+        String email = "user-" + UUID.randomUUID() + "@example.com";
+        memberAppender.register(email, "테스터", PASSWORD);
+        LoginResponse login = login(email);
+        String refreshBody = objectMapper.writeValueAsString(new RefreshTokenRequest(login.refreshToken()));
+
+        mvc.perform(post("/api/v1/auth/logout")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(refreshBody))
+                .andExpect(status().isNoContent());
+
+        mvc.perform(post("/api/v1/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(refreshBody))
+                .andExpect(status().isUnauthorized())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+    }
+
+    @Test
+    @DisplayName("발급된 적 없는 위조 리프레시 토큰의 refresh는 401로 거부된다")
+    void refreshRejectsForgedToken() throws Exception {
+        mvc.perform(post("/api/v1/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new RefreshTokenRequest(UUID.randomUUID().toString()))))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+    }
+
+    @Test
+    @DisplayName("탈퇴 회원의 유효한 리프레시 토큰 refresh는 401로 거부된다")
+    void refreshRejectsWithdrawnMember() throws Exception {
+        String email = "user-" + UUID.randomUUID() + "@example.com";
+        UUID memberId = memberAppender.register(email, "테스터", PASSWORD);
+        LoginResponse login = login(email);
+        memberRemover.delete(memberId, WithdrawalReason.NO_LONGER_USED);
+
+        mvc.perform(post("/api/v1/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new RefreshTokenRequest(login.refreshToken()))))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+    }
+
+    @Test
+    @DisplayName("이미 로그아웃한 토큰의 재로그아웃도 204로 응답한다 — 로그아웃은 멱등이다")
+    void logoutIsIdempotent() throws Exception {
+        String email = "user-" + UUID.randomUUID() + "@example.com";
+        memberAppender.register(email, "테스터", PASSWORD);
+        LoginResponse login = login(email);
+        String refreshBody = objectMapper.writeValueAsString(new RefreshTokenRequest(login.refreshToken()));
+
+        mvc.perform(post("/api/v1/auth/logout")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(refreshBody))
+                .andExpect(status().isNoContent());
+        mvc.perform(post("/api/v1/auth/logout")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(refreshBody))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    @DisplayName("공백 리프레시 토큰의 refresh는 400 VALIDATION_FAILED로 거부된다")
+    void refreshRejectsBlankToken() throws Exception {
+        mvc.perform(post("/api/v1/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new RefreshTokenRequest("  "))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+    }
+
+    /** 로그인하고 응답을 파싱한다. */
+    private LoginResponse login(String email) throws Exception {
+        String body = mvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new LoginRequest(email, PASSWORD))))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        return objectMapper.readValue(body, LoginResponse.class);
     }
 
     @Test
