@@ -1,4 +1,4 @@
-package com.commerce.order.event;
+package com.commerce.event.order;
 
 import com.commerce.event.event.DomainEvent;
 import java.util.Set;

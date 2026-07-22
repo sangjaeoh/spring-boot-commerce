@@ -1,8 +1,8 @@
 package com.commerce.batch.config;
 
+import com.commerce.event.order.OrderPaid;
 import com.commerce.event.registry.EventTypeRegistry;
 import com.commerce.event.registry.MapEventTypeRegistry;
-import com.commerce.order.event.OrderPaid;
 import java.util.Map;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

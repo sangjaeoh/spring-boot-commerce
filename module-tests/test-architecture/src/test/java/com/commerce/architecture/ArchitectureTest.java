@@ -84,8 +84,8 @@ class ArchitectureTest {
     private static final Set<String> ENTITY_OWNING_BASE_PACKAGES = entityOwningBasePackages();
 
     // 도메인 모듈 안에서 @Entity를 정당하게 참조하는 2개 구역(domain 상호참조·exception, application의
-    // 유스케이스 서비스·Info.from(Entity)·required 리포지토리). order의 event 패키지는 값 타입만
-    // 참조하므로(OrderPaid→UUID) 면제하지 않는다.
+    // 유스케이스 서비스·Info.from(Entity)·required 리포지토리). 이벤트 record는 이벤트 모듈
+    // (com.commerce.event..) 소유라 도메인 면제 대상이 아니다.
     private static final Set<String> ENTITY_ACCESS_EXEMPT_SUBPACKAGES = Set.of("domain", "application");
 
     @Test

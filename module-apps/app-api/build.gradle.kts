@@ -47,5 +47,7 @@ dependencies {
     testImplementation(libs.testcontainers.junit.jupiter)
     testImplementation(libs.flyway.core)
     testImplementation(libs.flyway.database.postgresql)
+    // 체크아웃 통합 테스트가 아웃박스 발행 단언에서 이벤트 record(OrderPaid)를 참조한다.
+    testImplementation(project(":module-events:event-order"))
     testRuntimeOnly(libs.junit.platform.launcher)
 }

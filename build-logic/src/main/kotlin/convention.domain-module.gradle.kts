@@ -5,7 +5,8 @@ plugins {
 val libsCatalog = extensions.getByType<VersionCatalogsExtension>().named("libs")
 
 restrictProjectDependencies("domain-module") { dependencyPath ->
-    dependencyPath in
+    dependencyPath.startsWith(":module-events:") ||
+        dependencyPath in
         setOf(
             ":module-domains:domain-shared",
             ":module-common:common-core",

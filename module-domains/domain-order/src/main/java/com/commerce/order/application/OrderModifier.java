@@ -1,5 +1,6 @@
 package com.commerce.order.application;
 
+import com.commerce.event.order.OrderPaid;
 import com.commerce.event.publish.MessagePublisher;
 import com.commerce.order.application.required.OrderRepository;
 import com.commerce.order.domain.CancellationReason;
@@ -10,7 +11,6 @@ import com.commerce.order.domain.OrderErrorCode;
 import com.commerce.order.domain.OrderNotFoundException;
 import com.commerce.order.domain.OrderStatusException;
 import com.commerce.order.domain.RefundReason;
-import com.commerce.order.event.OrderPaid;
 import java.time.Clock;
 import java.util.UUID;
 import org.springframework.stereotype.Service;

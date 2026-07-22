@@ -6,6 +6,8 @@ dependencies {
     implementation(project(":module-common:common-core"))
     implementation(project(":module-common:common-jpa"))
     implementation(project(":module-common:common-event"))
+    // 릴레이 레지스트리 배선·소비 리스너가 이벤트 record(OrderPaid)를 참조한다.
+    implementation(project(":module-events:event-order"))
     implementation(project(":module-domains:domain-order"))
     implementation(project(":module-domains:domain-payment"))
     implementation(project(":module-domains:domain-stock"))

@@ -1,7 +1,7 @@
 package com.commerce.batch.event.listener;
 
 import com.commerce.cart.application.CartModifier;
-import com.commerce.order.event.OrderPaid;
+import com.commerce.event.order.OrderPaid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
