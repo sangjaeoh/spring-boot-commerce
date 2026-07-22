@@ -3,6 +3,7 @@ package com.commerce.api.web.v1.member;
 import com.commerce.api.facade.MemberWithdrawalFacade;
 import com.commerce.api.web.auth.Anonymous;
 import com.commerce.api.web.auth.Authenticated;
+import com.commerce.api.web.v1.member.request.MemberPasswordReplacementRequest;
 import com.commerce.api.web.v1.member.request.MemberRegistrationRequest;
 import com.commerce.api.web.v1.member.request.MemberRenameRequest;
 import com.commerce.api.web.v1.member.request.MemberWithdrawalRequest;
@@ -31,8 +32,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 회원 가입·본인 조회·이름 변경·탈퇴 엔드포인트다. */
-@Tag(name = "회원", description = "회원 가입·본인 조회·이름 변경·탈퇴")
+/** 회원 가입·본인 조회·이름 변경·비밀번호 변경·탈퇴 엔드포인트다. */
+@Tag(name = "회원", description = "회원 가입·본인 조회·이름 변경·비밀번호 변경·탈퇴")
 @RestController
 @RequestMapping("/api/v1/members")
 public class MemberController {
@@ -116,6 +117,29 @@ public class MemberController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void rename(AuthUser authUser, @Valid @RequestBody MemberRenameRequest request) {
         memberModifier.rename(authUser.memberId(), request.name());
+    }
+
+    @Operation(summary = "본인 비밀번호 변경", description = "현재 비밀번호를 대조하고 새 비밀번호로 교체한다.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "204", description = "변경됨"),
+        @ApiResponse(
+                responseCode = "400",
+                description = "요청 값 무효 또는 현재 비밀번호 불일치·새 비밀번호 정책 위반",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+        @ApiResponse(
+                responseCode = "401",
+                description = "미인증",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+        @ApiResponse(
+                responseCode = "404",
+                description = "회원 없음",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+    })
+    @Authenticated
+    @PatchMapping("/me/password")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void replacePassword(AuthUser authUser, @Valid @RequestBody MemberPasswordReplacementRequest request) {
+        memberModifier.replacePassword(authUser.memberId(), request.currentPassword(), request.newPassword());
     }
 
     @Operation(summary = "본인 탈퇴", description = "본인을 탈퇴(논리삭제) 처리한다.")

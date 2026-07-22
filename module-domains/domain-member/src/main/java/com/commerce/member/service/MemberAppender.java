@@ -73,8 +73,8 @@ public class MemberAppender {
         }
     }
 
-    /** 패스워드가 길이 정책을 벗어나면 거부한다. */
-    private static void validatePassword(String rawPassword) {
+    /** 패스워드가 길이 정책을 벗어나면 거부한다. 패스워드 정책의 유일한 소유처라 패스워드 변경 경로도 이를 쓴다. */
+    static void validatePassword(String rawPassword) {
         if (rawPassword.length() < MIN_PASSWORD_LENGTH
                 || rawPassword.getBytes(StandardCharsets.UTF_8).length > MAX_PASSWORD_BYTES) {
             throw new InvalidPasswordException(MemberErrorCode.INVALID_PASSWORD_FORMAT);

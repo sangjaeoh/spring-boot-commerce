@@ -17,6 +17,7 @@ import com.commerce.api.web.v1.WebIntegrationTest;
 import com.commerce.api.web.v1.admin.member.request.MemberSuspensionRequest;
 import com.commerce.api.web.v1.cart.request.AddCartItemRequest;
 import com.commerce.api.web.v1.member.request.LoginRequest;
+import com.commerce.api.web.v1.member.request.MemberPasswordReplacementRequest;
 import com.commerce.api.web.v1.member.request.MemberRegistrationRequest;
 import com.commerce.api.web.v1.member.request.MemberRenameRequest;
 import com.commerce.api.web.v1.member.request.MemberWithdrawalRequest;
@@ -276,6 +277,73 @@ class MemberControllerTest extends WebIntegrationTest {
         MemberInfo member = memberReader.getMember(memberId);
         assertThat(member.name()).isEqualTo("새이름");
         assertThat(member.email()).isEqualTo(email);
+    }
+
+    @Test
+    @DisplayName("본인 비밀번호 변경이 204로 성공하고 새 비밀번호로만 로그인된다")
+    void replacePasswordSwitchesLoginCredential() throws Exception {
+        String email = "user-" + UUID.randomUUID() + "@example.com";
+        UUID memberId = memberAppender.register(email, "테스터", "password-123!");
+
+        MemberPasswordReplacementRequest request =
+                new MemberPasswordReplacementRequest("password-123!", "new-password-456!");
+        mvc.perform(patch("/api/v1/members/me/password")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isNoContent());
+
+        mvc.perform(post(LOGIN_PATH)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new LoginRequest(email, "new-password-456!"))))
+                .andExpect(status().isOk());
+
+        mvc.perform(post(LOGIN_PATH)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new LoginRequest(email, "password-123!"))))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("MEMBER_INVALID_CREDENTIALS"));
+    }
+
+    @Test
+    @DisplayName("현재 비밀번호가 틀린 변경은 400 MEMBER_PASSWORD_MISMATCH로 거부된다")
+    void replacePasswordRejectsWrongCurrentPassword() throws Exception {
+        UUID memberId = registerMember();
+
+        MemberPasswordReplacementRequest request =
+                new MemberPasswordReplacementRequest("wrong-password!", "new-password-456!");
+        mvc.perform(patch("/api/v1/members/me/password")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("MEMBER_PASSWORD_MISMATCH"));
+    }
+
+    @Test
+    @DisplayName("8자 미만 새 비밀번호 변경은 400 MEMBER_INVALID_PASSWORD_FORMAT로 거부된다")
+    void replacePasswordRejectsShortNewPassword() throws Exception {
+        UUID memberId = registerMember();
+
+        MemberPasswordReplacementRequest request = new MemberPasswordReplacementRequest("password-123!", "short-7");
+        mvc.perform(patch("/api/v1/members/me/password")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("MEMBER_INVALID_PASSWORD_FORMAT"));
+    }
+
+    @Test
+    @DisplayName("미인증 비밀번호 변경은 401 UNAUTHENTICATED로 거부된다")
+    void replacePasswordRejectsUnauthenticated() throws Exception {
+        MemberPasswordReplacementRequest request =
+                new MemberPasswordReplacementRequest("password-123!", "new-password-456!");
+        mvc.perform(patch("/api/v1/members/me/password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
     }
 
     @Test

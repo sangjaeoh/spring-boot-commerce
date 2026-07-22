@@ -111,6 +111,11 @@ public class Member extends BaseTimeEntity<UUID> {
         this.name = newName;
     }
 
+    /** 패스워드 해시를 새 값으로 교체한다. 자격증명은 이미 해시된 값을 받는다(평문 비보관). */
+    public void replacePassword(String newPasswordHash) {
+        this.passwordHash = newPasswordHash;
+    }
+
     /** 탈퇴 사유와 함께 논리삭제한다. */
     public void delete(WithdrawalReason reason, Instant now) {
         this.deletedAt = now;
