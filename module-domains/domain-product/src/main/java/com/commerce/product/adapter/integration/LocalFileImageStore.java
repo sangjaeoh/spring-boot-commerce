@@ -1,4 +1,4 @@
-package com.commerce.external.storage;
+package com.commerce.product.adapter.integration;
 
 import com.commerce.product.application.required.ImageStore;
 import java.io.IOException;

@@ -1,4 +1,4 @@
-package com.commerce.external.mail;
+package com.commerce.member.adapter.integration;
 
 import com.commerce.member.application.required.MailGateway;
 import org.slf4j.Logger;

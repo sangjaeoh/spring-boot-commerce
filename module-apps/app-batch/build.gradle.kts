@@ -25,10 +25,9 @@ dependencies {
     // 실행 앱인 이 모듈이 어노테이션 런타임을 직접 공급한다.
     implementation(libs.swagger.annotations.jakarta)
 
-    // 스테레오타입 빈만 조립한다(코드 참조 없음): ProblemDetail 핸들러·보안헤더/요청ID/멱등 필터·결제
-    // 어댑터(PG 상태 조회)·아웃박스 발행 transport와 저장소 포트 구현·ShedLock LockProvider·JDBC 드라이버.
+    // 스테레오타입 빈만 조립한다(코드 참조 없음): ProblemDetail 핸들러·보안헤더/요청ID/멱등 필터·아웃박스
+    // 발행 transport와 저장소 포트 구현·ShedLock LockProvider·JDBC 드라이버.
     runtimeOnly(project(":module-common:common-web"))
-    runtimeOnly(project(":module-external:external-payment"))
     runtimeOnly(project(":module-infra:infra-messaging"))
     runtimeOnly(project(":module-infra:infra-redis"))
     runtimeOnly(libs.postgresql)
@@ -44,7 +43,5 @@ dependencies {
     testImplementation(project(":module-domains:domain-shared"))
     testImplementation(project(":module-domains:domain-member"))
     testImplementation(project(":module-domains:domain-product"))
-    // 픽스처가 올린 domain-product의 이미지 서비스가 ImageStore 포트 구현을 요구한다(테스트 컨텍스트 조립용).
-    testRuntimeOnly(project(":module-external:external-storage"))
     testRuntimeOnly(libs.junit.platform.launcher)
 }

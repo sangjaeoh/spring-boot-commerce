@@ -1,9 +1,8 @@
-package com.commerce.external.payment;
+package com.commerce.payment.adapter.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.commerce.external.payment.exception.FakeGatewayTimeoutException;
 import com.commerce.payment.application.required.GatewayTransactionStatus;
 import com.commerce.payment.application.required.PaymentApproval;
 import com.commerce.payment.domain.FailureReason;

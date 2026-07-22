@@ -1,4 +1,4 @@
-package com.commerce.external.storage;
+package com.commerce.product.adapter.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;

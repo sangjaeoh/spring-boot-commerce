@@ -1,6 +1,5 @@
-package com.commerce.external.payment;
+package com.commerce.payment.adapter.integration;
 
-import com.commerce.external.payment.exception.FakeGatewayTimeoutException;
 import com.commerce.payment.application.required.GatewayTransactionStatus;
 import com.commerce.payment.application.required.PaymentApproval;
 import com.commerce.payment.application.required.PaymentGateway;

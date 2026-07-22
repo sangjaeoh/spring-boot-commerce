@@ -29,10 +29,7 @@ dependencies {
     implementation(libs.spring.boot.starter.actuator)
     implementation(libs.springdoc.openapi.starter.webmvc.ui)
 
-    // 스테레오타입 빈만 조립한다(코드 참조 없음): 결제 어댑터·메일 어댑터·아웃박스 발행 transport·멱등 키 저장소·JDBC 드라이버.
-    runtimeOnly(project(":module-external:external-payment"))
-    runtimeOnly(project(":module-external:external-mail"))
-    runtimeOnly(project(":module-external:external-storage"))
+    // 스테레오타입 빈만 조립한다(코드 참조 없음): 아웃박스 발행 transport·멱등 키 저장소·JDBC 드라이버.
     runtimeOnly(project(":module-infra:infra-messaging"))
     runtimeOnly(project(":module-infra:infra-redis"))
     runtimeOnly(libs.postgresql)

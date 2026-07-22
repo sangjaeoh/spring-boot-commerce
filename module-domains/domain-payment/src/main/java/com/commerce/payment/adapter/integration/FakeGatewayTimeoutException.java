@@ -1,4 +1,4 @@
-package com.commerce.external.payment.exception;
+package com.commerce.payment.adapter.integration;
 
 import java.util.UUID;
 
