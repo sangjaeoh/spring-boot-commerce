@@ -90,7 +90,8 @@ class MigrationApplicationTest {
                 "validate",
                 "hibernate.physical_naming_strategy",
                 "org.hibernate.boot.model.naming.CamelCaseToUnderscoresNamingStrategy"));
-        emfBean.afterPropertiesSet(); // validate 실행 — 엔티티↔DDL 불일치면 예외로 실패한다
+        // validate 실행 — 엔티티↔DDL 불일치면 예외로 실패한다
+        emfBean.afterPropertiesSet();
 
         try {
             EntityManagerFactory emf = emfBean.getNativeEntityManagerFactory();

@@ -45,9 +45,12 @@ class InMemoryIdempotencyStoreTest {
         long[] now = {1_000L};
         InMemoryIdempotencyStore store = new InMemoryIdempotencyStore(() -> now[0], IN_FLIGHT_MILLIS, WINDOW_MILLIS);
 
-        assertThat(store.tryBegin("k")).isTrue(); // 원본 요청 시작(미완료)
-        now[0] += WINDOW_MILLIS + 1; // dedup 창은 지났으나 요청은 여전히 in-flight
-        assertThat(store.tryBegin("k")).isFalse(); // 타임아웃 재시도가 새로 획득하지 못한다
+        // 원본 요청 시작(미완료)
+        assertThat(store.tryBegin("k")).isTrue();
+        // dedup 창은 지났으나 요청은 여전히 in-flight
+        now[0] += WINDOW_MILLIS + 1;
+        // 타임아웃 재시도가 새로 획득하지 못한다
+        assertThat(store.tryBegin("k")).isFalse();
     }
 
     @Test

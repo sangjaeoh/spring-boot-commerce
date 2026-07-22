@@ -22,7 +22,7 @@ class RedisLoginRateLimitStoreTest {
     private static final RedisContainer REDIS = new RedisContainer(DockerImageName.parse("redis:8.2-alpine"));
     private static final StringRedisTemplate TEMPLATE = createTemplate();
 
-    // 컨테이너·커넥션은 JVM 수명 동안 공유하고 종료 시 Testcontainers가 정리한다.
+    /** Redis 컨테이너를 시작하고 연결된 템플릿을 만든다. 컨테이너·커넥션은 JVM 수명 동안 공유하고 종료 시 Testcontainers가 정리한다. */
     private static StringRedisTemplate createTemplate() {
         REDIS.start();
         LettuceConnectionFactory factory = new LettuceConnectionFactory(REDIS.getRedisHost(), REDIS.getRedisPort());

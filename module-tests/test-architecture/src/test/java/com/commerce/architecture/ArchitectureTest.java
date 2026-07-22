@@ -35,6 +35,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Stream;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -88,11 +89,13 @@ class ArchitectureTest {
             Set.of("entity", "info", "service", "repository");
 
     @Test
+    @DisplayName("JPA 엔티티는 소유 도메인 모듈 내부에서만 접근된다")
     void jpaEntitiesAreOnlyAccessedWithinTheirOwnDomainModule() {
         jpaEntityAccessConfinedToDomainModules().check(CLASSES);
     }
 
     @Test
+    @DisplayName("매핑 클래스 소유 모듈의 베이스 패키지 감지가 기대 집합과 일치한다")
     void entityOwningBasePackagesAreDetected() {
         // 면제 한정의 변별력은 ENTITY_OWNING_BASE_PACKAGES가 매핑 클래스 소유 모듈만 담고 있음에 달렸다 —
         // 앱 등 다른 모듈에 매핑 클래스가 생기면 그 베이스가 면제 접두로 승격되므로 여기서 실패시킨다.
@@ -110,6 +113,7 @@ class ArchitectureTest {
     }
 
     @Test
+    @DisplayName("도메인 밖 service 패키지의 생 엔티티 참조는 면제되지 않는다")
     void entityAccessExemptionDoesNotCoverServicePackagesOutsideDomainModules() {
         // 도메인 밖 ...service 패키지의 생 엔티티 참조가 면제 없이 위반으로 잡히는지 고정한다.
         JavaClasses bypassAttempt = new ClassFileImporter().importClasses(EntityReferencingFixture.class, Member.class);
@@ -141,6 +145,7 @@ class ArchitectureTest {
     }
 
     @Test
+    @DisplayName("apps는 도메인 리포지토리에 직접 접근하지 않는다")
     void appsDoNotAccessRepositoriesDirectly() {
         ArchRule rule = noClasses()
                 .that()
@@ -157,6 +162,7 @@ class ArchitectureTest {
     }
 
     @Test
+    @DisplayName("앱 베이스 패키지 감지가 기대 집합과 일치한다")
     void appBasePackagesAreDetected() {
         // 앱 대상 규칙(리포지토리 직접 접근·컨트롤러 단일 도메인)의 변별력은 이 집합이 채워져 있음에 달렸다 —
         // 비면 검사할 앱이 없어 규칙이 공허해진다. @SpringBootApplication 감지 회귀를 여기서 고정한다.
@@ -164,6 +170,7 @@ class ArchitectureTest {
     }
 
     @Test
+    @DisplayName("소프트삭제 엔티티 리포지토리의 base finder는 직접 호출되지 않는다")
     void softDeleteRepositoryBaseFindersAreNotCalledDirectly() {
         DescribedPredicate<JavaMethodCall> baseFinderOnSoftDeleteRepository =
                 new DescribedPredicate<>("소프트삭제 엔티티 리포지토리에 삭제 여부를 거르지 않는 base finder 직접 호출") {
@@ -184,6 +191,7 @@ class ArchitectureTest {
     }
 
     @Test
+    @DisplayName("소프트삭제 엔티티 감지가 기대 집합과 일치한다")
     void softDeleteEntitiesAreDetected() {
         // 규칙의 변별력은 SOFT_DELETE_ENTITY_NAMES가 채워져 있음에 달렸다 — 비면 규칙이 공허하게 통과하고
         // (failOnEmptyShould는 .that() 필터가 없어 못 잡는다) 실제 위반을 놓친다. 감지 회귀를 여기서 실패시킨다.
@@ -193,36 +201,43 @@ class ArchitectureTest {
     }
 
     @Test
+    @DisplayName("컨트롤러는 최대 한 도메인의 service에만 직접 의존한다")
     void controllersDependOnAtMostOneDomainServiceDirectly() {
         controllersDependOnAtMostOneDomainService().check(CLASSES);
     }
 
     @Test
+    @DisplayName("컨트롤러 핸들러는 @Operation·@ApiResponse(s)를 선언한다")
     void controllerHandlerMethodsDeclareOpenApiDocs() {
         controllerHandlerMethodsDocumented().check(CLASSES);
     }
 
     @Test
+    @DisplayName("request·response 타입과 인스턴스 컴포넌트는 @Schema를 선언한다")
     void requestAndResponseTypesDeclareSchema() {
         requestAndResponseTypesDocumented().check(CLASSES);
     }
 
     @Test
+    @DisplayName("핸들러의 @RequestParam·@PathVariable은 description 있는 @Parameter를 선언한다")
     void controllerHandlerParametersDeclareParameterDocs() {
         controllerHandlerParametersDocumented().check(CLASSES);
     }
 
     @Test
+    @DisplayName("핸들러는 페이징을 int·Integer @RequestParam으로 직접 받지 않는다")
     void controllerHandlersDoNotDeclareRawPagingParams() {
         controllerHandlersUsePaginationRequest().check(CLASSES);
     }
 
     @Test
+    @DisplayName("어드민 표면 마커(패키지·네이밍·@Admin·URL)는 함께만 나타난다")
     void adminWebSurfaceMarkersAppearOnlyTogether() {
         adminSurfaceMarkersAligned().check(CLASSES);
     }
 
     @Test
+    @DisplayName("web 메서드는 메서드 레벨 @Admin을 선언하지 않는다")
     void webMethodsDoNotDeclareMethodLevelAdmin() {
         noMethods()
                 .that()
@@ -236,6 +251,7 @@ class ArchitectureTest {
     }
 
     @Test
+    @DisplayName("도메인 service 패키지 판정이 대표 사례를 정확히 가른다")
     void domainServiceRootParsingIsCorrect() {
         // 규칙의 변별력은 도메인 service 패키지 판정의 정확성에 달렸다 — facade·info·common을 service로 오인하면
         // 규칙이 공허해지거나(도메인 0개로 항상 통과) 오탐한다. 파싱 회귀를 여기서 고정한다.
