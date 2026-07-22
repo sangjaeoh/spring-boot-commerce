@@ -2,8 +2,10 @@ package com.commerce.api.facade;
 
 import com.commerce.api.facade.view.ProductSummaryView;
 import com.commerce.product.entity.ProductVariantStatus;
+import com.commerce.product.info.ProductImageInfo;
 import com.commerce.product.info.ProductInfo;
 import com.commerce.product.info.ProductVariantInfo;
+import com.commerce.product.service.ProductImageReader;
 import com.commerce.product.service.ProductReader;
 import com.commerce.product.service.ProductVariantReader;
 import com.commerce.shared.entity.Money;
@@ -27,12 +29,17 @@ public class ProductCatalogFacade {
     private final ProductReader productReader;
     private final ProductVariantReader variantReader;
     private final StockReader stockReader;
+    private final ProductImageReader imageReader;
 
     public ProductCatalogFacade(
-            ProductReader productReader, ProductVariantReader variantReader, StockReader stockReader) {
+            ProductReader productReader,
+            ProductVariantReader variantReader,
+            StockReader stockReader,
+            ProductImageReader imageReader) {
         this.productReader = productReader;
         this.variantReader = variantReader;
         this.stockReader = stockReader;
+        this.imageReader = imageReader;
     }
 
     /** 노출 상품 페이지를 대표가·품절과 함께 반환한다. 키워드가 있으면 상품명 부분 일치로 좁히고, 정렬 기준을 따른다. */
@@ -44,12 +51,27 @@ public class ProductCatalogFacade {
                     case PRICE_ASC -> productReader.getExposedPageOrderByPriceAsc(keyword, pageable);
                     case PRICE_DESC -> productReader.getExposedPageOrderByPriceDesc(keyword, pageable);
                 };
-        // 2. 합성 재료 수집 — ACTIVE 변형·재고
+        // 2. 합성 재료 수집 — ACTIVE 변형·재고·대표 이미지
         Map<UUID, List<ProductVariantInfo>> activeVariantsByProduct = activeVariantsByProduct(products.getContent());
         Set<UUID> orderableVariantIds = orderableVariantIds(activeVariantsByProduct);
+        Map<UUID, String> primaryImageUrlByProduct = primaryImageUrlByProduct(products.getContent());
         // 3. 상품별 대표가·품절 파생
-        return products.map(product ->
-                summarize(product, activeVariantsByProduct.getOrDefault(product.id(), List.of()), orderableVariantIds));
+        return products.map(product -> summarize(
+                product,
+                activeVariantsByProduct.getOrDefault(product.id(), List.of()),
+                orderableVariantIds,
+                primaryImageUrlByProduct.get(product.id())));
+    }
+
+    /** 페이지에 실린 상품의 대표 이미지(정렬 순서 최솟값) URL을 상품별로 모은다. */
+    private Map<UUID, String> primaryImageUrlByProduct(List<ProductInfo> products) {
+        if (products.isEmpty()) {
+            return Map.of();
+        }
+        List<UUID> productIds = products.stream().map(ProductInfo::id).toList();
+        // 조회가 정렬 순서 오름차순이라 상품별 첫 항목이 대표다.
+        return imageReader.getByProductIds(productIds).stream()
+                .collect(Collectors.toMap(ProductImageInfo::productId, ProductImageInfo::url, (first, later) -> first));
     }
 
     /** 페이지에 실린 상품의 ACTIVE 변형을 상품별로 모은다. */
@@ -78,9 +100,12 @@ public class ProductCatalogFacade {
                 .collect(Collectors.toSet());
     }
 
-    /** 상품 하나를 대표가·품절 파생과 함께 목록 뷰로 옮긴다. */
+    /** 상품 하나를 대표가·품절·대표 이미지 파생과 함께 목록 뷰로 옮긴다. */
     private static ProductSummaryView summarize(
-            ProductInfo product, List<ProductVariantInfo> activeVariants, Set<UUID> orderableVariantIds) {
+            ProductInfo product,
+            List<ProductVariantInfo> activeVariants,
+            Set<UUID> orderableVariantIds,
+            @Nullable String imageUrl) {
         Money fromPrice = null;
         boolean anyOrderable = false;
         for (ProductVariantInfo variant : activeVariants) {
@@ -88,7 +113,7 @@ public class ProductCatalogFacade {
             anyOrderable = anyOrderable || orderableVariantIds.contains(variant.id());
         }
         boolean soldOut = !activeVariants.isEmpty() && !anyOrderable;
-        return new ProductSummaryView(product.id(), product.name(), fromPrice, soldOut);
+        return new ProductSummaryView(product.id(), product.name(), fromPrice, soldOut, imageUrl);
     }
 
     /** 둘 중 작은 금액을 고른다. */

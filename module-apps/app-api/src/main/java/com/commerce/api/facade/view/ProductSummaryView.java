@@ -9,6 +9,11 @@ import org.jspecify.annotations.Nullable;
  *
  * @param fromPrice ACTIVE 변형 최저가. ACTIVE 변형이 없으면 null.
  * @param soldOut ACTIVE 변형이 있으나 주문가능이 하나도 없음. ACTIVE 변형이 없으면 false.
+ * @param imageUrl 대표 이미지 URL. 이미지가 없으면 null.
  */
 public record ProductSummaryView(
-        UUID id, String name, @Nullable Money fromPrice, boolean soldOut) {}
+        UUID id,
+        String name,
+        @Nullable Money fromPrice,
+        boolean soldOut,
+        @Nullable String imageUrl) {}

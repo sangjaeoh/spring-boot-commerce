@@ -21,10 +21,14 @@ public record ProductDetailResponse(
         Long fromPrice,
 
         @Schema(description = "품절 여부") boolean soldOut,
-        @Schema(description = "ACTIVE 변형 목록") List<VariantResponse> variants) {
+        @Schema(description = "ACTIVE 변형 목록") List<VariantResponse> variants,
+
+        @Schema(description = "이미지 URL 목록(정렬 순서대로, 첫 항목이 대표)")
+        List<String> imageUrls) {
 
     public ProductDetailResponse {
         variants = List.copyOf(variants);
+        imageUrls = List.copyOf(imageUrls);
     }
 
     /** 상품 상세 뷰에서 응답을 만든다. */
@@ -36,6 +40,7 @@ public record ProductDetailResponse(
                 product.status(),
                 product.fromPrice() == null ? null : product.fromPrice().amount(),
                 product.soldOut(),
-                product.variants().stream().map(VariantResponse::from).toList());
+                product.variants().stream().map(VariantResponse::from).toList(),
+                product.imageUrls());
     }
 }

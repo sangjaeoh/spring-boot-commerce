@@ -13,7 +13,10 @@ public record ProductSummaryResponse(
         @Schema(description = "대표가(원 단위, 변형 최저가)", nullable = true) @Nullable
         Long fromPrice,
 
-        @Schema(description = "품절 여부") boolean soldOut) {
+        @Schema(description = "품절 여부") boolean soldOut,
+
+        @Schema(description = "대표 이미지 URL. 이미지가 없으면 없음", nullable = true) @Nullable
+        String imageUrl) {
 
     /** 카탈로그 상품 뷰에서 응답을 만든다. */
     public static ProductSummaryResponse from(ProductSummaryView product) {
@@ -21,6 +24,7 @@ public record ProductSummaryResponse(
                 product.id(),
                 product.name(),
                 product.fromPrice() == null ? null : product.fromPrice().amount(),
-                product.soldOut());
+                product.soldOut(),
+                product.imageUrl());
     }
 }

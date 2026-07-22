@@ -9,7 +9,10 @@ public enum ProductErrorCode implements ErrorCode {
     INVALID_VARIANT_STATE_TRANSITION("PRODUCT_VARIANT_INVALID_STATE_TRANSITION", "허용되지 않은 변형 상태 전이다.", 409),
     DUPLICATE_VARIANT_OPTION("PRODUCT_VARIANT_DUPLICATE_OPTION", "이미 존재하는 옵션 조합이다.", 409),
     INVALID_PRICE("PRODUCT_VARIANT_INVALID_PRICE", "변형 가격은 1 이상이어야 한다.", 400),
-    INVALID_OPTION("PRODUCT_VARIANT_INVALID_OPTION", "옵션 입력이 올바르지 않다.", 400);
+    INVALID_OPTION("PRODUCT_VARIANT_INVALID_OPTION", "옵션 입력이 올바르지 않다.", 400),
+    IMAGE_NOT_FOUND("PRODUCT_IMAGE_NOT_FOUND", "상품 이미지를 찾을 수 없다.", 404),
+    UNSUPPORTED_IMAGE_FORMAT("PRODUCT_UNSUPPORTED_IMAGE_FORMAT", "지원하지 않는 이미지 형식이다.", 400),
+    IMAGE_TOO_LARGE("PRODUCT_IMAGE_TOO_LARGE", "이미지는 5MB 이하여야 한다.", 400);
 
     private final String code;
     private final String message;

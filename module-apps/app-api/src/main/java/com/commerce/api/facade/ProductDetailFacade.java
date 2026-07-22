@@ -4,8 +4,10 @@ import com.commerce.api.facade.view.ProductVariantView;
 import com.commerce.api.facade.view.ProductView;
 import com.commerce.product.entity.ProductVariantStatus;
 import com.commerce.product.exception.ProductNotFoundException;
+import com.commerce.product.info.ProductImageInfo;
 import com.commerce.product.info.ProductInfo;
 import com.commerce.product.info.ProductVariantInfo;
+import com.commerce.product.service.ProductImageReader;
 import com.commerce.product.service.ProductReader;
 import com.commerce.product.service.ProductVariantReader;
 import com.commerce.shared.entity.Money;
@@ -27,12 +29,17 @@ public class ProductDetailFacade {
     private final ProductReader productReader;
     private final ProductVariantReader variantReader;
     private final StockReader stockReader;
+    private final ProductImageReader imageReader;
 
     public ProductDetailFacade(
-            ProductReader productReader, ProductVariantReader variantReader, StockReader stockReader) {
+            ProductReader productReader,
+            ProductVariantReader variantReader,
+            StockReader stockReader,
+            ProductImageReader imageReader) {
         this.productReader = productReader;
         this.variantReader = variantReader;
         this.stockReader = stockReader;
+        this.imageReader = imageReader;
     }
 
     /**
@@ -62,8 +69,19 @@ public class ProductDetailFacade {
                         (ProductVariantView view) -> view.price().amount())
                 .thenComparing(ProductVariantView::variantId));
         boolean soldOut = !variants.isEmpty() && !anyOrderable;
+        // 4. 이미지 URL — 정렬 순서대로, 첫 항목이 대표
+        List<String> imageUrls = imageReader.getByProductId(productId).stream()
+                .map(ProductImageInfo::url)
+                .toList();
         return new ProductView(
-                product.id(), product.name(), product.description(), product.status(), fromPrice, soldOut, variants);
+                product.id(),
+                product.name(),
+                product.description(),
+                product.status(),
+                fromPrice,
+                soldOut,
+                variants,
+                imageUrls);
     }
 
     /** 재고가 받쳐주는(SELLABLE ∧ 수량 1 이상) 변형 ID를 모은다. */

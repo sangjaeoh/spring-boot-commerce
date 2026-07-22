@@ -3,11 +3,15 @@ package com.commerce.product;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.commerce.product.entity.ProductImage;
 import com.commerce.product.entity.ProductOption;
 import com.commerce.product.entity.ProductVariantStatus;
 import com.commerce.product.exception.DuplicateVariantOptionException;
+import com.commerce.product.info.ProductImageInfo;
 import com.commerce.product.info.ProductVariantInfo;
+import com.commerce.product.repository.ProductImageRepository;
 import com.commerce.product.service.ProductAppender;
+import com.commerce.product.service.ProductImageReader;
 import com.commerce.product.service.ProductVariantAppender;
 import com.commerce.product.service.ProductVariantModifier;
 import com.commerce.product.service.ProductVariantReader;
@@ -44,7 +48,13 @@ import org.testcontainers.utility.DockerImageName;
         })
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Testcontainers
-@Import({ProductAppender.class, ProductVariantAppender.class, ProductVariantModifier.class, ProductVariantReader.class})
+@Import({
+    ProductAppender.class,
+    ProductVariantAppender.class,
+    ProductVariantModifier.class,
+    ProductVariantReader.class,
+    ProductImageReader.class
+})
 @ImportAutoConfiguration(FlywayAutoConfiguration.class)
 @TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 class ProductPersistenceTest {
@@ -57,6 +67,8 @@ class ProductPersistenceTest {
     private final ProductVariantAppender variantAppender;
     private final ProductVariantModifier variantModifier;
     private final ProductVariantReader variantReader;
+    private final ProductImageReader imageReader;
+    private final ProductImageRepository imageRepository;
     private final TestEntityManager em;
 
     ProductPersistenceTest(
@@ -64,11 +76,15 @@ class ProductPersistenceTest {
             ProductVariantAppender variantAppender,
             ProductVariantModifier variantModifier,
             ProductVariantReader variantReader,
+            ProductImageReader imageReader,
+            ProductImageRepository imageRepository,
             TestEntityManager em) {
         this.productAppender = productAppender;
         this.variantAppender = variantAppender;
         this.variantModifier = variantModifier;
         this.variantReader = variantReader;
+        this.imageReader = imageReader;
+        this.imageRepository = imageRepository;
         this.em = em;
     }
 
@@ -104,6 +120,27 @@ class ProductPersistenceTest {
         assertThatThrownBy(() ->
                         variantAppender.create(productId, Money.of(16000L), List.of(new ProductOption("Color", "Red"))))
                 .isInstanceOf(DuplicateVariantOptionException.class);
+    }
+
+    @Test
+    @DisplayName("이미지 영속 후 상품별 조회는 정렬 순서 오름차순이다 — validate 스키마 정합")
+    void productImagesReadInSortOrder() {
+        UUID productId = productAppender.register("티셔츠", null);
+        ProductImage second = ProductImage.create(productId, "k2", "/files/k2", 1);
+        ProductImage first = ProductImage.create(productId, "k1", "/files/k1", 0);
+        imageRepository.save(second);
+        imageRepository.save(first);
+        em.flush();
+        em.clear();
+
+        List<ProductImageInfo> images = imageReader.getByProductId(productId);
+
+        assertThat(images).hasSize(2);
+        assertThat(images.get(0).id()).isEqualTo(first.getId());
+        assertThat(images.get(0).url()).isEqualTo("/files/k1");
+        assertThat(images.get(0).sortOrder()).isEqualTo(0);
+        assertThat(images.get(1).id()).isEqualTo(second.getId());
+        assertThat(imageReader.getByProductId(UUID.randomUUID())).isEmpty();
     }
 
     @Test

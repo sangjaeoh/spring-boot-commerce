@@ -7,6 +7,11 @@ server:
 spring:
   application:
     name: app-api
+  servlet:
+    multipart:
+      # 프레임워크 상한(방어선). 이미지 정책 상한(5MB)은 도메인이 소유하므로 그보다 넉넉히 둔다.
+      max-file-size: 10MB
+      max-request-size: 10MB
   jpa:
     open-in-view: false
     hibernate:
