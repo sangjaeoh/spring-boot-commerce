@@ -26,6 +26,7 @@
 | ErrorCode | `enum` | `ErrorCode` 구현 |
 | 커스텀 예외 | `class` | 경계 도달 예외만 `BaseException` 상속 |
 | 서비스·파사드·설정 | `class` | `final` 필드 + 생성자 주입 |
+| 제공(provided)·요구(required) 계약 | `interface` | 소유·배치는 → [architecture](architecture.md) |
 
 #### 예외 규칙
 
@@ -35,6 +36,7 @@
 - 호출자 버그로만 깨지는 선행조건은 `IllegalArgumentException`으로 처리한다.
 - `BaseException`은 `BaseException(ErrorCode)` 생성자만 노출한다.
 - 도메인별 `{Name}ErrorCode` enum은 `ErrorCode` 인터페이스를 구현한다.
+- 경계 도달 예외의 HTTP 상태는 `ErrorCode`가 소유한다.
 
 #### 접근제한자
 
@@ -79,7 +81,8 @@
 - 엔티티는 단수 명사를 사용한다.
 - 테이블명은 snake_case 단수형을 사용한다.
 - 표준과 다른 테이블명은 도메인 용어집에 등록된 경우만 허용한다.
-- 용어집에 없는 divergence는 임의로 만들지 않는다.
+- 용어집에 없는 이탈은 임의로 만들지 않는다.
+- 도메인 용어집은 `docs/`의 단일 문서가 소유한다.
 
 #### 서비스 접미사
 
@@ -93,6 +96,8 @@
 | `Validator` | 검증 |
 
 - 표에 없는 접미사는 도입 전에 사람 승인을 받는다.
+- 역할 접미사 이름은 provided 계약 인터페이스가 소유한다. 구현 서비스는 `Default{계약명}`으로 짓는다.
+- 계약 없는 내부 협력 서비스는 역할 접미사 이름을 그대로 쓴다.
 
 #### 메서드 네이밍
 
@@ -104,6 +109,7 @@
 
 - 소프트삭제 조회는 삭제 미포함이 기본이다.
 - 삭제 포함 조회만 별도 이름을 사용한다.
+- 활성-only 조회는 이름에 `DeletedAtIsNull`을 담고, 삭제 포함 조회는 `IncludingDeleted`를 붙인다.
 - boolean 메서드는 `is*`, `has*`, `can*`를 사용한다.
 - `update`, `set`, `change` 같은 범용 동사는 금지한다.
 - 하드삭제는 명시 동사(`purge*`, `anonymize*`)로만 노출한다.
@@ -124,7 +130,7 @@
 | `Reason` | 사유 enum |
 | `ErrorCode` | 에러 코드 enum |
 | `Exception` | 커스텀 예외 |
-| `Gateway` / `Store` / `Publisher` | 외부 연동 포트 |
+| `Gateway` / `Store` / `Publisher` | required 계약(외부 시스템·영속) |
 | `Filter` | 서블릿 필터 |
 | `Listener` | 이벤트 리스너 |
 | `Config` | 설정 |

@@ -2,24 +2,19 @@
 
 ## 언제
 
-- `entity` 패키지에 `@Entity`를 만들거나 필드·상태 enum을 추가·수정할 때
+- `domain` 구역에 `@Entity`를 만들거나 필드·상태 enum을 추가·수정할 때
 - 엔티티의 `@Id`, 버전 컬럼, 논리 참조를 설계할 때
 - 애그리거트 내부 연관과 자식 엔티티의 캐스케이드 생명주기를 설계할 때
 
----
 
-# 규칙
+## 규칙
 
-## 엔티티 골격
+### 엔티티 골격
 
 - `BaseTimeEntity`를 상속한다.
 - `createdAt`, `updatedAt`은 JPA Auditing이 채운다. 시각 필드를 직접 선언하지 않는다.
 - `@CreatedBy`, `@LastModifiedBy`는 필요한 도메인만 opt-in한다.
-- 모든 영속 non-null 필드에 매핑 애노테이션을 명시한다.
-- nullable 값만 `@Nullable`로 표기한다.
-- 무애노테이션 non-null basic 필드도 `@Column`을 붙인다.
-- NullAway 초기화 검사에서 매핑 애노테이션이 붙은 필드만 제외된다.
-- 무애노테이션 non-null 필드를 남기면 빌드가 실패한다.
+- 영속 필드의 매핑 애노테이션·`@Nullable` 표기와 초기화 검사 기준은 → [code-quality](code-quality.md)의 NullAway.
 - `BaseTimeEntity`는 `Persistable`을 구현해 merge penalty를 방어한다.
 - 수동 `@Id` 엔티티를 JPA가 detached로 오해하지 않도록 `createdAt == null`이면 신규로 판정해 `persist()`로 처리한다.
 - 이를 통해 `save()` 시 발생할 수 있는 불필요한 `SELECT`를 방지한다.
@@ -69,18 +64,16 @@ public abstract class BaseTimeEntity<ID extends Serializable> implements Persist
 }
 ```
 
----
 
-## 엔티티 ID
+### 엔티티 ID
 
 - `@Id`는 `create()` 팩토리에서 `UuidV7Generator.generate()`로 생성한다.
 - `@GeneratedValue`를 사용하지 않는다.
 - ID는 DB 왕복 없이 애플리케이션에서 확정한다.
 - 응답에는 UUIDv7을 문자열로 반환한다.
 
----
 
-## 값 객체 매핑
+### 값 객체 매핑
 
 | 대상 | 매핑 방식 | 비고 |
 |---|---|---|
@@ -95,9 +88,8 @@ public abstract class BaseTimeEntity<ID extends Serializable> implements Persist
 - sealed 계층은 임베더블 다형성 미지원 때문에 직접 매핑하지 않는다.
 - `@Inheritance`로 값을 엔티티로 승격하지 않는다.
 
----
 
-## 상태 전이
+### 상태 전이
 
 - 상태 enum은 `@Enumerated(EnumType.STRING)`으로 매핑한다.
 - ordinal 매핑을 금지한다.
@@ -108,11 +100,10 @@ public abstract class BaseTimeEntity<ID extends Serializable> implements Persist
 - 단일 애그리거트 전이는 `Modifier`가 엔트리다.
 - 여러 애그리거트 조율은 `Processor`가 담당한다.
 - 상태 변경 자체는 엔티티 메서드가 강제한다.
-- `Processor` 한 트랜잭션에서는 하나의 애그리거트만 변경한다.
+- 트랜잭션당 애그리거트 규칙은 → [architecture](architecture.md)의 트랜잭션 경계.
 
----
 
-## 물리 FK 금지
+### 물리 FK 금지
 
 - 물리 FK를 만들지 않는다.
 - 참조 정합성은 애플리케이션이 책임진다.
@@ -123,13 +114,12 @@ public abstract class BaseTimeEntity<ID extends Serializable> implements Persist
 - 모든 `xxx_id` 컬럼 인덱스는 Flyway가 생성한다.
 - `ddl-auto=validate`는 인덱스를 검증하지 않는다.
 
----
 
-## 연관
+### 연관
 
 - 단방향 다대일을 기본으로 한다.
 - 모든 연관에 `fetch = FetchType.LAZY`를 명시한다.
-- 경계를 넘는 양방향 연관을 지양한다.
+- 경계를 넘는 양방향 연관을 사용하지 않는다.
 - 역방향 조회는 리포지토리 쿼리로 해결한다.
 - 애그리거트 내부는 자식 → 부모 `@ManyToOne` 단방향이 기본이다.
 - 부모 → 자식 생명주기가 필요하면 `mappedBy` 양방향을 사용한다.
@@ -148,9 +138,8 @@ public abstract class BaseTimeEntity<ID extends Serializable> implements Persist
 - 신규 자식은 부모 컬렉션을 통해 생성·정리한다.
 - `CascadeType.REMOVE`만으로는 삭제만 전파되고 생성은 전파되지 않는다.
 
----
 
-## 버저닝 (`@Version`)
+### 버저닝 (`@Version`)
 
 - 기본 전략은 last-write-wins다.
 - 경합 민감 상태전이만 `@Version`을 사용한다.
@@ -161,9 +150,8 @@ public abstract class BaseTimeEntity<ID extends Serializable> implements Persist
 - 클라이언트가 재시도한다.
 - 재시도 폭주가 확인되면 비관락으로 승격한다.
 
----
 
-## 소프트삭제
+### 소프트삭제
 
 - 삭제는 논리삭제를 기본으로 한다.
 - nullable `deletedAt` 컬럼을 둔다.
@@ -171,13 +159,10 @@ public abstract class BaseTimeEntity<ID extends Serializable> implements Persist
 - `Remover`가 `delete()`를 호출한다.
 - 부모 소프트삭제 시 자식도 같은 트랜잭션에서 소프트삭제한다.
 
----
 
-## 생성 진입점
+### 생성 진입점
 
-- 엔티티 생성은 정적 팩토리 `create()` 하나로 통일한다.
-- 생성 시 불변식을 검증한다.
-- JPA 기본 생성자는 `protected`로 둔다.
+- 생성 진입점·생성자 규칙은 → [coding-conventions](coding-conventions.md)의 객체 생성.
 
 ```java
 @Entity
