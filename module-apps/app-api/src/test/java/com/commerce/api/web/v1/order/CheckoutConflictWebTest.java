@@ -74,7 +74,7 @@ class CheckoutConflictWebTest extends WebIntegrationTest {
         doThrow(new ObjectOptimisticLockingFailureException(Stock.class, UUID.randomUUID()))
                 .when(stockModifier)
                 .deduct(eq(variantId), anyInt());
-        CheckoutRequest request = new CheckoutRequest(addressRequest(), 0L, null, PaymentMethod.CARD);
+        CheckoutRequest request = new CheckoutRequest(null, addressRequest(), 0L, null, PaymentMethod.CARD);
 
         mvc.perform(post("/api/v1/orders")
                         .header(HttpHeaders.AUTHORIZATION, bearer(memberId))

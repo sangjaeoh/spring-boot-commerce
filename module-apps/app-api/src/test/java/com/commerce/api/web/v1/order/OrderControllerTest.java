@@ -104,7 +104,7 @@ class OrderControllerTest extends WebIntegrationTest {
         cartAppender.addItem(memberId, variantId, 2);
         UUID couponId = couponAppender.create("10% 할인", Discount.rate(10), Money.of(10000L), validity(), 30, null);
         UUID issuedId = issuedCouponAppender.issue(couponId, memberId);
-        CheckoutRequest request = new CheckoutRequest(addressRequest(), 3000L, issuedId, PaymentMethod.CARD);
+        CheckoutRequest request = new CheckoutRequest(null, addressRequest(), 3000L, issuedId, PaymentMethod.CARD);
 
         String body = mvc.perform(post("/api/v1/orders")
                         .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
@@ -133,7 +133,7 @@ class OrderControllerTest extends WebIntegrationTest {
         cartAppender.addItem(memberId, variantId, 2);
         UUID couponId = couponAppender.create("10% 할인", Discount.rate(10), Money.of(10000L), validity(), 30, null);
         UUID issuedId = issuedCouponAppender.issue(couponId, memberId);
-        CheckoutPreviewRequest request = new CheckoutPreviewRequest(3000L, issuedId);
+        CheckoutPreviewRequest request = new CheckoutPreviewRequest(null, 3000L, issuedId);
 
         mvc.perform(post("/api/v1/orders/preview")
                         .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
@@ -146,8 +146,76 @@ class OrderControllerTest extends WebIntegrationTest {
                 .andExpect(jsonPath("$.payAmount").value(21000));
 
         // 미리보기가 부작용을 남기지 않아 같은 장바구니·쿠폰으로 체크아웃이 그대로 성공한다.
-        UUID orderId = checkout(memberId, new CheckoutRequest(addressRequest(), 3000L, issuedId, PaymentMethod.CARD));
+        UUID orderId =
+                checkout(memberId, new CheckoutRequest(null, addressRequest(), 3000L, issuedId, PaymentMethod.CARD));
         assertThat(orderReader.getOrder(orderId, memberId).payAmount()).isEqualTo(Money.of(21000L));
+    }
+
+    @Test
+    @DisplayName("선택 체크아웃이 201로 선택 라인만 주문하고 미선택 라인은 장바구니에 남긴다")
+    void partialCheckoutOrdersSelectionOnly() throws Exception {
+        UUID memberId = registerMember();
+        UUID keptVariantId = seedProduct(50);
+        UUID orderedVariantId = seedProduct(50);
+        cartAppender.addItem(memberId, keptVariantId, 1);
+        cartAppender.addItem(memberId, orderedVariantId, 2);
+        CheckoutRequest request =
+                new CheckoutRequest(List.of(orderedVariantId), addressRequest(), 3000L, null, PaymentMethod.CARD);
+
+        String body = mvc.perform(post("/api/v1/orders")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        UUID orderId = UUID.fromString(
+                objectMapper.readValue(body, CheckoutResponse.class).orderId());
+        OrderInfo order = orderReader.getOrder(orderId, memberId);
+        assertThat(order.status()).isEqualTo(OrderStatus.PAID);
+        assertThat(order.payAmount()).isEqualTo(Money.of(23000L));
+        assertThat(stockReader.getByVariantId(orderedVariantId).quantity()).isEqualTo(48);
+        assertThat(stockReader.getByVariantId(keptVariantId).quantity()).isEqualTo(50);
+        CartInfo cart = cartReader.getCart(memberId);
+        assertThat(cart.items()).hasSize(1);
+        assertThat(cart.items().get(0).variantId()).isEqualTo(keptVariantId);
+    }
+
+    @Test
+    @DisplayName("장바구니에 없는 변형 선택 체크아웃은 409 API_CART_ITEM_NOT_FOUND로 거부된다")
+    void partialCheckoutRejectsUnknownSelection() throws Exception {
+        UUID memberId = registerMember();
+        cartAppender.addItem(memberId, seedProduct(50), 1);
+        CheckoutRequest request =
+                new CheckoutRequest(List.of(UUID.randomUUID()), addressRequest(), 0L, null, PaymentMethod.CARD);
+
+        mvc.perform(post("/api/v1/orders")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("API_CART_ITEM_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("선택 미리보기가 선택 라인 기준으로 금액을 계산한다")
+    void partialPreviewPricesSelectionOnly() throws Exception {
+        UUID memberId = registerMember();
+        UUID keptVariantId = seedProduct(50);
+        UUID selectedVariantId = seedProduct(50);
+        cartAppender.addItem(memberId, keptVariantId, 1);
+        cartAppender.addItem(memberId, selectedVariantId, 2);
+        CheckoutPreviewRequest request = new CheckoutPreviewRequest(List.of(selectedVariantId), 3000L, null);
+
+        mvc.perform(post("/api/v1/orders/preview")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalAmount").value(20000))
+                .andExpect(jsonPath("$.payAmount").value(23000));
     }
 
     @Test
@@ -264,7 +332,7 @@ class OrderControllerTest extends WebIntegrationTest {
         mvc.perform(post("/api/v1/orders/preview")
                         .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(new CheckoutPreviewRequest(0L, null))))
+                        .content(objectMapper.writeValueAsString(new CheckoutPreviewRequest(null, 0L, null))))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("API_EMPTY_CART"));
     }
@@ -280,7 +348,7 @@ class OrderControllerTest extends WebIntegrationTest {
         mvc.perform(post("/api/v1/orders/preview")
                         .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(new CheckoutPreviewRequest(3000L, issuedId))))
+                        .content(objectMapper.writeValueAsString(new CheckoutPreviewRequest(null, 3000L, issuedId))))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("API_COUPON_NOT_APPLICABLE"));
     }
@@ -290,7 +358,7 @@ class OrderControllerTest extends WebIntegrationTest {
     void previewRejectsUnauthenticated() throws Exception {
         mvc.perform(post("/api/v1/orders/preview")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(new CheckoutPreviewRequest(0L, null))))
+                        .content(objectMapper.writeValueAsString(new CheckoutPreviewRequest(null, 0L, null))))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
     }
@@ -298,7 +366,7 @@ class OrderControllerTest extends WebIntegrationTest {
     @Test
     @DisplayName("미인증 체크아웃은 401 UNAUTHENTICATED로 거부된다")
     void checkoutRejectsUnauthenticated() throws Exception {
-        CheckoutRequest request = new CheckoutRequest(addressRequest(), 0L, null, PaymentMethod.CARD);
+        CheckoutRequest request = new CheckoutRequest(null, addressRequest(), 0L, null, PaymentMethod.CARD);
 
         mvc.perform(post("/api/v1/orders")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -323,7 +391,7 @@ class OrderControllerTest extends WebIntegrationTest {
     @DisplayName("빈 장바구니 체크아웃은 409 API_EMPTY_CART로 거부된다")
     void checkoutRejectsEmptyCart() throws Exception {
         UUID memberId = registerMember();
-        CheckoutRequest request = new CheckoutRequest(addressRequest(), 0L, null, PaymentMethod.CARD);
+        CheckoutRequest request = new CheckoutRequest(null, addressRequest(), 0L, null, PaymentMethod.CARD);
 
         mvc.perform(post("/api/v1/orders")
                         .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
@@ -402,7 +470,7 @@ class OrderControllerTest extends WebIntegrationTest {
         UUID memberId = registerMember();
         UUID variantId = seedProduct(50);
         cartAppender.addItem(memberId, variantId, 3);
-        UUID orderId = checkout(memberId, new CheckoutRequest(addressRequest(), 0L, null, PaymentMethod.CARD));
+        UUID orderId = checkout(memberId, new CheckoutRequest(null, addressRequest(), 0L, null, PaymentMethod.CARD));
         String key = UUID.randomUUID().toString();
 
         mvc.perform(post("/api/v1/orders/{orderId}/cancel", orderId)
@@ -424,7 +492,7 @@ class OrderControllerTest extends WebIntegrationTest {
     void duplicateKeyedCheckoutIsRejectedAndDoesNotCreateSecondOrder() throws Exception {
         UUID memberId = registerMember();
         cartAppender.addItem(memberId, seedProduct(50), 2);
-        CheckoutRequest request = new CheckoutRequest(addressRequest(), 0L, null, PaymentMethod.CARD);
+        CheckoutRequest request = new CheckoutRequest(null, addressRequest(), 0L, null, PaymentMethod.CARD);
         String key = UUID.randomUUID().toString();
 
         mvc.perform(post("/api/v1/orders")
@@ -574,7 +642,7 @@ class OrderControllerTest extends WebIntegrationTest {
         cartAppender.addItem(memberId, seedProduct(50), 1);
         UUID couponId = couponAppender.create("100% 할인", Discount.rate(100), Money.of(10000L), validity(), 30, null);
         UUID issuedId = issuedCouponAppender.issue(couponId, memberId);
-        UUID orderId = checkout(memberId, new CheckoutRequest(addressRequest(), 0L, issuedId, null));
+        UUID orderId = checkout(memberId, new CheckoutRequest(null, addressRequest(), 0L, issuedId, null));
 
         mvc.perform(get("/api/v1/orders/{orderId}/payment", orderId)
                         .header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
@@ -676,7 +744,7 @@ class OrderControllerTest extends WebIntegrationTest {
         UUID memberId = registerMember();
         cartAppender.addItem(memberId, seedProduct(50), 1);
         cartAppender.addItem(memberId, seedProduct(50), 2);
-        CheckoutRequest request = new CheckoutRequest(addressRequest(), 0L, null, PaymentMethod.CARD);
+        CheckoutRequest request = new CheckoutRequest(null, addressRequest(), 0L, null, PaymentMethod.CARD);
         mvc.perform(post("/api/v1/orders")
                         .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -696,7 +764,7 @@ class OrderControllerTest extends WebIntegrationTest {
     private UUID checkoutForMember(UUID memberId) throws Exception {
         UUID variantId = seedProduct(50);
         cartAppender.addItem(memberId, variantId, 1);
-        return checkout(memberId, new CheckoutRequest(addressRequest(), 0L, null, PaymentMethod.CARD));
+        return checkout(memberId, new CheckoutRequest(null, addressRequest(), 0L, null, PaymentMethod.CARD));
     }
 
     private UUID checkout(UUID memberId, CheckoutRequest request) throws Exception {

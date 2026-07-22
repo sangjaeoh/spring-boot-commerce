@@ -61,7 +61,7 @@ public class OrderController {
         this.orderReader = orderReader;
     }
 
-    @Operation(summary = "체크아웃", description = "본인 장바구니를 주문·결제로 전환하고 결제 완료된 주문 ID를 반환한다.")
+    @Operation(summary = "체크아웃", description = "본인 장바구니(전체 또는 선택 라인)를 주문·결제로 전환하고 결제 완료된 주문 ID를 반환한다.")
     @ApiResponses({
         @ApiResponse(responseCode = "201", description = "주문 생성·결제 완료"),
         @ApiResponse(
@@ -78,7 +78,7 @@ public class OrderController {
                 content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
         @ApiResponse(
                 responseCode = "409",
-                description = "빈 장바구니·주문 불가·재고 부족·쿠폰 적용 불가·자격 없음·동시성 충돌",
+                description = "빈 장바구니·선택 라인 부재·주문 불가·재고 부족·쿠폰 적용 불가·자격 없음·동시성 충돌",
                 content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
     })
     @PostMapping
@@ -86,6 +86,7 @@ public class OrderController {
     public CheckoutResponse checkout(AuthUser authUser, @Valid @RequestBody CheckoutRequest request) {
         UUID orderId = checkoutFacade.checkout(
                 authUser.memberId(),
+                request.variantIds(),
                 request.shippingAddress().toAddress(),
                 Money.of(request.shippingFee()),
                 request.issuedCouponId(),
@@ -139,13 +140,13 @@ public class OrderController {
                 content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
         @ApiResponse(
                 responseCode = "409",
-                description = "빈 장바구니·주문 불가·재고 부족·쿠폰 적용 불가·자격 없음",
+                description = "빈 장바구니·선택 라인 부재·주문 불가·재고 부족·쿠폰 적용 불가·자격 없음",
                 content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
     })
     @PostMapping("/preview")
     public CheckoutPreviewResponse preview(AuthUser authUser, @Valid @RequestBody CheckoutPreviewRequest request) {
-        return CheckoutPreviewResponse.from(
-                checkoutFacade.preview(authUser.memberId(), Money.of(request.shippingFee()), request.issuedCouponId()));
+        return CheckoutPreviewResponse.from(checkoutFacade.preview(
+                authUser.memberId(), request.variantIds(), Money.of(request.shippingFee()), request.issuedCouponId()));
     }
 
     @Operation(summary = "주문 취소", description = "결제 완료된 본인 주문을 취소하고 환불·재고·쿠폰을 복원한다.")

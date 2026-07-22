@@ -127,7 +127,7 @@ class ProductAdminControllerTest extends WebIntegrationTest {
 
         UUID memberId = memberAppender.register("user-" + UUID.randomUUID() + "@example.com", "테스터", "password-123!");
         cartAppender.addItem(memberId, variantId, 2);
-        CheckoutRequest request = new CheckoutRequest(addressRequest(), 0L, null, PaymentMethod.CARD);
+        CheckoutRequest request = new CheckoutRequest(null, addressRequest(), 0L, null, PaymentMethod.CARD);
         mvc.perform(post("/api/v1/orders")
                         .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -253,7 +253,7 @@ class ProductAdminControllerTest extends WebIntegrationTest {
                         .header(HttpHeaders.AUTHORIZATION, adminBearer()))
                 .andExpect(status().isNoContent());
 
-        CheckoutRequest request = new CheckoutRequest(addressRequest(), 0L, null, PaymentMethod.CARD);
+        CheckoutRequest request = new CheckoutRequest(null, addressRequest(), 0L, null, PaymentMethod.CARD);
         mvc.perform(post("/api/v1/orders")
                         .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -381,7 +381,7 @@ class ProductAdminControllerTest extends WebIntegrationTest {
     }
 
     private UUID checkoutViaHttp(UUID memberId) throws Exception {
-        CheckoutRequest request = new CheckoutRequest(addressRequest(), 0L, null, PaymentMethod.CARD);
+        CheckoutRequest request = new CheckoutRequest(null, addressRequest(), 0L, null, PaymentMethod.CARD);
         String body = mvc.perform(post("/api/v1/orders")
                         .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
                         .contentType(MediaType.APPLICATION_JSON)

@@ -228,7 +228,7 @@ class StockAdminControllerTest extends WebIntegrationTest {
     }
 
     private ResultActions checkout(UUID memberId) throws Exception {
-        CheckoutRequest request = new CheckoutRequest(addressRequest(), 0L, null, PaymentMethod.CARD);
+        CheckoutRequest request = new CheckoutRequest(null, addressRequest(), 0L, null, PaymentMethod.CARD);
         return mvc.perform(post("/api/v1/orders")
                 .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
                 .contentType(MediaType.APPLICATION_JSON)

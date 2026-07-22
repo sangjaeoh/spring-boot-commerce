@@ -159,7 +159,7 @@ class ProductVariantAdminControllerTest extends WebIntegrationTest {
         UUID memberId = memberAppender.register("user-" + UUID.randomUUID() + "@example.com", "테스터", "password-123!");
         UUID variantId = seedVariant(10000L, 10);
         cartAppender.addItem(memberId, variantId, 1);
-        CheckoutRequest request = new CheckoutRequest(addressRequest(), 0L, null, PaymentMethod.CARD);
+        CheckoutRequest request = new CheckoutRequest(null, addressRequest(), 0L, null, PaymentMethod.CARD);
         String body = mvc.perform(post("/api/v1/orders")
                         .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
                         .contentType(MediaType.APPLICATION_JSON)

@@ -38,6 +38,7 @@ import com.commerce.stock.service.StockModifier;
 import com.commerce.stock.service.StockReader;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
@@ -97,10 +98,27 @@ public class CheckoutFacade {
             Money shippingFee,
             @Nullable UUID issuedCouponId,
             @Nullable PaymentMethod method) {
+        return checkout(memberId, null, shippingAddress, shippingFee, issuedCouponId, method);
+    }
+
+    /**
+     * 선택한 장바구니 라인만 체크아웃하고 결제 완료된 주문 ID를 반환한다. {@code variantIds}가 null이면 장바구니
+     * 전체를 체크아웃한다. 실패하면 그 콜스택에서 동기 보상한다.
+     *
+     * @throws ApiException 회원 자격·장바구니·선택 라인 부재·주문 가능·쿠폰 적용성·결제 거절 등 크로스 도메인 정책 거부
+     */
+    public UUID checkout(
+            UUID memberId,
+            @Nullable List<UUID> variantIds,
+            Address shippingAddress,
+            Money shippingFee,
+            @Nullable UUID issuedCouponId,
+            @Nullable PaymentMethod method) {
         // 1. 회원 자격 확인
         requireEligibleMember(memberId);
-        // 2. 장바구니를 주문 라인 스냅샷으로 변환
-        List<OrderLineSnapshot> snapshots = buildOrderableSnapshots(requireNonEmptyCart(memberId));
+        // 2. 장바구니 선택 라인을 주문 라인 스냅샷으로 변환
+        List<OrderLineSnapshot> snapshots =
+                buildOrderableSnapshots(selectItems(requireNonEmptyCart(memberId), variantIds));
         // 3. 주문·결제 실행
         return placeAndPay(memberId, snapshots, shippingAddress, shippingFee, issuedCouponId, method);
     }
@@ -165,11 +183,13 @@ public class CheckoutFacade {
      *
      * @throws ApiException 회원 자격·장바구니·주문 가능·쿠폰 적용성 등 크로스 도메인 정책 거부
      */
-    public CheckoutPreviewView preview(UUID memberId, Money shippingFee, @Nullable UUID issuedCouponId) {
+    public CheckoutPreviewView preview(
+            UUID memberId, @Nullable List<UUID> variantIds, Money shippingFee, @Nullable UUID issuedCouponId) {
         // 1. 회원 자격 확인
         requireEligibleMember(memberId);
-        // 2. 장바구니를 주문 라인 스냅샷으로 변환
-        List<OrderLineSnapshot> snapshots = buildOrderableSnapshots(requireNonEmptyCart(memberId));
+        // 2. 장바구니 선택 라인을 주문 라인 스냅샷으로 변환
+        List<OrderLineSnapshot> snapshots =
+                buildOrderableSnapshots(selectItems(requireNonEmptyCart(memberId), variantIds));
         // 3. 할인·실청구액 산출
         Money totalAmount = totalOf(snapshots);
         Money discountAmount =
@@ -184,6 +204,22 @@ public class CheckoutFacade {
         if (member.status() != MemberStatus.ACTIVE) {
             throw new ApiException(ApiErrorCode.MEMBER_NOT_ELIGIBLE);
         }
+    }
+
+    /** 선택 목록이 있으면 장바구니 라인을 선택분으로 좁힌다. 선택한 변형이 장바구니에 없으면 거부한다. */
+    private static List<CartItemInfo> selectItems(List<CartItemInfo> items, @Nullable List<UUID> variantIds) {
+        if (variantIds == null) {
+            return items;
+        }
+        Set<UUID> selected = Set.copyOf(variantIds);
+        List<CartItemInfo> filtered = items.stream()
+                .filter(item -> selected.contains(item.variantId()))
+                .toList();
+        // 장바구니 라인은 변형별 유일이라 매칭 수가 선택 수보다 적으면 장바구니에 없는 선택이 있다.
+        if (filtered.size() < selected.size()) {
+            throw new ApiException(ApiErrorCode.CART_ITEM_NOT_FOUND);
+        }
+        return filtered;
     }
 
     /** 장바구니가 비어 있지 않은지 확인하고 라인을 반환한다. */

@@ -6,6 +6,7 @@ import com.commerce.core.exception.ErrorCode;
 public enum ApiErrorCode implements ErrorCode {
     MEMBER_NOT_ELIGIBLE("API_MEMBER_NOT_ELIGIBLE", "주문 자격이 없는 회원이다.", 409),
     EMPTY_CART("API_EMPTY_CART", "장바구니가 비어 있어 주문할 수 없다.", 409),
+    CART_ITEM_NOT_FOUND("API_CART_ITEM_NOT_FOUND", "선택한 항목이 장바구니에 없다.", 409),
     NOT_ORDERABLE("API_NOT_ORDERABLE", "주문할 수 없는 상품·변형이 포함돼 있다.", 409),
     INSUFFICIENT_STOCK("API_INSUFFICIENT_STOCK", "재고가 부족하다.", 409),
     COUPON_NOT_APPLICABLE("API_COUPON_NOT_APPLICABLE", "적용할 수 없는 쿠폰이다.", 409),

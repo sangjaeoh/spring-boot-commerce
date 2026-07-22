@@ -374,7 +374,7 @@ class OrderAdminControllerTest extends WebIntegrationTest {
     private UUID checkoutForMember(UUID memberId) throws Exception {
         UUID variantId = seedProduct(50);
         cartAppender.addItem(memberId, variantId, 1);
-        CheckoutRequest request = new CheckoutRequest(addressRequest(), 0L, null, PaymentMethod.CARD);
+        CheckoutRequest request = new CheckoutRequest(null, addressRequest(), 0L, null, PaymentMethod.CARD);
         String body = mvc.perform(post("/api/v1/orders")
                         .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
                         .contentType(MediaType.APPLICATION_JSON)
