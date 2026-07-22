@@ -9,6 +9,7 @@ import com.commerce.order.service.OrderModifier;
 import com.commerce.order.service.OrderReader;
 import com.commerce.payment.entity.FailureReason;
 import com.commerce.payment.entity.PaymentStatus;
+import com.commerce.payment.exception.PaymentNotFoundException;
 import com.commerce.payment.info.PaymentInfo;
 import com.commerce.payment.port.GatewayTransactionStatus;
 import com.commerce.payment.service.PaymentProcessor;
@@ -107,7 +108,7 @@ public class PaymentConfirmationFacade {
      * 결제는 주문측 잔여를 마저 종결한다. 이미 종결된 결제·주문 쌍과 유예가 지나지 않은 결제는 무시한다
      * (중복 전달 무해·동기 경로 경합 차단).
      *
-     * @throws com.commerce.payment.exception.PaymentNotFoundException 결제가 없으면
+     * @throws PaymentNotFoundException 결제가 없으면
      */
     public void confirm(UUID paymentId) {
         // 1. 지목된 결제 조회

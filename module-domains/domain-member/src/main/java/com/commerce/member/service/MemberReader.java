@@ -2,6 +2,7 @@ package com.commerce.member.service;
 
 import com.commerce.member.entity.Email;
 import com.commerce.member.entity.Member;
+import com.commerce.member.exception.InvalidEmailException;
 import com.commerce.member.exception.MemberErrorCode;
 import com.commerce.member.exception.MemberNotFoundException;
 import com.commerce.member.info.MemberInfo;
@@ -37,7 +38,7 @@ public class MemberReader {
      * 이메일 정확 일치로 활성 회원을 조회한다. 정지 회원·정지 사유를 포함한다.
      *
      * @throws MemberNotFoundException 해당 이메일의 활성 회원이 없으면
-     * @throws com.commerce.member.exception.InvalidEmailException 이메일 형식이 올바르지 않으면
+     * @throws InvalidEmailException 이메일 형식이 올바르지 않으면
      */
     @Transactional(readOnly = true)
     public MemberInfo getMemberByEmail(String email) {

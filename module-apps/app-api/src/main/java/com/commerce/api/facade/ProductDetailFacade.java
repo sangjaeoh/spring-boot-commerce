@@ -3,6 +3,7 @@ package com.commerce.api.facade;
 import com.commerce.api.facade.view.ProductVariantView;
 import com.commerce.api.facade.view.ProductView;
 import com.commerce.product.entity.ProductVariantStatus;
+import com.commerce.product.exception.ProductNotFoundException;
 import com.commerce.product.info.ProductInfo;
 import com.commerce.product.info.ProductVariantInfo;
 import com.commerce.product.service.ProductReader;
@@ -37,7 +38,7 @@ public class ProductDetailFacade {
     /**
      * 상품 상세를 합성해 반환한다. 변형은 가격 오름차순으로 싣는다.
      *
-     * @throws com.commerce.product.exception.ProductNotFoundException 노출 상품이 없으면(미존재·숨김·삭제 포함)
+     * @throws ProductNotFoundException 노출 상품이 없으면(미존재·숨김·삭제 포함)
      */
     public ProductView getProductDetail(UUID productId) {
         // 1. 노출 상품 조회
