@@ -46,7 +46,6 @@ import com.commerce.stock.exception.StockShortageException;
 import com.commerce.stock.service.StockModifier;
 import com.commerce.stock.service.StockReader;
 import java.time.Instant;
-import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.CountDownLatch;
@@ -87,7 +86,6 @@ class OrderCancellationFacadeTest extends FacadeIntegrationTest {
 
     private final OrderCancellationFacade orderCancellationFacade;
     private final CheckoutFacade checkoutFacade;
-    private final ProductRegistrationFacade productRegistrationFacade;
     private final MemberAppender memberAppender;
     private final CartAppender cartAppender;
     private final CouponAppender couponAppender;
@@ -101,7 +99,6 @@ class OrderCancellationFacadeTest extends FacadeIntegrationTest {
     OrderCancellationFacadeTest(
             OrderCancellationFacade orderCancellationFacade,
             CheckoutFacade checkoutFacade,
-            ProductRegistrationFacade productRegistrationFacade,
             MemberAppender memberAppender,
             CartAppender cartAppender,
             CouponAppender couponAppender,
@@ -113,7 +110,6 @@ class OrderCancellationFacadeTest extends FacadeIntegrationTest {
             PaymentReader paymentReader) {
         this.orderCancellationFacade = orderCancellationFacade;
         this.checkoutFacade = checkoutFacade;
-        this.productRegistrationFacade = productRegistrationFacade;
         this.memberAppender = memberAppender;
         this.cartAppender = cartAppender;
         this.couponAppender = couponAppender;
@@ -578,7 +574,7 @@ class OrderCancellationFacadeTest extends FacadeIntegrationTest {
     }
 
     private UUID seedProduct(Money price, int quantity) {
-        UUID productId = productRegistrationFacade.registerProduct("상품", null, price, List.of(), quantity);
+        UUID productId = seedOnSaleProduct("상품", null, price, quantity);
         return variantReader.getByProductId(productId).get(0).id();
     }
 

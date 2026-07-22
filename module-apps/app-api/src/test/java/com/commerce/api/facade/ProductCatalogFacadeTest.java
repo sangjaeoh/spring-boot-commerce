@@ -25,7 +25,6 @@ import org.springframework.test.context.TestConstructor;
 class ProductCatalogFacadeTest extends FacadeIntegrationTest {
 
     private final ProductCatalogFacade productCatalogFacade;
-    private final ProductRegistrationFacade productRegistrationFacade;
     private final ProductVariantAppender variantAppender;
     private final ProductVariantReader variantReader;
     private final ProductVariantModifier variantModifier;
@@ -35,7 +34,6 @@ class ProductCatalogFacadeTest extends FacadeIntegrationTest {
 
     ProductCatalogFacadeTest(
             ProductCatalogFacade productCatalogFacade,
-            ProductRegistrationFacade productRegistrationFacade,
             ProductVariantAppender variantAppender,
             ProductVariantReader variantReader,
             ProductVariantModifier variantModifier,
@@ -43,7 +41,6 @@ class ProductCatalogFacadeTest extends FacadeIntegrationTest {
             ProductModifier productModifier,
             ProductRemover productRemover) {
         this.productCatalogFacade = productCatalogFacade;
-        this.productRegistrationFacade = productRegistrationFacade;
         this.variantAppender = variantAppender;
         this.variantReader = variantReader;
         this.variantModifier = variantModifier;
@@ -133,7 +130,7 @@ class ProductCatalogFacadeTest extends FacadeIntegrationTest {
     }
 
     private UUID registerExposed(String name, long price, int initialQuantity) {
-        return productRegistrationFacade.registerProduct(name, null, Money.of(price), List.of(), initialQuantity);
+        return seedOnSaleProduct(name, null, Money.of(price), initialQuantity);
     }
 
     private void addActiveVariant(UUID productId, long price, String colorValue, int quantity) {

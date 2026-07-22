@@ -23,11 +23,11 @@ import com.commerce.order.entity.OrderStatus;
 import com.commerce.order.info.OrderInfo;
 import com.commerce.order.service.OrderReader;
 import com.commerce.payment.entity.PaymentMethod;
+import com.commerce.product.service.ProductModifier;
 import com.commerce.product.service.ProductVariantReader;
 import com.commerce.shared.entity.Money;
 import com.commerce.stock.service.StockReader;
 import java.time.Instant;
-import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -37,7 +37,6 @@ import org.springframework.test.context.TestConstructor;
 class CheckoutFacadeTest extends FacadeIntegrationTest {
 
     private final CheckoutFacade checkoutFacade;
-    private final ProductRegistrationFacade productRegistrationFacade;
     private final MemberAppender memberAppender;
     private final MemberModifier memberModifier;
     private final CartAppender cartAppender;
@@ -46,13 +45,13 @@ class CheckoutFacadeTest extends FacadeIntegrationTest {
     private final IssuedCouponModifier issuedCouponModifier;
     private final OrderReader orderReader;
     private final CartReader cartReader;
+    private final ProductModifier productModifier;
     private final ProductVariantReader variantReader;
     private final IssuedCouponReader issuedCouponReader;
     private final StockReader stockReader;
 
     CheckoutFacadeTest(
             CheckoutFacade checkoutFacade,
-            ProductRegistrationFacade productRegistrationFacade,
             MemberAppender memberAppender,
             MemberModifier memberModifier,
             CartAppender cartAppender,
@@ -61,11 +60,11 @@ class CheckoutFacadeTest extends FacadeIntegrationTest {
             IssuedCouponModifier issuedCouponModifier,
             OrderReader orderReader,
             CartReader cartReader,
+            ProductModifier productModifier,
             ProductVariantReader variantReader,
             IssuedCouponReader issuedCouponReader,
             StockReader stockReader) {
         this.checkoutFacade = checkoutFacade;
-        this.productRegistrationFacade = productRegistrationFacade;
         this.memberAppender = memberAppender;
         this.memberModifier = memberModifier;
         this.cartAppender = cartAppender;
@@ -74,6 +73,7 @@ class CheckoutFacadeTest extends FacadeIntegrationTest {
         this.issuedCouponModifier = issuedCouponModifier;
         this.orderReader = orderReader;
         this.cartReader = cartReader;
+        this.productModifier = productModifier;
         this.variantReader = variantReader;
         this.issuedCouponReader = issuedCouponReader;
         this.stockReader = stockReader;
@@ -159,6 +159,19 @@ class CheckoutFacadeTest extends FacadeIntegrationTest {
     }
 
     @Test
+    @DisplayName("담긴 뒤 숨겨진 상품 라인의 체크아웃은 주문 불가로 거부된다")
+    void checkoutRejectsHiddenProductLine() {
+        UUID memberId = registerMember();
+        UUID variantId = seedProduct(Money.of(10000L), 5);
+        cartAppender.addItem(memberId, variantId, 1);
+        productModifier.hide(variantReader.getVariant(variantId).productId());
+
+        assertThatThrownBy(() -> checkoutFacade.checkout(memberId, address(), Money.ZERO, null, PaymentMethod.CARD))
+                .isInstanceOfSatisfying(
+                        ApiException.class, ex -> assertThat(ex.getErrorCode()).isEqualTo(ApiErrorCode.NOT_ORDERABLE));
+    }
+
+    @Test
     @DisplayName("재고 부족 체크아웃은 거부되고 주문·재고를 만들지 않는다")
     void checkoutRejectsInsufficientStock() {
         UUID memberId = registerMember();
@@ -177,7 +190,7 @@ class CheckoutFacadeTest extends FacadeIntegrationTest {
     }
 
     private UUID seedProduct(Money price, int quantity) {
-        UUID productId = productRegistrationFacade.registerProduct("상품", null, price, List.of(), quantity);
+        UUID productId = seedOnSaleProduct("상품", null, price, quantity);
         return variantReader.getByProductId(productId).get(0).id();
     }
 

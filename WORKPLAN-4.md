@@ -35,7 +35,7 @@
 
 ### 2. app-admin 분리
 
-- 진행: [ ] 설계 / [ ] 설계 리뷰 / [ ] 구현 / [ ] 코드 리뷰 / [ ] 게이트·커밋
+- 진행: [x] 설계 / [x] 설계 리뷰 / [x] 구현 / [x] 코드 리뷰 / [x] 게이트·커밋
 - 목표: admin 컨트롤러 전부를 `app-admin` 앱으로 이전한다.
 - 배경: 어드민 표면(`web/v1/admin/**`)이 app-api 안에 있다. 문서는 별도 앱과 `infrastructure/query` 격리 구역을 정의한다.
 - 범위: `module-apps/app-admin` 모듈 신설, admin 슬라이스(컨트롤러·request/response·테스트) 이전, 관리자 전용 SecurityConfig·시딩 이전. 공유 응답 DTO는 "본인/공개 슬라이스 소유, 어드민 참조" 규칙을 적용해 정리한다. 크로스 도메인 조회가 필요한 곳만 `infrastructure/query`를 도입한다 — 기존 Reader 경유로 충분하면 그대로 둔다.

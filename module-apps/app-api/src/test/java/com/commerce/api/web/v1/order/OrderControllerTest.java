@@ -6,9 +6,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.commerce.api.facade.ProductRegistrationFacade;
 import com.commerce.api.web.v1.WebIntegrationTest;
-import com.commerce.api.web.v1.admin.order.request.OrderShipRequest;
 import com.commerce.api.web.v1.order.request.AddressRequest;
 import com.commerce.api.web.v1.order.request.CheckoutPreviewRequest;
 import com.commerce.api.web.v1.order.request.CheckoutRequest;
@@ -66,7 +64,6 @@ class OrderControllerTest extends WebIntegrationTest {
     private final MemberAppender memberAppender;
     private final CartAppender cartAppender;
     private final CartReader cartReader;
-    private final ProductRegistrationFacade productRegistrationFacade;
     private final ProductVariantReader variantReader;
     private final CouponAppender couponAppender;
     private final IssuedCouponAppender issuedCouponAppender;
@@ -81,7 +78,6 @@ class OrderControllerTest extends WebIntegrationTest {
             MemberAppender memberAppender,
             CartAppender cartAppender,
             CartReader cartReader,
-            ProductRegistrationFacade productRegistrationFacade,
             ProductVariantReader variantReader,
             CouponAppender couponAppender,
             IssuedCouponAppender issuedCouponAppender,
@@ -94,7 +90,6 @@ class OrderControllerTest extends WebIntegrationTest {
         this.memberAppender = memberAppender;
         this.cartAppender = cartAppender;
         this.cartReader = cartReader;
-        this.productRegistrationFacade = productRegistrationFacade;
         this.variantReader = variantReader;
         this.couponAppender = couponAppender;
         this.issuedCouponAppender = issuedCouponAppender;
@@ -452,15 +447,11 @@ class OrderControllerTest extends WebIntegrationTest {
     }
 
     @Test
-    @DisplayName("HTTP로 출고한 주문의 취소 요청은 409 API_ORDER_NOT_CANCELLABLE로 거부되고 상태를 바꾸지 않는다")
-    void cancelRejectsShippedOrderViaHttp() throws Exception {
+    @DisplayName("출고된 주문의 취소 요청은 409 API_ORDER_NOT_CANCELLABLE로 거부되고 상태를 바꾸지 않는다")
+    void cancelRejectsShippedOrder() throws Exception {
         UUID memberId = registerMember();
         UUID orderId = checkoutForMember(memberId);
-        mvc.perform(post("/api/v1/admin/orders/{orderId}/ship", orderId)
-                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(shipRequestBody()))
-                .andExpect(status().isNoContent());
+        orderModifier.ship(orderId, "CJ대한통운", "688900123456");
 
         mvc.perform(post("/api/v1/orders/{orderId}/cancel", orderId)
                         .header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
@@ -957,10 +948,6 @@ class OrderControllerTest extends WebIntegrationTest {
                 .andExpect(jsonPath("$.orders[0].lines.length()").value(2));
     }
 
-    private String shipRequestBody() {
-        return objectMapper.writeValueAsString(new OrderShipRequest("CJ대한통운", "688900123456"));
-    }
-
     private UUID checkoutForMember(UUID memberId) throws Exception {
         UUID variantId = seedProduct(50);
         cartAppender.addItem(memberId, variantId, 1);
@@ -992,7 +979,7 @@ class OrderControllerTest extends WebIntegrationTest {
     }
 
     private UUID seedProduct(int quantity) {
-        UUID productId = productRegistrationFacade.registerProduct("상품", null, Money.of(10000L), List.of(), quantity);
+        UUID productId = seedOnSaleProduct("상품", null, Money.of(10000L), quantity);
         return variantReader.getByProductId(productId).get(0).id();
     }
 

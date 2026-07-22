@@ -1,0 +1,65 @@
+server:
+  # 배포 재시작 시 진행 중 관리자 오퍼레이션(환불 등 돈의 경로)을 끊지 않고 마치고 내려가도록 graceful 종료한다.
+  shutdown: graceful
+
+spring:
+  application:
+    name: app-admin
+  servlet:
+    multipart:
+      # 프레임워크 상한(방어선). 이미지 정책 상한(5MB)은 도메인이 소유하므로 그보다 넉넉히 둔다.
+      max-file-size: 10MB
+      max-request-size: 10MB
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  lifecycle:
+    # graceful 종료가 진행 중 요청을 마칠 최대 대기. 환불 PG 호출 최대 처리 시간을 넘도록 두되 배포
+    # 오케스트레이터의 종료 유예 안에 들도록 30s로 둔다.
+    timeout-per-shutdown-phase: 30s
+  datasource:
+    hikari:
+      # app-api와 같은 전제(Postgres 기본 max_connections=100 공유). 관리자 트래픽이 작아 인스턴스당
+      # 10이면 충분하고, 다른 앱·마이그레이션·운영 도구 커넥션과 합쳐도 여유를 남긴다.
+      maximum-pool-size: 10
+      # 풀 고갈 시 기본 30s까지 매달리지 않고 10s에 빠르게 실패시킨다.
+      connection-timeout: 10000
+      # 커넥션 최대 수명(30분). DB·프록시가 커넥션을 끊는 시간보다 짧게 두어 죽은 커넥션을 미리 회수한다.
+      max-lifetime: 1800000
+
+logging:
+  structured:
+    format:
+      # ECS(Elastic Common Schema) — 전 앱 동일 포맷(app-api와 같은 근거).
+      console: ecs
+
+springdoc:
+  # 의도적 기본 비노출 — API 문서·swagger-ui는 개발 표면이라 로컬 환경(local 프로필·compose full)에서만 연다.
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # 관측 최소셋 — health와 metrics만(내부망 전제, PII·시크릿 미포함).
+        include: health,metrics
+  endpoint:
+    health:
+      probes:
+        # 쿠버네티스 밖에서도 /actuator/health/{liveness,readiness} 프로브 그룹을 연다.
+        enabled: true
+      group:
+        # readiness = 기동 + DB·Redis(멱등 키 저장소) 도달. liveness에는 저장소를 넣지 않는다(app-api와 같은 근거).
+        readiness:
+          include: readinessState,db,redis
+
+auth:
+  jwt:
+    # HS256 대칭 서명 키 — 발급 앱(app-api)과 같은 키를 공유해 관리자 토큰을 검증한다. 기본값 없이
+    # 환경변수로만 주입한다(REQUIREMENTS.md 제약·전제).
+    secret: ${AUTH_JWT_SECRET}
+    access-token-ttl: 1h

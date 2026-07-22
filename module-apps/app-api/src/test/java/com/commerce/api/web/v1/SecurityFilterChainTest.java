@@ -20,8 +20,8 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * 무상태 JWT 시큐리티 필터 체인의 인가 매트릭스를 한자리에서 고정하는 테스트다 — 공개 경로 무토큰 통과, 인증 경로 무토큰
- * 401, 어드민 URL의 buyer 403·admin 통과, POST /members 공개 vs GET /members/me 인증. 401 본문은 진입점의
- * problem+json 계약(코드·content-type·시큐리티 헤더 파리티)을 함께 검증한다.
+ * 401, POST /members 공개 vs GET /members/me 인증. 401 본문은 진입점의 problem+json 계약(코드·content-type·
+ * 시큐리티 헤더 파리티)을 함께 검증한다. 어드민 URL 게이트는 app-admin의 동명 테스트가 소유한다.
  */
 @TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 class SecurityFilterChainTest extends WebIntegrationTest {
@@ -50,26 +50,6 @@ class SecurityFilterChainTest extends WebIntegrationTest {
                 .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"))
                 .andExpect(header().string("X-Content-Type-Options", "nosniff"))
                 .andExpect(header().string("Cache-Control", "no-store"));
-    }
-
-    @Test
-    @DisplayName("어드민 URL의 구매자 토큰 요청은 403 FORBIDDEN으로 거부된다")
-    void adminPathRejectsBuyerTokenWith403() throws Exception {
-        mvc.perform(get("/api/v1/admin/stocks")
-                        .param("variantIds", UUID.randomUUID().toString())
-                        .header(HttpHeaders.AUTHORIZATION, bearer(UUID.randomUUID())))
-                .andExpect(status().isForbidden())
-                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
-                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
-    }
-
-    @Test
-    @DisplayName("어드민 URL의 관리자 토큰 요청은 인가를 통과한다")
-    void adminPathAllowsAdminToken() throws Exception {
-        mvc.perform(get("/api/v1/admin/stocks")
-                        .param("variantIds", UUID.randomUUID().toString())
-                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
-                .andExpect(status().isOk());
     }
 
     @Test

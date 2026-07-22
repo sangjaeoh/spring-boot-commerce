@@ -14,9 +14,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.commerce.api.facade.CheckoutFacade;
-import com.commerce.api.facade.ProductRegistrationFacade;
 import com.commerce.api.web.v1.WebIntegrationTest;
-import com.commerce.api.web.v1.admin.member.request.MemberSuspensionRequest;
 import com.commerce.api.web.v1.cart.request.AddCartItemRequest;
 import com.commerce.api.web.v1.member.request.EmailVerificationRequest;
 import com.commerce.api.web.v1.member.request.LoginRequest;
@@ -33,12 +31,13 @@ import com.commerce.member.exception.MemberNotFoundException;
 import com.commerce.member.info.MemberInfo;
 import com.commerce.member.port.MailGateway;
 import com.commerce.member.service.MemberAppender;
+import com.commerce.member.service.MemberModifier;
 import com.commerce.member.service.MemberReader;
 import com.commerce.order.entity.Address;
+import com.commerce.order.service.OrderModifier;
 import com.commerce.payment.entity.PaymentMethod;
 import com.commerce.product.service.ProductVariantReader;
 import com.commerce.shared.entity.Money;
-import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -65,29 +64,32 @@ class MemberControllerTest extends WebIntegrationTest {
     private final MockMvc mvc;
     private final ObjectMapper objectMapper;
     private final MemberAppender memberAppender;
+    private final MemberModifier memberModifier;
     private final MemberReader memberReader;
     private final CartAppender cartAppender;
-    private final ProductRegistrationFacade productRegistrationFacade;
     private final ProductVariantReader variantReader;
     private final CheckoutFacade checkoutFacade;
+    private final OrderModifier orderModifier;
 
     MemberControllerTest(
             MockMvc mvc,
             ObjectMapper objectMapper,
             MemberAppender memberAppender,
+            MemberModifier memberModifier,
             MemberReader memberReader,
             CartAppender cartAppender,
-            ProductRegistrationFacade productRegistrationFacade,
             ProductVariantReader variantReader,
-            CheckoutFacade checkoutFacade) {
+            CheckoutFacade checkoutFacade,
+            OrderModifier orderModifier) {
         this.mvc = mvc;
         this.objectMapper = objectMapper;
         this.memberAppender = memberAppender;
+        this.memberModifier = memberModifier;
         this.memberReader = memberReader;
         this.cartAppender = cartAppender;
-        this.productRegistrationFacade = productRegistrationFacade;
         this.variantReader = variantReader;
         this.checkoutFacade = checkoutFacade;
+        this.orderModifier = orderModifier;
     }
 
     @Test
@@ -233,12 +235,7 @@ class MemberControllerTest extends WebIntegrationTest {
     void suspendedMemberCannotAddCartItem() throws Exception {
         UUID memberId = registerMember();
         UUID variantId = seedProduct(50);
-        mvc.perform(post("/api/v1/admin/members/{memberId}/suspend", memberId)
-                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(
-                                new MemberSuspensionRequest(SuspensionReason.PAYMENT_ABUSE))))
-                .andExpect(status().isNoContent());
+        memberModifier.suspend(memberId, SuspensionReason.PAYMENT_ABUSE);
 
         AddCartItemRequest request = new AddCartItemRequest(variantId, 1);
         mvc.perform(post("/api/v1/carts/items")
@@ -253,12 +250,7 @@ class MemberControllerTest extends WebIntegrationTest {
     @DisplayName("정지 회원도 탈퇴가 204로 성공한다")
     void suspendedMemberCanWithdraw() throws Exception {
         UUID memberId = registerMember();
-        mvc.perform(post("/api/v1/admin/members/{memberId}/suspend", memberId)
-                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(
-                                new MemberSuspensionRequest(SuspensionReason.CS_MANUAL))))
-                .andExpect(status().isNoContent());
+        memberModifier.suspend(memberId, SuspensionReason.CS_MANUAL);
 
         mvc.perform(delete("/api/v1/members/me")
                         .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
@@ -396,14 +388,8 @@ class MemberControllerTest extends WebIntegrationTest {
         UUID variantId = seedProduct(50);
         cartAppender.addItem(memberId, variantId, 1);
         UUID orderId = checkoutFacade.checkout(memberId, address(), Money.ZERO, null, PaymentMethod.CARD);
-        mvc.perform(post("/api/v1/admin/orders/{orderId}/ship", orderId)
-                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"carrier\":\"CJ대한통운\",\"trackingNumber\":\"688900123456\"}"))
-                .andExpect(status().isNoContent());
-        mvc.perform(post("/api/v1/admin/orders/{orderId}/delivery-confirmation", orderId)
-                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
-                .andExpect(status().isNoContent());
+        orderModifier.ship(orderId, "CJ대한통운", "688900123456");
+        orderModifier.confirmDelivery(orderId);
 
         mvc.perform(delete("/api/v1/members/me")
                         .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
@@ -506,7 +492,7 @@ class MemberControllerTest extends WebIntegrationTest {
     }
 
     private UUID seedProduct(int quantity) {
-        UUID productId = productRegistrationFacade.registerProduct("상품", null, Money.of(10000L), List.of(), quantity);
+        UUID productId = seedOnSaleProduct("상품", null, Money.of(10000L), quantity);
         return variantReader.getByProductId(productId).get(0).id();
     }
 

@@ -13,8 +13,6 @@ public enum ApiErrorCode implements ErrorCode {
     PAYMENT_METHOD_REQUIRED("API_PAYMENT_METHOD_REQUIRED", "결제 금액이 있으면 결제 수단이 필요하다.", 400),
     PAYMENT_DECLINED("API_PAYMENT_DECLINED", "결제가 거절됐다.", 402),
     ORDER_NOT_CANCELLABLE("API_ORDER_NOT_CANCELLABLE", "취소할 수 없는 주문 상태다.", 409),
-    ORDER_NOT_REFUNDABLE("API_ORDER_NOT_REFUNDABLE", "환불할 수 없는 주문 상태다.", 409),
-    ORDER_RETURN_NOT_REQUESTED("API_ORDER_RETURN_NOT_REQUESTED", "반품 요청 상태의 주문이 아니다.", 409),
     WITHDRAWAL_BLOCKED("API_WITHDRAWAL_BLOCKED", "미배송 결제 주문이 있어 탈퇴할 수 없다.", 409),
     REVIEW_NOT_ELIGIBLE("API_REVIEW_NOT_ELIGIBLE", "구매확정(배송 완료)한 상품만 리뷰를 쓸 수 있다.", 409);
 

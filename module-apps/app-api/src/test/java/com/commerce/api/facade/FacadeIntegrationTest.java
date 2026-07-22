@@ -2,6 +2,16 @@ package com.commerce.api.facade;
 
 import com.commerce.api.SharedPostgresContainer;
 import com.commerce.api.SharedRedisContainer;
+import com.commerce.product.service.ProductAppender;
+import com.commerce.product.service.ProductModifier;
+import com.commerce.product.service.ProductVariantAppender;
+import com.commerce.product.service.ProductVariantModifier;
+import com.commerce.shared.entity.Money;
+import com.commerce.stock.service.StockAppender;
+import java.util.List;
+import java.util.UUID;
+import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -17,6 +27,21 @@ import org.springframework.test.context.DynamicPropertySource;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 abstract class FacadeIntegrationTest {
 
+    @Autowired
+    private ProductAppender productAppender;
+
+    @Autowired
+    private ProductVariantAppender variantAppender;
+
+    @Autowired
+    private StockAppender stockAppender;
+
+    @Autowired
+    private ProductVariantModifier variantModifier;
+
+    @Autowired
+    private ProductModifier productModifier;
+
     @DynamicPropertySource
     static void datasourceProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url", SharedPostgresContainer.INSTANCE::getJdbcUrl);
@@ -25,5 +50,18 @@ abstract class FacadeIntegrationTest {
         registry.add("spring.data.redis.host", SharedRedisContainer.INSTANCE::getRedisHost);
         registry.add("spring.data.redis.port", SharedRedisContainer.INSTANCE::getRedisPort);
         registry.add("auth.jwt.secret", () -> "test-secret-key-of-at-least-32-bytes!!");
+    }
+
+    /**
+     * 상품·첫 변형·초기 재고를 시딩하고 판매를 시작해 상품 ID를 반환한다 — 어드민 앱으로 이전한 상품 등록
+     * 경로를 도메인 서비스 직접 호출로 인라인한 픽스처다.
+     */
+    protected UUID seedOnSaleProduct(String name, @Nullable String description, Money price, int initialQuantity) {
+        UUID productId = productAppender.register(name, description, null);
+        UUID variantId = variantAppender.create(productId, price, List.of());
+        stockAppender.create(variantId, initialQuantity);
+        variantModifier.enable(variantId);
+        productModifier.show(productId);
+        return productId;
     }
 }

@@ -7,7 +7,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.commerce.api.web.v1.WebIntegrationTest;
 import com.commerce.api.web.v1.inquiry.request.InquiryRequest;
+import com.commerce.auth.token.JwtTokenCodec;
 import com.commerce.member.service.MemberAppender;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -24,11 +26,14 @@ class InquiryControllerTest extends WebIntegrationTest {
     private final MockMvc mvc;
     private final ObjectMapper objectMapper;
     private final MemberAppender memberAppender;
+    private final JwtTokenCodec jwtTokenCodec;
 
-    InquiryControllerTest(MockMvc mvc, ObjectMapper objectMapper, MemberAppender memberAppender) {
+    InquiryControllerTest(
+            MockMvc mvc, ObjectMapper objectMapper, MemberAppender memberAppender, JwtTokenCodec jwtTokenCodec) {
         this.mvc = mvc;
         this.objectMapper = objectMapper;
         this.memberAppender = memberAppender;
+        this.jwtTokenCodec = jwtTokenCodec;
     }
 
     @Test
@@ -109,6 +114,13 @@ class InquiryControllerTest extends WebIntegrationTest {
                 .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)));
+    }
+
+    /** ADMIN 역할 회원을 등록하고 그 주체의 관리자 토큰 헤더 값을 만든다 — 관리자 시딩은 app-admin 소유라 직접 만든다. */
+    private String adminBearer() {
+        UUID adminId = memberAppender.registerAdmin(
+                "admin-" + UUID.randomUUID() + "@example.com", "관리자", "admin-password-123!");
+        return "Bearer " + jwtTokenCodec.issue(adminId.toString(), Map.of("role", "ADMIN"));
     }
 
     private UUID registerMember() {

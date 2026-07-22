@@ -48,10 +48,11 @@ cd spring-boot-commerce
 docker compose --profile full up -d --build --wait
 ```
 
-PostgreSQL·Redis → 스키마 마이그레이션 → API·배치 순서로 기동합니다. 앱 이미지를 컨테이너 안에서 빌드하므로 첫 실행은 수 분 걸립니다.
+PostgreSQL·Redis → 스키마 마이그레이션 → API·어드민·배치 순서로 기동합니다. 앱 이미지를 컨테이너 안에서 빌드하므로 첫 실행은 수 분 걸립니다.
 
 - API: `http://localhost:8080`
 - API 문서(swagger-ui): `http://localhost:8080/swagger-ui.html`
+- 어드민(관리자 오퍼레이션·시딩): `http://localhost:8082` (문서: `http://localhost:8082/swagger-ui.html`)
 - 배치(스케줄 스윕·PG 웹훅 수신): `http://localhost:8081`
 
 ## IDE에서 작업하기
@@ -76,9 +77,10 @@ PostgreSQL·Redis → 스키마 마이그레이션 → API·배치 순서로 기
    ./gradlew :module-apps:app-api:bootRun --args='--spring.profiles.active=local'
    ```
 
-4. 스케줄 스윕·PG 웹훅 수신이 필요하면 배치 앱을 띄웁니다.
+4. 관리자 오퍼레이션이 필요하면 어드민 앱을, 스케줄 스윕·PG 웹훅 수신이 필요하면 배치 앱을 띄웁니다.
 
    ```bash
+   ./gradlew :module-apps:app-admin:bootRun --args='--spring.profiles.active=local --server.port=8082'
    ./gradlew :module-apps:app-batch:bootRun --args='--spring.profiles.active=local --server.port=8081'
    ```
 

@@ -34,7 +34,6 @@ class ProductDetailFacadeTest extends FacadeIntegrationTest {
     private StockReader stockReader;
 
     private final ProductDetailFacade productDetailFacade;
-    private final ProductRegistrationFacade productRegistrationFacade;
     private final ProductVariantAppender variantAppender;
     private final ProductVariantReader variantReader;
     private final ProductVariantModifier variantModifier;
@@ -44,7 +43,6 @@ class ProductDetailFacadeTest extends FacadeIntegrationTest {
 
     ProductDetailFacadeTest(
             ProductDetailFacade productDetailFacade,
-            ProductRegistrationFacade productRegistrationFacade,
             ProductVariantAppender variantAppender,
             ProductVariantReader variantReader,
             ProductVariantModifier variantModifier,
@@ -52,7 +50,6 @@ class ProductDetailFacadeTest extends FacadeIntegrationTest {
             StockModifier stockModifier,
             ProductModifier productModifier) {
         this.productDetailFacade = productDetailFacade;
-        this.productRegistrationFacade = productRegistrationFacade;
         this.variantAppender = variantAppender;
         this.variantReader = variantReader;
         this.variantModifier = variantModifier;
@@ -64,7 +61,7 @@ class ProductDetailFacadeTest extends FacadeIntegrationTest {
     @Test
     @DisplayName("ACTIVE 변형을 최저가·재고 주문가능과 함께 합성한다(대표가는 품절 변형이라도 최저가)")
     void composesActiveVariantsWithOrderabilityAndFromPrice() {
-        UUID productId = productRegistrationFacade.registerProduct("셔츠", "면 100%", Money.of(10000L), List.of(), 5);
+        UUID productId = seedOnSaleProduct("셔츠", "면 100%", Money.of(10000L), 5);
         // 최저가지만 품절
         addActiveVariant(productId, 8000L, "블랙", 0);
         addActiveVariant(productId, 12000L, "화이트", 3);
@@ -82,7 +79,7 @@ class ProductDetailFacadeTest extends FacadeIntegrationTest {
     @Test
     @DisplayName("ACTIVE 변형이 없으면 대표가 null·품절 아님(제공할 것 없음 ≠ 품절)")
     void nothingToOfferWhenNoActiveVariant() {
-        UUID productId = productRegistrationFacade.registerProduct("셔츠", null, Money.of(10000L), List.of(), 5);
+        UUID productId = seedOnSaleProduct("셔츠", null, Money.of(10000L), 5);
         variantModifier.disable(firstVariantId(productId));
 
         ProductView detail = productDetailFacade.getProductDetail(productId);
@@ -95,7 +92,7 @@ class ProductDetailFacadeTest extends FacadeIntegrationTest {
     @Test
     @DisplayName("DISABLED 변형은 상세에서 제외한다")
     void excludesDisabledVariants() {
-        UUID productId = productRegistrationFacade.registerProduct("셔츠", null, Money.of(10000L), List.of(), 5);
+        UUID productId = seedOnSaleProduct("셔츠", null, Money.of(10000L), 5);
         variantAppender.create(productId, Money.of(5000L), List.of(new ProductOption("색상", "블랙")));
 
         ProductView detail = productDetailFacade.getProductDetail(productId);
@@ -107,7 +104,7 @@ class ProductDetailFacadeTest extends FacadeIntegrationTest {
     @Test
     @DisplayName("수량이 있어도 재고 status가 SELLABLE이 아니면 주문 불가·품절이다")
     void notOrderableWhenStockSoldOutDespiteQuantity() {
-        UUID productId = productRegistrationFacade.registerProduct("셔츠", null, Money.of(10000L), List.of(), 5);
+        UUID productId = seedOnSaleProduct("셔츠", null, Money.of(10000L), 5);
         stockModifier.markSoldOut(firstVariantId(productId));
 
         ProductView detail = productDetailFacade.getProductDetail(productId);
@@ -119,7 +116,7 @@ class ProductDetailFacadeTest extends FacadeIntegrationTest {
     @Test
     @DisplayName("변형 N개의 재고를 배치(IN) 1회로 조회한다(변형별 단건 조회 없음)")
     void queriesStockOnceForAllActiveVariants() {
-        UUID productId = productRegistrationFacade.registerProduct("셔츠", null, Money.of(10000L), List.of(), 5);
+        UUID productId = seedOnSaleProduct("셔츠", null, Money.of(10000L), 5);
         addActiveVariant(productId, 8000L, "블랙", 3);
         addActiveVariant(productId, 12000L, "화이트", 3);
         clearInvocations(stockReader);
@@ -133,7 +130,7 @@ class ProductDetailFacadeTest extends FacadeIntegrationTest {
     @Test
     @DisplayName("HIDDEN 상품 상세는 미존재와 같은 404(ProductNotFoundException)로 은닉한다")
     void hidesHiddenProductAsNotFound() {
-        UUID productId = productRegistrationFacade.registerProduct("셔츠", null, Money.of(10000L), List.of(), 5);
+        UUID productId = seedOnSaleProduct("셔츠", null, Money.of(10000L), 5);
         productModifier.hide(productId);
 
         assertThatThrownBy(() -> productDetailFacade.getProductDetail(productId))

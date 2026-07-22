@@ -16,7 +16,6 @@ import com.commerce.order.service.OrderModifier;
 import com.commerce.payment.entity.PaymentMethod;
 import com.commerce.product.service.ProductVariantReader;
 import com.commerce.shared.entity.Money;
-import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -27,7 +26,6 @@ class MemberWithdrawalFacadeTest extends FacadeIntegrationTest {
 
     private final MemberWithdrawalFacade memberWithdrawalFacade;
     private final CheckoutFacade checkoutFacade;
-    private final ProductRegistrationFacade productRegistrationFacade;
     private final MemberAppender memberAppender;
     private final MemberReader memberReader;
     private final CartAppender cartAppender;
@@ -37,7 +35,6 @@ class MemberWithdrawalFacadeTest extends FacadeIntegrationTest {
     MemberWithdrawalFacadeTest(
             MemberWithdrawalFacade memberWithdrawalFacade,
             CheckoutFacade checkoutFacade,
-            ProductRegistrationFacade productRegistrationFacade,
             MemberAppender memberAppender,
             MemberReader memberReader,
             CartAppender cartAppender,
@@ -45,7 +42,6 @@ class MemberWithdrawalFacadeTest extends FacadeIntegrationTest {
             OrderModifier orderModifier) {
         this.memberWithdrawalFacade = memberWithdrawalFacade;
         this.checkoutFacade = checkoutFacade;
-        this.productRegistrationFacade = productRegistrationFacade;
         this.memberAppender = memberAppender;
         this.memberReader = memberReader;
         this.cartAppender = cartAppender;
@@ -98,7 +94,7 @@ class MemberWithdrawalFacadeTest extends FacadeIntegrationTest {
     }
 
     private UUID seedProduct(int quantity) {
-        UUID productId = productRegistrationFacade.registerProduct("상품", null, Money.of(10000L), List.of(), quantity);
+        UUID productId = seedOnSaleProduct("상품", null, Money.of(10000L), quantity);
         return variantReader.getByProductId(productId).get(0).id();
     }
 

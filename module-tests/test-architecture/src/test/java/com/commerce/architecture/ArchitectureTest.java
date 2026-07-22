@@ -61,8 +61,8 @@ class ArchitectureTest {
     private static final Set<String> BASE_FINDERS =
             Set.of("findById", "existsById", "findAll", "findAllById", "count", "getReferenceById");
 
-    // 어드민 게이트 어노테이션 FQN — 마커 정렬 규칙과 메서드 레벨 금지 규칙이 공유한다.
-    private static final String ADMIN_ONLY = "com.commerce.api.web.auth.Admin";
+    // 어드민 게이트 어노테이션 FQN — 마커 정렬 규칙과 메서드 레벨 금지 규칙이 공유한다. 어드민 표면은 app-admin이 소유한다.
+    private static final String ADMIN_ONLY = "com.commerce.admin.web.auth.Admin";
 
     // 유효 URL 경로 합성이 읽는 매핑 어노테이션(@RequestMapping과 그 메서드 축약형) FQN.
     private static final Set<String> MAPPING_ANNOTATIONS = Set.of(
@@ -169,7 +169,9 @@ class ArchitectureTest {
     void appBasePackagesAreDetected() {
         // 앱 대상 규칙(리포지토리 직접 접근·컨트롤러 단일 도메인)의 변별력은 이 집합이 채워져 있음에 달렸다 —
         // 비면 검사할 앱이 없어 규칙이 공허해진다. @SpringBootApplication 감지 회귀를 여기서 고정한다.
-        assertEquals(Set.of("com.commerce.api", "com.commerce.batch", "com.commerce.migration"), APP_BASE_PACKAGES);
+        assertEquals(
+                Set.of("com.commerce.admin", "com.commerce.api", "com.commerce.batch", "com.commerce.migration"),
+                APP_BASE_PACKAGES);
     }
 
     @Test

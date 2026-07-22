@@ -18,7 +18,6 @@ import com.commerce.product.service.ProductRemover;
 import com.commerce.product.service.ProductVariantModifier;
 import com.commerce.product.service.ProductVariantReader;
 import com.commerce.shared.entity.Money;
-import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -32,7 +31,6 @@ class CartCommandFacadeTest extends FacadeIntegrationTest {
     private final MemberAppender memberAppender;
     private final MemberModifier memberModifier;
     private final MemberRemover memberRemover;
-    private final ProductRegistrationFacade productRegistrationFacade;
     private final ProductVariantReader variantReader;
     private final ProductVariantModifier variantModifier;
     private final ProductModifier productModifier;
@@ -44,7 +42,6 @@ class CartCommandFacadeTest extends FacadeIntegrationTest {
             MemberAppender memberAppender,
             MemberModifier memberModifier,
             MemberRemover memberRemover,
-            ProductRegistrationFacade productRegistrationFacade,
             ProductVariantReader variantReader,
             ProductVariantModifier variantModifier,
             ProductModifier productModifier,
@@ -54,7 +51,6 @@ class CartCommandFacadeTest extends FacadeIntegrationTest {
         this.memberAppender = memberAppender;
         this.memberModifier = memberModifier;
         this.memberRemover = memberRemover;
-        this.productRegistrationFacade = productRegistrationFacade;
         this.variantReader = variantReader;
         this.variantModifier = variantModifier;
         this.productModifier = productModifier;
@@ -191,7 +187,7 @@ class CartCommandFacadeTest extends FacadeIntegrationTest {
     }
 
     private UUID seedVariant() {
-        UUID productId = productRegistrationFacade.registerProduct("상품", null, Money.of(10000L), List.of(), 50);
+        UUID productId = seedOnSaleProduct("상품", null, Money.of(10000L), 50);
         return variantReader.getByProductId(productId).get(0).id();
     }
 

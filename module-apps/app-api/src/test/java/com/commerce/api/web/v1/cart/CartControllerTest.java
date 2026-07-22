@@ -5,14 +5,12 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.commerce.api.facade.ProductRegistrationFacade;
 import com.commerce.api.web.v1.WebIntegrationTest;
 import com.commerce.cart.service.CartAppender;
 import com.commerce.member.service.MemberAppender;
 import com.commerce.product.service.ProductVariantModifier;
 import com.commerce.product.service.ProductVariantReader;
 import com.commerce.shared.entity.Money;
-import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -27,7 +25,6 @@ class CartControllerTest extends WebIntegrationTest {
     private final MockMvc mvc;
     private final MemberAppender memberAppender;
     private final CartAppender cartAppender;
-    private final ProductRegistrationFacade productRegistrationFacade;
     private final ProductVariantReader variantReader;
     private final ProductVariantModifier variantModifier;
 
@@ -35,13 +32,11 @@ class CartControllerTest extends WebIntegrationTest {
             MockMvc mvc,
             MemberAppender memberAppender,
             CartAppender cartAppender,
-            ProductRegistrationFacade productRegistrationFacade,
             ProductVariantReader variantReader,
             ProductVariantModifier variantModifier) {
         this.mvc = mvc;
         this.memberAppender = memberAppender;
         this.cartAppender = cartAppender;
-        this.productRegistrationFacade = productRegistrationFacade;
         this.variantReader = variantReader;
         this.variantModifier = variantModifier;
     }
@@ -143,7 +138,7 @@ class CartControllerTest extends WebIntegrationTest {
     }
 
     private UUID seedVariant(long price) {
-        UUID productId = productRegistrationFacade.registerProduct("상품", null, Money.of(price), List.of(), 50);
+        UUID productId = seedOnSaleProduct("상품", null, Money.of(price), 50);
         return variantReader.getByProductId(productId).get(0).id();
     }
 

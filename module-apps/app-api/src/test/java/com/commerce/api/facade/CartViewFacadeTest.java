@@ -12,7 +12,6 @@ import com.commerce.product.service.ProductVariantModifier;
 import com.commerce.product.service.ProductVariantReader;
 import com.commerce.shared.entity.Money;
 import com.commerce.stock.service.StockModifier;
-import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -22,7 +21,6 @@ import org.springframework.test.context.TestConstructor;
 class CartViewFacadeTest extends FacadeIntegrationTest {
 
     private final CartViewFacade cartViewFacade;
-    private final ProductRegistrationFacade productRegistrationFacade;
     private final MemberAppender memberAppender;
     private final CartAppender cartAppender;
     private final ProductVariantReader variantReader;
@@ -33,7 +31,6 @@ class CartViewFacadeTest extends FacadeIntegrationTest {
 
     CartViewFacadeTest(
             CartViewFacade cartViewFacade,
-            ProductRegistrationFacade productRegistrationFacade,
             MemberAppender memberAppender,
             CartAppender cartAppender,
             ProductVariantReader variantReader,
@@ -42,7 +39,6 @@ class CartViewFacadeTest extends FacadeIntegrationTest {
             ProductRemover productRemover,
             StockModifier stockModifier) {
         this.cartViewFacade = cartViewFacade;
-        this.productRegistrationFacade = productRegistrationFacade;
         this.memberAppender = memberAppender;
         this.cartAppender = cartAppender;
         this.variantReader = variantReader;
@@ -156,7 +152,7 @@ class CartViewFacadeTest extends FacadeIntegrationTest {
     }
 
     private UUID seedProduct(long price) {
-        return productRegistrationFacade.registerProduct("상품", null, Money.of(price), List.of(), 50);
+        return seedOnSaleProduct("상품", null, Money.of(price), 50);
     }
 
     private UUID seedVariant(long price) {

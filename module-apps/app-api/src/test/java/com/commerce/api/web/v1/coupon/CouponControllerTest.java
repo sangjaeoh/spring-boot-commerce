@@ -7,13 +7,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.commerce.api.web.v1.WebIntegrationTest;
-import com.commerce.api.web.v1.admin.coupon.request.CouponCreationRequest;
-import com.commerce.api.web.v1.admin.coupon.request.DiscountRequest;
-import com.commerce.api.web.v1.admin.coupon.response.CouponCreationResponse;
 import com.commerce.api.web.v1.coupon.response.IssuableCouponPageResponse;
 import com.commerce.api.web.v1.coupon.response.IssuableCouponResponse;
 import com.commerce.coupon.entity.Discount;
-import com.commerce.coupon.entity.DiscountType;
 import com.commerce.coupon.entity.ValidityPeriod;
 import com.commerce.coupon.service.CouponAppender;
 import com.commerce.coupon.service.CouponModifier;
@@ -28,7 +24,6 @@ import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
 import org.springframework.test.context.TestConstructor;
 import org.springframework.test.web.servlet.MockMvc;
 import tools.jackson.databind.ObjectMapper;
@@ -118,24 +113,13 @@ class CouponControllerTest extends WebIntegrationTest {
     @Test
     @DisplayName("발급 한도 소진 후 발급은 409 COUPON_ISSUANCE_LIMIT_EXHAUSTED로 거부된다")
     void issueRejectsWhenLimitExhausted() throws Exception {
-        CouponCreationRequest request = new CouponCreationRequest(
+        UUID couponId = couponAppender.create(
                 "한도 쿠폰",
-                new DiscountRequest(DiscountType.FIXED, 1000L, null, null),
-                0L,
-                VALID_FROM,
-                VALID_UNTIL,
+                Discount.fixed(Money.of(1000L)),
+                Money.ZERO,
+                ValidityPeriod.of(VALID_FROM, VALID_UNTIL),
                 30,
                 1);
-        String body = mvc.perform(post("/api/v1/admin/coupons")
-                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isCreated())
-                .andReturn()
-                .getResponse()
-                .getContentAsString();
-        UUID couponId = UUID.fromString(
-                objectMapper.readValue(body, CouponCreationResponse.class).couponId());
 
         mvc.perform(post("/api/v1/coupons/{couponId}/issues", couponId)
                         .header(HttpHeaders.AUTHORIZATION, bearer(registerMember())))

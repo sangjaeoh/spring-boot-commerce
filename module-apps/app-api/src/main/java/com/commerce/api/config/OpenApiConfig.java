@@ -1,6 +1,5 @@
 package com.commerce.api.config;
 
-import com.commerce.api.web.auth.Admin;
 import com.commerce.web.auth.AuthUser;
 import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
@@ -38,14 +37,13 @@ public class OpenApiConfig {
                                         .bearerFormat("JWT")));
     }
 
-    /** 인증이 강제되는 오퍼레이션({@link AuthUser} 파라미터·{@link Admin})에 bearer 요구를 표기한다. */
+    /** 인증이 강제되는 오퍼레이션({@link AuthUser} 파라미터)에 bearer 요구를 표기한다. */
     @Bean
     OperationCustomizer bearerRequirementCustomizer() {
         return (operation, handlerMethod) -> {
-            boolean adminOnly = handlerMethod.getBeanType().isAnnotationPresent(Admin.class);
             boolean authUserBound = Arrays.stream(handlerMethod.getMethodParameters())
                     .anyMatch(parameter -> AuthUser.class.equals(parameter.getParameterType()));
-            if (adminOnly || authUserBound) {
+            if (authUserBound) {
                 operation.addSecurityItem(new SecurityRequirement().addList(BEARER_JWT));
             }
             return operation;

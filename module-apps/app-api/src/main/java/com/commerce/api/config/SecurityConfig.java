@@ -35,11 +35,8 @@ public class SecurityConfig {
     private static final String[] PUBLIC_PRODUCT_PATHS = {
         "/api/v1/products", "/api/v1/products/*", "/api/v1/products/*/reviews", "/api/v1/products/*/inquiries"
     };
-    private static final String[] ADMIN_PATHS = {"/api/v1/admin/**"};
 
-    /**
-     * 열거된 공개 경로만 열고 어드민 URL 네임스페이스는 관리자 역할을, 나머지는 인증을 요구하는 무상태 체인을 공급한다.
-     */
+    /** 열거된 공개 경로만 열고 나머지는 인증을 요구하는 무상태 체인을 공급한다. */
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http, JwtTokenCodec jwtTokenCodec, ObjectMapper objectMapper)
             throws Exception {
@@ -57,8 +54,6 @@ public class SecurityConfig {
                         .permitAll()
                         .requestMatchers(HttpMethod.GET, PUBLIC_PRODUCT_PATHS)
                         .permitAll()
-                        .requestMatchers(ADMIN_PATHS)
-                        .hasRole("ADMIN")
                         .anyRequest()
                         .authenticated())
                 .exceptionHandling(exceptions -> exceptions
