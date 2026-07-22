@@ -1,4 +1,4 @@
-package com.commerce.infra.redis;
+package com.commerce.member.adapter.persistence;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;

@@ -9,8 +9,8 @@ import com.commerce.order.domain.CancellationReason;
 import com.commerce.order.domain.OrderStatus;
 import com.commerce.payment.application.PaymentProcessor;
 import com.commerce.payment.application.PaymentReader;
+import com.commerce.payment.application.info.GatewayTransactionInfo;
 import com.commerce.payment.application.info.PaymentInfo;
-import com.commerce.payment.application.required.GatewayTransactionStatus;
 import com.commerce.payment.domain.FailureReason;
 import com.commerce.payment.domain.PaymentNotFoundException;
 import com.commerce.payment.domain.PaymentStatus;
@@ -134,7 +134,7 @@ public class PaymentConfirmationFacade {
     /** 미확정(REQUESTED) 결제를 PG 거래 상태 조회로 확정한다. */
     private void confirmFromGateway(PaymentInfo payment) {
         // 1. PG 거래 상태 조회
-        GatewayTransactionStatus transaction = paymentProcessor.inquireGateway(payment.id());
+        GatewayTransactionInfo transaction = paymentProcessor.inquireGateway(payment.id());
         // 2. 주문 조회
         OrderInfo order = orderReader.getOrder(payment.orderId());
         // 3. 조회 결과별 확정

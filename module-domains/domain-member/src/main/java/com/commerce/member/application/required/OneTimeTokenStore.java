@@ -1,4 +1,4 @@
-package com.commerce.auth.token;
+package com.commerce.member.application.required;
 
 import java.time.Duration;
 import java.util.Optional;

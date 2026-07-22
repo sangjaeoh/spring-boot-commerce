@@ -1,6 +1,6 @@
-package com.commerce.infra.redis;
+package com.commerce.member.adapter.persistence;
 
-import com.commerce.auth.token.OneTimeTokenStore;
+import com.commerce.member.application.required.OneTimeTokenStore;
 import java.time.Duration;
 import java.util.Optional;
 import org.springframework.data.redis.core.StringRedisTemplate;

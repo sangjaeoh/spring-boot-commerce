@@ -1,7 +1,7 @@
 package com.commerce.payment.application;
 
+import com.commerce.payment.application.info.GatewayTransactionInfo;
 import com.commerce.payment.application.info.PaymentInfo;
-import com.commerce.payment.application.required.GatewayTransactionStatus;
 import com.commerce.payment.application.required.PaymentApproval;
 import com.commerce.payment.application.required.PaymentGateway;
 import com.commerce.payment.application.required.PaymentRepository;
@@ -94,9 +94,9 @@ public class PaymentProcessor {
      *
      * @throws PaymentNotFoundException 결제가 없으면
      */
-    public GatewayTransactionStatus inquireGateway(UUID paymentId) {
+    public GatewayTransactionInfo inquireGateway(UUID paymentId) {
         find(paymentId);
-        return paymentGateway.inquire(paymentId);
+        return GatewayTransactionInfo.from(paymentGateway.inquire(paymentId));
     }
 
     /**
