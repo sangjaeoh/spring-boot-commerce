@@ -50,6 +50,8 @@ management:
 messaging:
   outbox:
     relay:
+      # 재전달 구현(infra-messaging)의 프로퍼티 게이트 — 릴레이 실행 앱인 이 앱만 켠다.
+      enabled: true
       # 아웃박스 미발행 이벤트의 재발행 주기. 짧게 두어 커밋-소비 지연을 초 단위로 유지한다(폴링은
       # 미발행 부분 인덱스만 스캔해 저렴하다).
       fixed-delay: 1s

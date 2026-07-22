@@ -8,6 +8,7 @@ import com.commerce.cart.application.provided.CartAppender;
 import com.commerce.cart.application.provided.CartReader;
 import com.commerce.event.order.OrderPaid;
 import com.commerce.event.publish.MessagePublisher;
+import com.commerce.infra.messaging.OutboxRelay;
 import com.commerce.member.application.provided.MemberAppender;
 import com.commerce.product.application.provided.ProductVariantReader;
 import com.commerce.shared.entity.Money;

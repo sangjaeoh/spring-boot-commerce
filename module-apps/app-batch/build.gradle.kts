@@ -39,6 +39,8 @@ dependencies {
     testImplementation(libs.testcontainers.junit.jupiter)
     testImplementation(libs.flyway.core)
     testImplementation(libs.flyway.database.postgresql)
+    // OutboxRelayTest가 릴레이 빈(infra 소유)을 직접 구동한다(스케줄 대기 없는 결정적 실행).
+    testImplementation(project(":module-infra:infra-messaging"))
     // 통합 테스트 픽스처(회원·상품·재고 시딩)가 도메인 서비스를 직접 호출한다. main 코드는 참조하지 않는다.
     testImplementation(project(":module-domains:domain-shared"))
     testImplementation(project(":module-domains:domain-member"))
