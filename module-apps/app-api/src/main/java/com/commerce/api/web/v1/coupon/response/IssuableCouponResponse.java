@@ -1,8 +1,8 @@
 package com.commerce.api.web.v1.coupon.response;
 
-import com.commerce.coupon.entity.Discount;
-import com.commerce.coupon.entity.DiscountType;
-import com.commerce.coupon.info.CouponInfo;
+import com.commerce.coupon.application.info.CouponInfo;
+import com.commerce.coupon.domain.Discount;
+import com.commerce.coupon.domain.DiscountType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.UUID;

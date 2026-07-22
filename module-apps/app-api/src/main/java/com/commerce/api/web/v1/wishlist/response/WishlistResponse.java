@@ -1,6 +1,6 @@
 package com.commerce.api.web.v1.wishlist.response;
 
-import com.commerce.wishlist.info.WishlistItemInfo;
+import com.commerce.wishlist.application.info.WishlistItemInfo;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 

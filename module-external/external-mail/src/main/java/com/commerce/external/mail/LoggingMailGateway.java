@@ -1,6 +1,6 @@
 package com.commerce.external.mail;
 
-import com.commerce.member.port.MailGateway;
+import com.commerce.member.application.required.MailGateway;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;

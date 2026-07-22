@@ -1,8 +1,8 @@
 package com.commerce.api.web.v1.member.response;
 
-import com.commerce.member.entity.MemberStatus;
-import com.commerce.member.entity.SuspensionReason;
-import com.commerce.member.info.MemberInfo;
+import com.commerce.member.application.info.MemberInfo;
+import com.commerce.member.domain.MemberStatus;
+import com.commerce.member.domain.SuspensionReason;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.UUID;

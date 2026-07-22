@@ -1,7 +1,7 @@
 package com.commerce.admin.web.v1.admin.product.response;
 
-import com.commerce.product.entity.ProductStatus;
-import com.commerce.product.info.ProductInfo;
+import com.commerce.product.application.info.ProductInfo;
+import com.commerce.product.domain.ProductStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.UUID;

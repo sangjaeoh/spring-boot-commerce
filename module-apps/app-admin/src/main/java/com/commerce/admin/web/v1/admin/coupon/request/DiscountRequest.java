@@ -1,7 +1,7 @@
 package com.commerce.admin.web.v1.admin.coupon.request;
 
-import com.commerce.coupon.entity.Discount;
-import com.commerce.coupon.entity.DiscountType;
+import com.commerce.coupon.domain.Discount;
+import com.commerce.coupon.domain.DiscountType;
 import com.commerce.shared.entity.Money;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;

@@ -1,6 +1,6 @@
 package com.commerce.api.web.v1.order.request;
 
-import com.commerce.order.entity.Address;
+import com.commerce.order.domain.Address;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import org.jspecify.annotations.Nullable;

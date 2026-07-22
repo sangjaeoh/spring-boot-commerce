@@ -2,10 +2,10 @@ package com.commerce.api.facade;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.commerce.cart.info.CartInfo;
-import com.commerce.cart.info.CartItemInfo;
-import com.commerce.cart.service.CartAppender;
-import com.commerce.cart.service.CartReader;
+import com.commerce.cart.application.CartAppender;
+import com.commerce.cart.application.CartReader;
+import com.commerce.cart.application.info.CartInfo;
+import com.commerce.cart.application.info.CartItemInfo;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;

@@ -9,9 +9,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.commerce.admin.facade.ProductRegistrationFacade;
 import com.commerce.admin.web.v1.WebIntegrationTest;
 import com.commerce.admin.web.v1.admin.product.response.ProductImageUploadResponse;
-import com.commerce.member.service.MemberAppender;
-import com.commerce.product.info.ProductImageInfo;
-import com.commerce.product.service.ProductImageReader;
+import com.commerce.member.application.MemberAppender;
+import com.commerce.product.application.ProductImageReader;
+import com.commerce.product.application.info.ProductImageInfo;
 import com.commerce.shared.entity.Money;
 import java.util.List;
 import java.util.UUID;

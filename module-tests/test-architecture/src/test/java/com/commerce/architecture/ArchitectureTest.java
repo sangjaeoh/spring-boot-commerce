@@ -8,8 +8,8 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noMethods;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import com.commerce.architecture.bypass.service.EntityReferencingFixture;
-import com.commerce.member.entity.Member;
+import com.commerce.architecture.bypass.application.EntityReferencingFixture;
+import com.commerce.member.domain.Member;
 import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.Dependency;
 import com.tngtech.archunit.core.domain.JavaAnnotation;
@@ -77,16 +77,16 @@ class ArchitectureTest {
     // 해석에 의존하지 않는다. softDeleteEntityNames가 CLASSES를 순회하므로 반드시 CLASSES 선언 뒤에 둔다.
     private static final Set<String> SOFT_DELETE_ENTITY_NAMES = softDeleteEntityNames();
 
-    // 매핑 클래스(@Entity·@MappedSuperclass)가 사는 {base}.entity 패키지에서 파생한 소유 모듈 베이스 패키지
-    // 집합 — 도메인 모듈(com.commerce.{domain})과 공통 베이스 엔티티의 common-jpa(com.commerce.jpa).
-    // 엔티티 접근 면제를 이 접두로 한정한다. entityOwningBasePackages가 CLASSES를 순회하므로 CLASSES 선언 뒤에 둔다.
+    // 매핑 클래스(@Entity·@MappedSuperclass)가 사는 {base}.domain(도메인 모듈)·{base}.entity(common-jpa)
+    // 패키지에서 파생한 소유 모듈 베이스 패키지 집합 — 도메인 모듈(com.commerce.{domain})과 공통 베이스 엔티티의
+    // common-jpa(com.commerce.jpa). 엔티티 접근 면제를 이 접두로 한정한다. entityOwningBasePackages가 CLASSES를
+    // 순회하므로 CLASSES 선언 뒤에 둔다.
     private static final Set<String> ENTITY_OWNING_BASE_PACKAGES = entityOwningBasePackages();
 
-    // 도메인 모듈 안에서 @Entity를 정당하게 참조하는 4개 서브 패키지(entity 상호참조, Info.from(Entity),
-    // service·repository). port·event·exception은 값 타입만 참조하므로(PaymentGateway→enum, OrderPaid→UUID)
-    // 면제하지 않는다.
-    private static final Set<String> ENTITY_ACCESS_EXEMPT_SUBPACKAGES =
-            Set.of("entity", "info", "service", "repository");
+    // 도메인 모듈 안에서 @Entity를 정당하게 참조하는 2개 구역(domain 상호참조·exception, application의
+    // 유스케이스 서비스·Info.from(Entity)·required 리포지토리). order의 event 패키지는 값 타입만
+    // 참조하므로(OrderPaid→UUID) 면제하지 않는다.
+    private static final Set<String> ENTITY_ACCESS_EXEMPT_SUBPACKAGES = Set.of("domain", "application");
 
     @Test
     @DisplayName("JPA 엔티티는 소유 도메인 모듈 내부에서만 접근된다")
@@ -116,9 +116,9 @@ class ArchitectureTest {
     }
 
     @Test
-    @DisplayName("도메인 밖 service 패키지의 생 엔티티 참조는 면제되지 않는다")
-    void entityAccessExemptionDoesNotCoverServicePackagesOutsideDomainModules() {
-        // 도메인 밖 ...service 패키지의 생 엔티티 참조가 면제 없이 위반으로 잡히는지 고정한다.
+    @DisplayName("도메인 밖 application 패키지의 생 엔티티 참조는 면제되지 않는다")
+    void entityAccessExemptionDoesNotCoverApplicationPackagesOutsideDomainModules() {
+        // 도메인 밖 ...application 패키지의 생 엔티티 참조가 면제 없이 위반으로 잡히는지 고정한다.
         JavaClasses bypassAttempt = new ClassFileImporter().importClasses(EntityReferencingFixture.class, Member.class);
 
         assertThrows(
@@ -126,14 +126,14 @@ class ArchitectureTest {
                 () -> jpaEntityAccessConfinedToDomainModules().check(bypassAttempt));
     }
 
-    // 면제는 매핑 클래스 소유 모듈의 베이스 패키지 접두로 한정한다 — 전역 패키지명 기준(..service.. 등)이면
-    // 앱이 ...service 패키지를 만들어 생 엔티티를 참조해도 면제되는 우회가 생긴다.
+    // 면제는 매핑 클래스 소유 모듈의 베이스 패키지 접두로 한정한다 — 전역 패키지명 기준(..application.. 등)이면
+    // 앱이 ...application 패키지를 만들어 생 엔티티를 참조해도 면제되는 우회가 생긴다.
     private static ArchRule jpaEntityAccessConfinedToDomainModules() {
         DescribedPredicate<CanBeAnnotated> jpaMapped = annotatedWith("jakarta.persistence.Entity")
                 .or(annotatedWith("jakarta.persistence.MappedSuperclass"))
                 .as("@Entity 또는 @MappedSuperclass 매핑 클래스");
         DescribedPredicate<JavaClass> entityOwningModuleInternal =
-                new DescribedPredicate<>("매핑 클래스 소유 모듈 내부 패키지(entity·info·service·repository)") {
+                new DescribedPredicate<>("매핑 클래스 소유 모듈 내부 구역(domain·application)") {
                     @Override
                     public boolean test(JavaClass clazz) {
                         return isEntityOwningModuleInternal(clazz.getPackageName());
@@ -155,10 +155,9 @@ class ArchitectureTest {
                 .resideInAnyPackage(appSubtreePatterns(".."))
                 .should()
                 .dependOnClassesThat()
-                // 도메인 리포지토리(com.commerce..repository..)만 대상이다. 프레임워크의
-                // org.springframework.data.jpa.repository.config(@EnableJpaRepositories 배선)까지
-                // "..repository.."가 잡지 않게 접두를 고정한다.
-                .resideInAPackage("com.commerce..repository..")
+                // 리포지토리가 application/required에 포트 계약과 평탄 동거하므로 패키지명 대신 Spring Data
+                // Repository 계승으로 판정한다 — 포트 소비(P7 해소 전까지 잔존)는 잡지 않고 리포지토리만 잡는다.
+                .areAssignableTo("org.springframework.data.repository.Repository")
                 .because("apps는 도메인 리포지토리에 직접 접근하지 않는다 — architecture.md 리포지토리 접근 범위");
 
         rule.check(CLASSES);
@@ -202,9 +201,9 @@ class ArchitectureTest {
         // (failOnEmptyShould는 .that() 필터가 없어 못 잡는다) 실제 위반을 놓친다. 감지 회귀를 여기서 실패시킨다.
         assertEquals(
                 Set.of(
-                        "com.commerce.member.entity.Member",
-                        "com.commerce.product.entity.Product",
-                        "com.commerce.product.entity.Category"),
+                        "com.commerce.member.domain.Member",
+                        "com.commerce.product.domain.Product",
+                        "com.commerce.product.domain.Category"),
                 SOFT_DELETE_ENTITY_NAMES);
     }
 
@@ -259,21 +258,22 @@ class ArchitectureTest {
     }
 
     @Test
-    @DisplayName("도메인 service 패키지 판정이 대표 사례를 정확히 가른다")
+    @DisplayName("도메인 application 패키지 판정이 대표 사례를 정확히 가른다")
     void domainServiceRootParsingIsCorrect() {
-        // 규칙의 변별력은 도메인 service 패키지 판정의 정확성에 달렸다 — facade·info·common을 service로 오인하면
-        // 규칙이 공허해지거나(도메인 0개로 항상 통과) 오탐한다. 파싱 회귀를 여기서 고정한다.
-        assertEquals(Optional.of("order"), domainServiceRoot("com.commerce.order.service"));
-        assertEquals(Optional.of("payment"), domainServiceRoot("com.commerce.payment.service.support"));
+        // 규칙의 변별력은 도메인 application 패키지 판정의 정확성에 달렸다 — facade·info·required·common을
+        // 유스케이스 서비스로 오인하면 규칙이 공허해지거나(도메인 0개로 항상 통과) 오탐한다. 파싱 회귀를 여기서 고정한다.
+        assertEquals(Optional.of("order"), domainServiceRoot("com.commerce.order.application"));
+        assertEquals(Optional.of("payment"), domainServiceRoot("com.commerce.payment.application.support"));
         assertEquals(Optional.empty(), domainServiceRoot("com.commerce.api.facade"));
-        assertEquals(Optional.empty(), domainServiceRoot("com.commerce.order.info"));
+        assertEquals(Optional.empty(), domainServiceRoot("com.commerce.order.application.info"));
+        assertEquals(Optional.empty(), domainServiceRoot("com.commerce.order.application.required"));
         assertEquals(Optional.empty(), domainServiceRoot("com.commerce.auth.token"));
         assertEquals(Optional.empty(), domainServiceRoot("com.commerce.web.auth"));
     }
 
-    // web 컨트롤러가 서로 다른 도메인의 service 패키지에 2개 이상 직접 의존하면 실패한다. 컨트롤러는 단일 도메인
-    // service(또는 facade)에만 얇게 위임하고, 크로스 도메인 조율은 facade가 소유한다 — architecture.md 앱 모듈 구조.
-    // 여러 도메인 service를 엮는 facade 자신({app}.facade)은 web 패키지 밖이라 대상이 아니다.
+    // web 컨트롤러가 서로 다른 도메인의 application(유스케이스 서비스)에 2개 이상 직접 의존하면 실패한다. 컨트롤러는
+    // 단일 도메인 서비스(또는 facade)에만 얇게 위임하고, 크로스 도메인 조율은 facade가 소유한다 — architecture.md 앱
+    // 모듈 구조. 여러 도메인 서비스를 엮는 facade 자신({app}.facade)은 web 패키지 밖이라 대상이 아니다.
     private static ArchRule controllersDependOnAtMostOneDomainService() {
         return classes()
                 .that()
@@ -570,15 +570,18 @@ class ArchitectureTest {
                 .toArray(String[]::new);
     }
 
-    // com.commerce.{root}.service[.*] 패키지면 도메인 루트를 반환한다. 도메인 모듈만 .service 서브 패키지를 두므로
-    // (facade·info·entity·common엔 없다) 이 접미 판정으로 도메인 service 의존을 가른다.
+    // com.commerce.{root}.application[.*] 패키지(경계 모델 info·요구 계약 required 하위 제외)면 도메인 루트를
+    // 반환한다. 도메인 모듈만 application 구역을 두므로(facade·domain·common엔 없다) 이 판정으로 도메인
+    // 유스케이스 서비스 의존을 가른다.
     private static Optional<String> domainServiceRoot(String packageName) {
         String prefix = "com.commerce.";
         if (!packageName.startsWith(prefix)) {
             return Optional.empty();
         }
         String[] segments = packageName.substring(prefix.length()).split("\\.");
-        if (segments.length >= 2 && segments[1].equals("service")) {
+        if (segments.length >= 2
+                && segments[1].equals("application")
+                && (segments.length == 2 || !Set.of("info", "required").contains(segments[2]))) {
             return Optional.of(segments[0]);
         }
         return Optional.empty();
@@ -589,7 +592,7 @@ class ArchitectureTest {
         return APP_BASE_PACKAGES.stream().map(base -> base + suffix).toArray(String[]::new);
     }
 
-    // 클래스가 매핑 클래스 소유 모듈의 면제 서브 패키지({base}.{entity|info|service|repository} 이하)에 있으면 참이다.
+    // 클래스가 매핑 클래스 소유 모듈의 면제 구역({base}.{domain|application} 이하)에 있으면 참이다.
     private static boolean isEntityOwningModuleInternal(String packageName) {
         for (String basePackage : ENTITY_OWNING_BASE_PACKAGES) {
             if (!packageName.startsWith(basePackage + ".")) {
@@ -620,9 +623,13 @@ class ArchitectureTest {
             if (candidate.isAnnotatedWith("jakarta.persistence.Entity")
                     || candidate.isAnnotatedWith("jakarta.persistence.MappedSuperclass")) {
                 String packageName = candidate.getPackageName();
-                int entityIndex = (packageName + ".").indexOf(".entity.");
-                if (entityIndex >= 0) {
-                    basePackages.add(packageName.substring(0, entityIndex));
+                // 도메인 모듈은 domain 구역, common-jpa는 구역 규칙 비적용이라 entity 패키지가 마커다.
+                int zoneIndex = (packageName + ".").indexOf(".domain.");
+                if (zoneIndex < 0) {
+                    zoneIndex = (packageName + ".").indexOf(".entity.");
+                }
+                if (zoneIndex >= 0) {
+                    basePackages.add(packageName.substring(0, zoneIndex));
                 }
             }
         }

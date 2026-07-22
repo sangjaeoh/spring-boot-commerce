@@ -1,6 +1,6 @@
 package com.commerce.api.web.v1.coupon.response;
 
-import com.commerce.coupon.info.CouponInfo;
+import com.commerce.coupon.application.info.CouponInfo;
 import com.commerce.web.paging.PaginationResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;

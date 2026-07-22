@@ -2,12 +2,12 @@ package com.commerce.api.facade;
 
 import com.commerce.api.SharedPostgresContainer;
 import com.commerce.api.SharedRedisContainer;
-import com.commerce.product.service.ProductAppender;
-import com.commerce.product.service.ProductModifier;
-import com.commerce.product.service.ProductVariantAppender;
-import com.commerce.product.service.ProductVariantModifier;
+import com.commerce.product.application.ProductAppender;
+import com.commerce.product.application.ProductModifier;
+import com.commerce.product.application.ProductVariantAppender;
+import com.commerce.product.application.ProductVariantModifier;
 import com.commerce.shared.entity.Money;
-import com.commerce.stock.service.StockAppender;
+import com.commerce.stock.application.StockAppender;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;

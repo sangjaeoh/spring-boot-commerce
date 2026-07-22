@@ -1,6 +1,6 @@
 package com.commerce.api.web.v1.order.response;
 
-import com.commerce.order.info.AddressInfo;
+import com.commerce.order.application.info.AddressInfo;
 import io.swagger.v3.oas.annotations.media.Schema;
 import org.jspecify.annotations.Nullable;
 

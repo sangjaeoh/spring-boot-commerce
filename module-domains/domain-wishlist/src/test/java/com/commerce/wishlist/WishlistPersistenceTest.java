@@ -3,12 +3,12 @@ package com.commerce.wishlist;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.commerce.wishlist.entity.WishlistItem;
-import com.commerce.wishlist.info.WishlistItemInfo;
-import com.commerce.wishlist.repository.WishlistItemRepository;
-import com.commerce.wishlist.service.WishlistAppender;
-import com.commerce.wishlist.service.WishlistReader;
-import com.commerce.wishlist.service.WishlistRemover;
+import com.commerce.wishlist.application.WishlistAppender;
+import com.commerce.wishlist.application.WishlistReader;
+import com.commerce.wishlist.application.WishlistRemover;
+import com.commerce.wishlist.application.info.WishlistItemInfo;
+import com.commerce.wishlist.application.required.WishlistItemRepository;
+import com.commerce.wishlist.domain.WishlistItem;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

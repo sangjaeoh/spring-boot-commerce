@@ -10,7 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.commerce.api.web.v1.WebIntegrationTest;
 import com.commerce.api.web.v1.member.request.MemberAddressRequest;
 import com.commerce.api.web.v1.member.response.MemberAddressCreationResponse;
-import com.commerce.member.service.MemberAppender;
+import com.commerce.member.application.MemberAppender;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

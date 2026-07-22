@@ -2,12 +2,12 @@ package com.commerce.cart;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.commerce.cart.entity.CartItem;
-import com.commerce.cart.info.CartInfo;
-import com.commerce.cart.info.CartItemInfo;
-import com.commerce.cart.service.CartAppender;
-import com.commerce.cart.service.CartModifier;
-import com.commerce.cart.service.CartReader;
+import com.commerce.cart.application.CartAppender;
+import com.commerce.cart.application.CartModifier;
+import com.commerce.cart.application.CartReader;
+import com.commerce.cart.application.info.CartInfo;
+import com.commerce.cart.application.info.CartItemInfo;
+import com.commerce.cart.domain.CartItem;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

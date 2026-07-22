@@ -2,7 +2,7 @@ package com.commerce.admin.web.v1.admin.product;
 
 import com.commerce.admin.web.auth.Admin;
 import com.commerce.admin.web.v1.admin.product.request.VariantPriceChangeRequest;
-import com.commerce.product.service.ProductVariantModifier;
+import com.commerce.product.application.ProductVariantModifier;
 import com.commerce.shared.entity.Money;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

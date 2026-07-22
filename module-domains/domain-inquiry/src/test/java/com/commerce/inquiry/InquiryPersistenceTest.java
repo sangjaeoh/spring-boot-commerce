@@ -3,11 +3,11 @@ package com.commerce.inquiry;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.commerce.inquiry.exception.InquiryNotFoundException;
-import com.commerce.inquiry.info.InquiryInfo;
-import com.commerce.inquiry.service.InquiryAppender;
-import com.commerce.inquiry.service.InquiryModifier;
-import com.commerce.inquiry.service.InquiryReader;
+import com.commerce.inquiry.application.InquiryAppender;
+import com.commerce.inquiry.application.InquiryModifier;
+import com.commerce.inquiry.application.InquiryReader;
+import com.commerce.inquiry.application.info.InquiryInfo;
+import com.commerce.inquiry.domain.InquiryNotFoundException;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

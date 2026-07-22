@@ -1,10 +1,10 @@
 package com.commerce.payment;
 
-import com.commerce.payment.entity.FailureReason;
-import com.commerce.payment.entity.PaymentMethod;
-import com.commerce.payment.port.GatewayTransactionStatus;
-import com.commerce.payment.port.PaymentApproval;
-import com.commerce.payment.port.PaymentGateway;
+import com.commerce.payment.application.required.GatewayTransactionStatus;
+import com.commerce.payment.application.required.PaymentApproval;
+import com.commerce.payment.application.required.PaymentGateway;
+import com.commerce.payment.domain.FailureReason;
+import com.commerce.payment.domain.PaymentMethod;
 import com.commerce.shared.entity.Money;
 import java.util.HashMap;
 import java.util.Map;

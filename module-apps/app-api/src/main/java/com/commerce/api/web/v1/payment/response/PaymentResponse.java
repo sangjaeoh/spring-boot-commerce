@@ -1,9 +1,9 @@
 package com.commerce.api.web.v1.payment.response;
 
-import com.commerce.payment.entity.FailureReason;
-import com.commerce.payment.entity.PaymentMethod;
-import com.commerce.payment.entity.PaymentStatus;
-import com.commerce.payment.info.PaymentInfo;
+import com.commerce.payment.application.info.PaymentInfo;
+import com.commerce.payment.domain.FailureReason;
+import com.commerce.payment.domain.PaymentMethod;
+import com.commerce.payment.domain.PaymentStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import org.jspecify.annotations.Nullable;

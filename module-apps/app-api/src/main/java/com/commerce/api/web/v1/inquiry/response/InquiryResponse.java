@@ -1,6 +1,6 @@
 package com.commerce.api.web.v1.inquiry.response;
 
-import com.commerce.inquiry.info.InquiryInfo;
+import com.commerce.inquiry.application.info.InquiryInfo;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.UUID;

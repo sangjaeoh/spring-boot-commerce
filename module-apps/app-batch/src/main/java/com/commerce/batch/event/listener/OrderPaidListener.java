@@ -1,6 +1,6 @@
 package com.commerce.batch.event.listener;
 
-import com.commerce.cart.service.CartModifier;
+import com.commerce.cart.application.CartModifier;
 import com.commerce.order.event.OrderPaid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

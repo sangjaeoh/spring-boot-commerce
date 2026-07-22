@@ -6,10 +6,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.commerce.api.web.v1.WebIntegrationTest;
-import com.commerce.cart.service.CartAppender;
-import com.commerce.member.service.MemberAppender;
-import com.commerce.product.service.ProductVariantModifier;
-import com.commerce.product.service.ProductVariantReader;
+import com.commerce.cart.application.CartAppender;
+import com.commerce.member.application.MemberAppender;
+import com.commerce.product.application.ProductVariantModifier;
+import com.commerce.product.application.ProductVariantReader;
 import com.commerce.shared.entity.Money;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;

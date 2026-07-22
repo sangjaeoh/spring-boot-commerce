@@ -1,6 +1,6 @@
 package com.commerce.external.storage;
 
-import com.commerce.product.port.ImageStore;
+import com.commerce.product.application.required.ImageStore;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;

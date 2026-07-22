@@ -1,6 +1,6 @@
 package com.commerce.api.web.v1.order.response;
 
-import com.commerce.order.info.OrderInfo;
+import com.commerce.order.application.info.OrderInfo;
 import com.commerce.web.paging.PaginationResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;

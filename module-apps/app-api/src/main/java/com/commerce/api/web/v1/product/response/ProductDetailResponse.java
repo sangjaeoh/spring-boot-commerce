@@ -1,7 +1,7 @@
 package com.commerce.api.web.v1.product.response;
 
 import com.commerce.api.facade.view.ProductView;
-import com.commerce.product.entity.ProductStatus;
+import com.commerce.product.domain.ProductStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 import java.util.UUID;

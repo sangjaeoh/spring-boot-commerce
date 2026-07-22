@@ -1,6 +1,6 @@
 package com.commerce.api.web.v1.order.request;
 
-import com.commerce.order.entity.RefundReason;
+import com.commerce.order.domain.RefundReason;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 
