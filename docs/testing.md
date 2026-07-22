@@ -41,7 +41,7 @@
 | 레벨 | 대상 | 환경 | 선택 기준 |
 |---|---|---|---|
 | 단위 | 엔티티 메서드·값 객체·`Validator`·순수 로직 | 컨텍스트 없는 JVM | 협력자 없이 검증 가능한 행동 |
-| 영속 슬라이스 | 리포지토리·도메인 서비스 | `@DataJpaTest` + 실 DB | DB 왕복이 행동의 일부 |
+| 영속 슬라이스 | 리포지토리·도메인 서비스·query 조회·이벤트 소비자 | `@DataJpaTest` + 실 DB | DB 왕복이 행동의 일부 |
 | 웹 슬라이스 | 컨트롤러·예외 매핑·인가 게이트 | `@WebMvcTest` | HTTP 계약이 행동의 일부 |
 | 통합 | 앱 경계 대표 시나리오 | `@SpringBootTest` + 실 DB | 계층 조립 자체가 검증 대상 |
 | 아키텍처 | 모듈 경계·의존 방향 | → [architecture](architecture.md) | — |
@@ -77,10 +77,10 @@
 | 축 | 검증 시나리오 | 파생 원천 |
 |---|---|---|
 | 상태 전이 | 허용 전이의 성공, 전이 불가 시 도메인 예외와 에러코드 | → [entity-persistence](entity-persistence.md) |
-| 생성 불변식 | `create()`·compact constructor의 검증 실패 예외 | → [entity-persistence](entity-persistence.md) |
+| 생성 불변식 | `create()`·compact constructor의 검증 실패 예외 | → [coding-conventions](coding-conventions.md) |
 | 값 객체 매핑 | `@Convert`·`@Embeddable` 값의 저장·재조회 왕복 일치 | → [entity-persistence](entity-persistence.md) |
-| 애그리거트 일관성 | 루트 의도 메서드 경유 자식 변경의 결과, 부모 소프트삭제 시 자식 소프트삭제 전파 | → [entity-persistence](entity-persistence.md) |
-| 소프트삭제 | 활성-only 조회의 삭제분 미포함, `IncludingDeleted` 조회의 포함 | → [architecture](architecture.md) |
+| 애그리거트 일관성 | 루트 의도 메서드 경유 자식 변경의 결과, 부모 소프트삭제 시 자식 소프트삭제 전파 | → [entity-persistence](entity-persistence.md)·[architecture](architecture.md) |
+| 소프트삭제 | 활성-only 조회의 삭제분 미포함, `IncludingDeleted` 조회의 포함 | → [coding-conventions](coding-conventions.md) |
 | 낙관락 | `@Version` 엔티티의 경합 충돌과 409 응답 | → [entity-persistence](entity-persistence.md) |
 | 에러 경로 | 경계 도달 예외의 에러코드·HTTP 상태 매핑 | → [coding-conventions](coding-conventions.md) |
 | 페이지네이션 | 1-based 요청 수용, 0-based 도메인 변환, 1-based 응답 보정 | → [architecture](architecture.md) |
@@ -88,6 +88,7 @@
 | 입력 검증 | request DTO의 Bean Validation 거부 | → [coding-conventions](coding-conventions.md) |
 | 이벤트 발행 | 쓰기 행동 성공 시 도메인 이벤트 발행과 페이로드, 검증 실패 시 미발행 | → [architecture](architecture.md) |
 | 이벤트 소비 | 리스너의 멱등 소비(중복 이벤트에 1회 효과) | → [architecture](architecture.md) |
+| 크로스 도메인 조회 | query provided 조회의 축(필터·정렬·페이지) 결과 | → [architecture](architecture.md) |
 
 ### 시나리오 충분성
 
@@ -133,7 +134,7 @@
 - 테스트 스키마는 Flyway 마이그레이션으로 생성한다. `ddl-auto`로 생성하지 않는다.
 - 도메인 서비스는 `@DataJpaTest` + `@Import`로 실 리포지토리와 함께 검증한다.
 - QueryDSL 설정은 `@Import`로 명시 로딩한다.
-- 포트 협력자는 `@MockitoBean`으로 대체한다.
+- required 계약 협력자(`Gateway`·`Store`·`Publisher`)는 `@MockitoBean`으로 대체한다.
 - 슬라이스는 테스트 단위 트랜잭션 롤백으로 격리한다.
 - 수정 행동은 flush 후 재조회로 검증한다. 관리 엔티티에 `save()`를 호출하지 않는다(→ [entity-persistence](entity-persistence.md)).
 - 파생 쿼리 메서드도 이름 선언이 곧 구현이므로 실 DB로 검증한다.
@@ -142,15 +143,15 @@
 
 - `@WebMvcTest`로 컨트롤러·예외 매핑·인가 게이트를 검증한다.
 - `SecurityConfig`와 메서드 시큐리티를 `@Import`해 401·403을 실제 설정으로 검증한다.
-- 파사드는 `@MockitoBean`으로 대체한다.
+- 파사드와 주입된 provided는 `@MockitoBean`으로 대체한다.
 - 응답은 상태 코드와 JSON 형상으로 단언한다.
 
 ### 목·스텁
 
 - 목은 Mockito를 사용한다.
 - 목 허용 경계는 두 곳이다.
-  - `port/` 인터페이스(`Gateway`·`Store`·`Publisher`): 실 벤더는 테스트에서 실행 불가·비결정이다.
-  - 웹 슬라이스의 파사드: HTTP 계약 검증에서 도메인 조립은 대상이 아니다.
+  - required 계약(`Gateway`·`Store`·`Publisher`): 실 벤더는 테스트에서 실행 불가·비결정이다.
+  - 웹 슬라이스의 파사드·주입된 provided: HTTP 계약 검증에서 조립·조회는 대상이 아니다.
 - 리포지토리·도메인 서비스는 목으로 대체하지 않는다. 실 DB 슬라이스로 검증한다.
   - 도메인 내부 협력을 목으로 고정하면 테스트가 구현 세부에 결합된다.
 - 소유하지 않은 타입(프레임워크·라이브러리 클래스)은 목하지 않는다.

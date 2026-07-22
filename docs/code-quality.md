@@ -10,7 +10,7 @@
 
 - 이 문서는 포맷·null·정적분석 도구만 다룬다.
 - 계층 의존·엔티티 비노출 등 경계 강제는 컨벤션 플러그인·아키텍처 테스트가 담당한다.
-- 강제 대상 불변식은 [architecture](architecture.md)의 빌드 강제 규칙이 소유한다.
+- 강제 대상 불변식은 [architecture](architecture.md)의 빌드가 강제하는 불변식이 소유한다.
 - Spotless·NullAway·Error Prone은 `convention.java-base`가 전 JVM 모듈에 일괄 적용한다.
 - `convention.java-common`이 Lombok·H2 의존성을 차단한다.
 - Lombok은 사용하지 않는다.
@@ -37,6 +37,7 @@
 - JPA가 채우는 엔티티 필드는 초기화 검사에서 제외한다.
 - 클래스 단위 `@SuppressWarnings("NullAway.Init")`는 사용하지 않는다.
 - 모든 영속 non-null 필드에 매핑 애노테이션을 명시한다.
+- 무애노테이션 non-null basic 필드도 `@Column`을 붙인다.
 - nullable 필드만 `@Nullable`로 유지한다.
 
 ### 정적분석 억제
@@ -58,7 +59,7 @@
 - 의존성은 `libs.*` 카탈로그 별칭으로만 선언한다.
 - 빌드스크립트에 버전 리터럴을 두지 않는다.
 
-| 항목 | 권장 baseline |
+| 항목 | baseline |
 |---|---|
 | Java | 25 (LTS) |
 | Spotless (Palantir Java Format) | 8.8.x (Palantir 2.94.x) |
