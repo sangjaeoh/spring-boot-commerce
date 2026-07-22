@@ -2,7 +2,7 @@ package com.commerce.admin.web.v1.admin.inquiry;
 
 import com.commerce.admin.web.auth.Admin;
 import com.commerce.admin.web.v1.admin.inquiry.request.InquiryAnswerRequest;
-import com.commerce.inquiry.service.InquiryModifier;
+import com.commerce.inquiry.application.provided.InquiryModifier;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;

@@ -1,6 +1,6 @@
 package com.commerce.api.web.v1.review.response;
 
-import com.commerce.review.info.ReviewInfo;
+import com.commerce.review.application.info.ReviewInfo;
 import com.commerce.web.paging.PaginationResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;

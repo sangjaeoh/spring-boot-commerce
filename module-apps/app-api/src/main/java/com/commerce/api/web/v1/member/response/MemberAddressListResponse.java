@@ -1,6 +1,6 @@
 package com.commerce.api.web.v1.member.response;
 
-import com.commerce.member.info.MemberAddressInfo;
+import com.commerce.member.application.info.MemberAddressInfo;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 

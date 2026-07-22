@@ -1,11 +1,11 @@
 package com.commerce.batch;
 
-import com.commerce.product.service.ProductAppender;
-import com.commerce.product.service.ProductModifier;
-import com.commerce.product.service.ProductVariantAppender;
-import com.commerce.product.service.ProductVariantModifier;
+import com.commerce.product.application.provided.ProductAppender;
+import com.commerce.product.application.provided.ProductModifier;
+import com.commerce.product.application.provided.ProductVariantAppender;
+import com.commerce.product.application.provided.ProductVariantModifier;
 import com.commerce.shared.entity.Money;
-import com.commerce.stock.service.StockAppender;
+import com.commerce.stock.application.provided.StockAppender;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;

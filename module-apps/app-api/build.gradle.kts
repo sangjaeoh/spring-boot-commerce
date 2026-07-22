@@ -5,7 +5,7 @@ plugins {
 dependencies {
     implementation(project(":module-common:common-core"))
     implementation(project(":module-common:common-jpa"))
-    implementation(project(":module-common:common-messaging"))
+    implementation(project(":module-common:common-event"))
     implementation(project(":module-common:common-auth"))
     // 컨트롤러가 인증 주체(AuthUser)를 코드 참조한다. 경계 웹 빈(ProblemDetail 핸들러·인증/멱등 필터·
     // 아규먼트 리졸버)은 스테레오타입 스캔으로 조립된다.
@@ -29,10 +29,7 @@ dependencies {
     implementation(libs.spring.boot.starter.actuator)
     implementation(libs.springdoc.openapi.starter.webmvc.ui)
 
-    // 스테레오타입 빈만 조립한다(코드 참조 없음): 결제 어댑터·메일 어댑터·아웃박스 발행 transport·멱등 키 저장소·JDBC 드라이버.
-    runtimeOnly(project(":module-external:external-payment"))
-    runtimeOnly(project(":module-external:external-mail"))
-    runtimeOnly(project(":module-external:external-storage"))
+    // 스테레오타입 빈만 조립한다(코드 참조 없음): 아웃박스 발행 transport·멱등 키 저장소·JDBC 드라이버.
     runtimeOnly(project(":module-infra:infra-messaging"))
     runtimeOnly(project(":module-infra:infra-redis"))
     runtimeOnly(libs.postgresql)
@@ -47,5 +44,7 @@ dependencies {
     testImplementation(libs.testcontainers.junit.jupiter)
     testImplementation(libs.flyway.core)
     testImplementation(libs.flyway.database.postgresql)
+    // 체크아웃 통합 테스트가 아웃박스 발행 단언에서 이벤트 record(OrderPaid)를 참조한다.
+    testImplementation(project(":module-events:event-order"))
     testRuntimeOnly(libs.junit.platform.launcher)
 }

@@ -10,11 +10,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.commerce.api.web.v1.WebIntegrationTest;
 import com.commerce.api.web.v1.review.request.ReviewRequest;
 import com.commerce.api.web.v1.review.response.ReviewCreationResponse;
-import com.commerce.member.service.MemberAppender;
-import com.commerce.order.entity.Address;
-import com.commerce.order.entity.OrderLineSnapshot;
-import com.commerce.order.service.OrderAppender;
-import com.commerce.order.service.OrderModifier;
+import com.commerce.member.application.provided.MemberAppender;
+import com.commerce.order.application.provided.OrderAppender;
+import com.commerce.order.application.provided.OrderModifier;
+import com.commerce.order.domain.Address;
+import com.commerce.order.domain.OrderLineSnapshot;
 import com.commerce.shared.entity.Money;
 import java.util.List;
 import java.util.UUID;

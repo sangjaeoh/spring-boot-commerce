@@ -4,11 +4,11 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
-import com.commerce.coupon.service.IssuedCouponModifier;
-import com.commerce.order.service.OrderModifier;
-import com.commerce.order.service.OrderReader;
-import com.commerce.payment.service.PaymentReader;
-import com.commerce.stock.service.StockModifier;
+import com.commerce.coupon.application.provided.IssuedCouponModifier;
+import com.commerce.order.application.provided.OrderModifier;
+import com.commerce.order.application.provided.OrderReader;
+import com.commerce.payment.application.provided.PaymentReader;
+import com.commerce.stock.application.provided.StockModifier;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Duration;

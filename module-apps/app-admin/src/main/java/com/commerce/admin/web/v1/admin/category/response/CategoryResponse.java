@@ -1,6 +1,6 @@
 package com.commerce.admin.web.v1.admin.category.response;
 
-import com.commerce.product.info.CategoryInfo;
+import com.commerce.product.application.info.CategoryInfo;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.UUID;
 

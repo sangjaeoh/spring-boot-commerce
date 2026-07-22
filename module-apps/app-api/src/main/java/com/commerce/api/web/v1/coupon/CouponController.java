@@ -4,7 +4,7 @@ import com.commerce.api.facade.CouponIssuanceFacade;
 import com.commerce.api.web.auth.Authenticated;
 import com.commerce.api.web.v1.coupon.response.CouponIssuanceResponse;
 import com.commerce.api.web.v1.coupon.response.IssuableCouponPageResponse;
-import com.commerce.coupon.service.CouponReader;
+import com.commerce.coupon.application.provided.CouponReader;
 import com.commerce.web.auth.AuthUser;
 import com.commerce.web.paging.PaginationRequest;
 import io.swagger.v3.oas.annotations.Operation;

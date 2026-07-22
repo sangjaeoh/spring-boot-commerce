@@ -1,6 +1,6 @@
 package com.commerce.api.facade.view;
 
-import com.commerce.product.entity.ProductStatus;
+import com.commerce.product.domain.ProductStatus;
 import com.commerce.shared.entity.Money;
 import java.util.List;
 import java.util.UUID;

@@ -1,17 +1,17 @@
 package com.commerce.api.facade;
 
 import com.commerce.api.facade.view.ProductSummaryView;
-import com.commerce.product.entity.ProductVariantStatus;
-import com.commerce.product.info.ProductImageInfo;
-import com.commerce.product.info.ProductInfo;
-import com.commerce.product.info.ProductVariantInfo;
-import com.commerce.product.service.ProductImageReader;
-import com.commerce.product.service.ProductReader;
-import com.commerce.product.service.ProductVariantReader;
+import com.commerce.product.application.info.ProductImageInfo;
+import com.commerce.product.application.info.ProductInfo;
+import com.commerce.product.application.info.ProductVariantInfo;
+import com.commerce.product.application.provided.ProductImageReader;
+import com.commerce.product.application.provided.ProductReader;
+import com.commerce.product.application.provided.ProductVariantReader;
+import com.commerce.product.domain.ProductVariantStatus;
 import com.commerce.shared.entity.Money;
-import com.commerce.stock.entity.StockStatus;
-import com.commerce.stock.info.StockInfo;
-import com.commerce.stock.service.StockReader;
+import com.commerce.stock.application.info.StockInfo;
+import com.commerce.stock.application.provided.StockReader;
+import com.commerce.stock.domain.StockStatus;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;

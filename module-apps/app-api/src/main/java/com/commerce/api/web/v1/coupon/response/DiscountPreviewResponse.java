@@ -1,6 +1,6 @@
 package com.commerce.api.web.v1.coupon.response;
 
-import com.commerce.coupon.info.DiscountPreviewInfo;
+import com.commerce.coupon.application.info.DiscountPreviewInfo;
 import io.swagger.v3.oas.annotations.media.Schema;
 import org.jspecify.annotations.Nullable;
 

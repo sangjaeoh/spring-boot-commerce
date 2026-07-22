@@ -10,11 +10,9 @@ import com.commerce.api.web.v1.member.request.MemberRenameRequest;
 import com.commerce.api.web.v1.member.request.MemberWithdrawalRequest;
 import com.commerce.api.web.v1.member.response.MemberRegistrationResponse;
 import com.commerce.api.web.v1.member.response.MemberResponse;
-import com.commerce.auth.token.OneTimeTokenStore;
-import com.commerce.member.port.MailGateway;
-import com.commerce.member.service.MemberAppender;
-import com.commerce.member.service.MemberModifier;
-import com.commerce.member.service.MemberReader;
+import com.commerce.member.application.provided.MemberModifier;
+import com.commerce.member.application.provided.MemberReader;
+import com.commerce.member.application.provided.MemberRegistrationProcessor;
 import com.commerce.web.auth.AuthUser;
 import com.commerce.web.exception.UnauthenticatedException;
 import com.commerce.web.exception.WebErrorCode;
@@ -25,9 +23,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import java.time.Duration;
 import java.util.UUID;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -45,32 +41,20 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/members")
 public class MemberController {
 
-    /** 이메일 인증 토큰의 1회용 저장 네임스페이스. */
-    static final String EMAIL_VERIFICATION_NAMESPACE = "email-verification";
-
-    private final MemberAppender memberAppender;
+    private final MemberRegistrationProcessor memberRegistrationProcessor;
     private final MemberReader memberReader;
     private final MemberModifier memberModifier;
     private final MemberWithdrawalFacade memberWithdrawalFacade;
-    private final OneTimeTokenStore oneTimeTokenStore;
-    private final MailGateway mailGateway;
-    private final Duration emailVerificationTokenTtl;
 
     public MemberController(
-            MemberAppender memberAppender,
+            MemberRegistrationProcessor memberRegistrationProcessor,
             MemberReader memberReader,
             MemberModifier memberModifier,
-            MemberWithdrawalFacade memberWithdrawalFacade,
-            OneTimeTokenStore oneTimeTokenStore,
-            MailGateway mailGateway,
-            @Value("${auth.email-verification-token-ttl}") Duration emailVerificationTokenTtl) {
-        this.memberAppender = memberAppender;
+            MemberWithdrawalFacade memberWithdrawalFacade) {
+        this.memberRegistrationProcessor = memberRegistrationProcessor;
         this.memberReader = memberReader;
         this.memberModifier = memberModifier;
         this.memberWithdrawalFacade = memberWithdrawalFacade;
-        this.oneTimeTokenStore = oneTimeTokenStore;
-        this.mailGateway = mailGateway;
-        this.emailVerificationTokenTtl = emailVerificationTokenTtl;
     }
 
     @Operation(summary = "회원 가입", description = "회원을 가입시키고 가입된 회원 ID를 반환한다.")
@@ -93,10 +77,7 @@ public class MemberController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public MemberRegistrationResponse register(@Valid @RequestBody MemberRegistrationRequest request) {
-        UUID memberId = memberAppender.register(request.email(), request.name(), request.password());
-        String token = UUID.randomUUID().toString();
-        oneTimeTokenStore.save(EMAIL_VERIFICATION_NAMESPACE, token, memberId.toString(), emailVerificationTokenTtl);
-        mailGateway.sendVerificationMail(request.email(), token);
+        UUID memberId = memberRegistrationProcessor.register(request.email(), request.name(), request.password());
         return MemberRegistrationResponse.from(memberId);
     }
 
@@ -115,10 +96,9 @@ public class MemberController {
     @PostMapping("/email-verification")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void verifyEmail(@Valid @RequestBody EmailVerificationRequest request) {
-        String memberId = oneTimeTokenStore
-                .consume(EMAIL_VERIFICATION_NAMESPACE, request.token())
-                .orElseThrow(() -> new UnauthenticatedException(WebErrorCode.UNAUTHENTICATED));
-        memberModifier.verifyEmail(UUID.fromString(memberId));
+        if (memberRegistrationProcessor.verifyEmail(request.token()).isEmpty()) {
+            throw new UnauthenticatedException(WebErrorCode.UNAUTHENTICATED);
+        }
     }
 
     @Operation(summary = "본인 조회", description = "토큰 주체의 회원 상세를 계정 상태·정지 사유와 함께 조회한다.")

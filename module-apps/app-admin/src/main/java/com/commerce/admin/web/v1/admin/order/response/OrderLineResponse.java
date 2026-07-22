@@ -1,6 +1,6 @@
 package com.commerce.admin.web.v1.admin.order.response;
 
-import com.commerce.order.info.OrderLineInfo;
+import com.commerce.order.application.info.OrderLineInfo;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;

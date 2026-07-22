@@ -8,14 +8,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.commerce.admin.web.v1.WebIntegrationTest;
 import com.commerce.admin.web.v1.admin.member.request.MemberSuspensionRequest;
-import com.commerce.member.entity.MemberStatus;
-import com.commerce.member.entity.SuspensionReason;
-import com.commerce.member.entity.WithdrawalReason;
-import com.commerce.member.info.MemberInfo;
-import com.commerce.member.service.MemberAppender;
-import com.commerce.member.service.MemberModifier;
-import com.commerce.member.service.MemberReader;
-import com.commerce.member.service.MemberRemover;
+import com.commerce.member.application.info.MemberInfo;
+import com.commerce.member.application.provided.MemberAppender;
+import com.commerce.member.application.provided.MemberModifier;
+import com.commerce.member.application.provided.MemberReader;
+import com.commerce.member.application.provided.MemberRemover;
+import com.commerce.member.domain.MemberStatus;
+import com.commerce.member.domain.SuspensionReason;
+import com.commerce.member.domain.WithdrawalReason;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

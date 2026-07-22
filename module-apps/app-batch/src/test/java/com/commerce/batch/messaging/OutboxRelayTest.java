@@ -4,13 +4,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.commerce.batch.BatchIntegrationTest;
-import com.commerce.cart.service.CartAppender;
-import com.commerce.cart.service.CartReader;
-import com.commerce.member.service.MemberAppender;
-import com.commerce.messaging.publish.MessagePublisher;
-import com.commerce.order.event.OrderPaid;
-import com.commerce.product.service.ProductVariantReader;
+import com.commerce.cart.application.provided.CartAppender;
+import com.commerce.cart.application.provided.CartReader;
+import com.commerce.event.order.OrderPaid;
+import com.commerce.event.publish.MessagePublisher;
+import com.commerce.infra.messaging.OutboxRelay;
+import com.commerce.member.application.provided.MemberAppender;
+import com.commerce.product.application.provided.ProductVariantReader;
 import com.commerce.shared.entity.Money;
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -18,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestConstructor;
 import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * 트랜잭션 아웃박스의 원자성(커밋과 발행의 동시 확정)과 릴레이 전달·멱등 소비를 검증하는 테스트다.
@@ -33,6 +37,7 @@ class OutboxRelayTest extends BatchIntegrationTest {
     private final OutboxRelay outboxRelay;
     private final TransactionTemplate transactionTemplate;
     private final JdbcTemplate jdbcTemplate;
+    private final ObjectMapper objectMapper;
     private final MemberAppender memberAppender;
     private final CartAppender cartAppender;
     private final CartReader cartReader;
@@ -43,6 +48,7 @@ class OutboxRelayTest extends BatchIntegrationTest {
             OutboxRelay outboxRelay,
             TransactionTemplate transactionTemplate,
             JdbcTemplate jdbcTemplate,
+            ObjectMapper objectMapper,
             MemberAppender memberAppender,
             CartAppender cartAppender,
             CartReader cartReader,
@@ -51,6 +57,7 @@ class OutboxRelayTest extends BatchIntegrationTest {
         this.outboxRelay = outboxRelay;
         this.transactionTemplate = transactionTemplate;
         this.jdbcTemplate = jdbcTemplate;
+        this.objectMapper = objectMapper;
         this.memberAppender = memberAppender;
         this.cartAppender = cartAppender;
         this.cartReader = cartReader;
@@ -113,6 +120,54 @@ class OutboxRelayTest extends BatchIntegrationTest {
     }
 
     @Test
+    @DisplayName("발행된 아웃박스 행의 event_type은 논리 타입 키다")
+    void publishedRowCarriesLogicalTypeKey() {
+        OrderPaid event = new OrderPaid(UUID.randomUUID(), UUID.randomUUID(), Set.of(UUID.randomUUID()));
+
+        transactionTemplate.executeWithoutResult(status -> messagePublisher.publish(event));
+
+        String eventType = jdbcTemplate.queryForObject(
+                "SELECT event_type FROM messaging.outbox WHERE payload LIKE ?", String.class, orderIdPattern(event));
+        assertThat(eventType).isEqualTo("order.OrderPaid");
+    }
+
+    @Test
+    @DisplayName("릴레이는 논리 타입 키로 이벤트를 해석해 발행한다")
+    void relayResolvesLogicalTypeKeyAndPublishes() {
+        UUID memberId = registerMember();
+        UUID variantId = seedVariant();
+        cartAppender.addItem(memberId, variantId, 1);
+        OrderPaid event = new OrderPaid(UUID.randomUUID(), memberId, Set.of(variantId));
+        insertOutboxRow(UUID.randomUUID(), "order.OrderPaid", objectMapper.writeValueAsString(event), Instant.now());
+
+        outboxRelay.relay();
+
+        assertThat(cartReader.getCart(memberId).items()).isEmpty();
+        assertThat(unpublishedCount(event.orderId())).isZero();
+    }
+
+    @Test
+    @DisplayName("미등록 키 행은 행 단위로 격리되고 릴레이는 계속된다")
+    void unregisteredKeyRowIsIsolatedAndRelayContinues() {
+        UUID memberId = registerMember();
+        UUID variantId = seedVariant();
+        cartAppender.addItem(memberId, variantId, 1);
+        UUID unknownRowId = UUID.randomUUID();
+        // 미등록 키 행을 정상 행보다 먼저(생성순 앞) 두어, 실패 후에도 뒤 행이 처리됨을 본다.
+        insertOutboxRow(unknownRowId, "order.Unknown", "{}", Instant.now().minusSeconds(60));
+        OrderPaid event = new OrderPaid(UUID.randomUUID(), memberId, Set.of(variantId));
+        transactionTemplate.executeWithoutResult(status -> messagePublisher.publish(event));
+
+        outboxRelay.relay();
+
+        assertThat(cartReader.getCart(memberId).items()).isEmpty();
+        assertThat(unpublishedCount(event.orderId())).isZero();
+        assertThat(unpublishedCountById(unknownRowId)).isEqualTo(1);
+        // 배경 스케줄 릴레이가 스위트 내내 격리 행을 재시도하지 않도록 발행 표시로 치운다.
+        jdbcTemplate.update("UPDATE messaging.outbox SET published_at = now() WHERE id = ?", unknownRowId);
+    }
+
+    @Test
     @DisplayName("활성 트랜잭션 없는 발행은 거부되고 행이 남지 않는다")
     void publishOutsideTransactionIsRejected() {
         OrderPaid event = new OrderPaid(UUID.randomUUID(), UUID.randomUUID(), Set.of(UUID.randomUUID()));
@@ -144,6 +199,22 @@ class OutboxRelayTest extends BatchIntegrationTest {
                 Long.class,
                 "%" + orderId + "%");
         return count == null ? 0 : count;
+    }
+
+    private long unpublishedCountById(UUID id) {
+        Long count = jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM messaging.outbox WHERE published_at IS NULL AND id = ?", Long.class, id);
+        return count == null ? 0 : count;
+    }
+
+    /** 릴레이 입력을 직접 구성하는 시나리오용으로 아웃박스 행을 임의 키·페이로드로 삽입한다. */
+    private void insertOutboxRow(UUID id, String eventType, String payload, Instant createdAt) {
+        jdbcTemplate.update(
+                "INSERT INTO messaging.outbox (id, event_type, payload, created_at) VALUES (?, ?, ?, ?)",
+                id,
+                eventType,
+                payload,
+                Timestamp.from(createdAt));
     }
 
     private String orderIdPattern(OrderPaid event) {

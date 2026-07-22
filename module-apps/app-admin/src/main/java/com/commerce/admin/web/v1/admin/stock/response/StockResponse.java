@@ -1,7 +1,7 @@
 package com.commerce.admin.web.v1.admin.stock.response;
 
-import com.commerce.stock.entity.StockStatus;
-import com.commerce.stock.info.StockInfo;
+import com.commerce.stock.application.info.StockInfo;
+import com.commerce.stock.domain.StockStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.UUID;

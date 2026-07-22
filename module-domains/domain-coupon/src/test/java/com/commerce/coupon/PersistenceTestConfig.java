@@ -13,9 +13,9 @@ import org.springframework.context.annotation.Import;
 @SpringBootConfiguration
 @EnableAutoConfiguration
 @Import(JpaAuditingConfig.class)
-class PersistenceTestConfig {
+public class PersistenceTestConfig {
 
-    static final Instant FIXED_NOW = Instant.parse("2025-06-15T00:00:00Z");
+    public static final Instant FIXED_NOW = Instant.parse("2025-06-15T00:00:00Z");
 
     @Bean
     Clock clock() {

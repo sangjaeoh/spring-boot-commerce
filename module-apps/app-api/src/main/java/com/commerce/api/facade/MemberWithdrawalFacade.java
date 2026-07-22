@@ -2,9 +2,9 @@ package com.commerce.api.facade;
 
 import com.commerce.api.exception.ApiErrorCode;
 import com.commerce.api.exception.ApiException;
-import com.commerce.member.entity.WithdrawalReason;
-import com.commerce.member.service.MemberRemover;
-import com.commerce.order.service.OrderReader;
+import com.commerce.member.application.provided.MemberRemover;
+import com.commerce.member.domain.WithdrawalReason;
+import com.commerce.order.application.provided.OrderReader;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 

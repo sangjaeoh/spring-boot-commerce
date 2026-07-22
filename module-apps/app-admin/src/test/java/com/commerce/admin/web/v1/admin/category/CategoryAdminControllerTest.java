@@ -14,7 +14,7 @@ import com.commerce.admin.web.v1.admin.category.request.CategoryRenameRequest;
 import com.commerce.admin.web.v1.admin.category.response.CategoryCreationResponse;
 import com.commerce.admin.web.v1.admin.category.response.CategoryListResponse;
 import com.commerce.admin.web.v1.admin.category.response.CategoryResponse;
-import com.commerce.member.service.MemberAppender;
+import com.commerce.member.application.provided.MemberAppender;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;

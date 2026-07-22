@@ -1,20 +1,20 @@
 package com.commerce.batch.facade;
 
-import com.commerce.coupon.service.IssuedCouponModifier;
-import com.commerce.order.entity.CancellationReason;
-import com.commerce.order.entity.OrderStatus;
-import com.commerce.order.info.OrderInfo;
-import com.commerce.order.info.OrderLineInfo;
-import com.commerce.order.service.OrderModifier;
-import com.commerce.order.service.OrderReader;
-import com.commerce.payment.entity.FailureReason;
-import com.commerce.payment.entity.PaymentStatus;
-import com.commerce.payment.exception.PaymentNotFoundException;
-import com.commerce.payment.info.PaymentInfo;
-import com.commerce.payment.port.GatewayTransactionStatus;
-import com.commerce.payment.service.PaymentProcessor;
-import com.commerce.payment.service.PaymentReader;
-import com.commerce.stock.service.StockModifier;
+import com.commerce.coupon.application.provided.IssuedCouponModifier;
+import com.commerce.order.application.info.OrderInfo;
+import com.commerce.order.application.info.OrderLineInfo;
+import com.commerce.order.application.provided.OrderModifier;
+import com.commerce.order.application.provided.OrderReader;
+import com.commerce.order.domain.CancellationReason;
+import com.commerce.order.domain.OrderStatus;
+import com.commerce.payment.application.info.GatewayTransactionInfo;
+import com.commerce.payment.application.info.PaymentInfo;
+import com.commerce.payment.application.provided.PaymentProcessor;
+import com.commerce.payment.application.provided.PaymentReader;
+import com.commerce.payment.domain.FailureReason;
+import com.commerce.payment.domain.PaymentNotFoundException;
+import com.commerce.payment.domain.PaymentStatus;
+import com.commerce.stock.application.provided.StockModifier;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
@@ -134,7 +134,7 @@ public class PaymentConfirmationFacade {
     /** 미확정(REQUESTED) 결제를 PG 거래 상태 조회로 확정한다. */
     private void confirmFromGateway(PaymentInfo payment) {
         // 1. PG 거래 상태 조회
-        GatewayTransactionStatus transaction = paymentProcessor.inquireGateway(payment.id());
+        GatewayTransactionInfo transaction = paymentProcessor.inquireGateway(payment.id());
         // 2. 주문 조회
         OrderInfo order = orderReader.getOrder(payment.orderId());
         // 3. 조회 결과별 확정

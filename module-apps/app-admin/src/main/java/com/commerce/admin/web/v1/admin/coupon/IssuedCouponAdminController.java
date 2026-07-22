@@ -2,7 +2,7 @@ package com.commerce.admin.web.v1.admin.coupon;
 
 import com.commerce.admin.web.auth.Admin;
 import com.commerce.admin.web.v1.admin.coupon.request.IssuedCouponRevocationRequest;
-import com.commerce.coupon.service.IssuedCouponModifier;
+import com.commerce.coupon.application.provided.IssuedCouponModifier;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;

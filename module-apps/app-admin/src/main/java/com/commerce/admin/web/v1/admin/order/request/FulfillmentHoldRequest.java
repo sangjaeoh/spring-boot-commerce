@@ -1,6 +1,6 @@
 package com.commerce.admin.web.v1.admin.order.request;
 
-import com.commerce.order.entity.HoldReason;
+import com.commerce.order.domain.HoldReason;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 

@@ -1,12 +1,12 @@
 package com.commerce.admin.web.v1.admin.order.response;
 
-import com.commerce.order.entity.CancellationReason;
-import com.commerce.order.entity.FulfillmentStatus;
-import com.commerce.order.entity.HoldReason;
-import com.commerce.order.entity.OrderStatus;
-import com.commerce.order.entity.RefundReason;
-import com.commerce.order.entity.ReturnStatus;
-import com.commerce.order.info.OrderInfo;
+import com.commerce.order.application.info.OrderInfo;
+import com.commerce.order.domain.CancellationReason;
+import com.commerce.order.domain.FulfillmentStatus;
+import com.commerce.order.domain.HoldReason;
+import com.commerce.order.domain.OrderStatus;
+import com.commerce.order.domain.RefundReason;
+import com.commerce.order.domain.ReturnStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.Comparator;

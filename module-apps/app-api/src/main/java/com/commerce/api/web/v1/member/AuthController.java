@@ -8,14 +8,12 @@ import com.commerce.api.web.v1.member.request.RefreshTokenRequest;
 import com.commerce.api.web.v1.member.response.LoginResponse;
 import com.commerce.api.web.v1.member.response.TokenRefreshResponse;
 import com.commerce.auth.token.JwtTokenCodec;
-import com.commerce.auth.token.OneTimeTokenStore;
 import com.commerce.auth.token.RefreshTokenStore;
-import com.commerce.member.exception.MemberNotFoundException;
-import com.commerce.member.info.MemberInfo;
-import com.commerce.member.port.MailGateway;
-import com.commerce.member.service.MemberCredentialValidator;
-import com.commerce.member.service.MemberModifier;
-import com.commerce.member.service.MemberReader;
+import com.commerce.member.application.info.MemberInfo;
+import com.commerce.member.application.provided.MemberCredentialValidator;
+import com.commerce.member.application.provided.MemberReader;
+import com.commerce.member.application.provided.PasswordResetProcessor;
+import com.commerce.member.domain.MemberNotFoundException;
 import com.commerce.web.exception.UnauthenticatedException;
 import com.commerce.web.exception.WebErrorCode;
 import io.swagger.v3.oas.annotations.Operation;
@@ -44,38 +42,26 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/auth")
 public class AuthController {
 
-    /** 재설정 토큰의 1회용 저장 네임스페이스. */
-    static final String PASSWORD_RESET_NAMESPACE = "password-reset";
-
     private final MemberCredentialValidator memberCredentialValidator;
     private final MemberReader memberReader;
-    private final MemberModifier memberModifier;
+    private final PasswordResetProcessor passwordResetProcessor;
     private final JwtTokenCodec jwtTokenCodec;
     private final RefreshTokenStore refreshTokenStore;
-    private final OneTimeTokenStore oneTimeTokenStore;
-    private final MailGateway mailGateway;
     private final Duration refreshTokenTtl;
-    private final Duration passwordResetTokenTtl;
 
     public AuthController(
             MemberCredentialValidator memberCredentialValidator,
             MemberReader memberReader,
-            MemberModifier memberModifier,
+            PasswordResetProcessor passwordResetProcessor,
             JwtTokenCodec jwtTokenCodec,
             RefreshTokenStore refreshTokenStore,
-            OneTimeTokenStore oneTimeTokenStore,
-            MailGateway mailGateway,
-            @Value("${auth.refresh-token-ttl}") Duration refreshTokenTtl,
-            @Value("${auth.password-reset-token-ttl}") Duration passwordResetTokenTtl) {
+            @Value("${auth.refresh-token-ttl}") Duration refreshTokenTtl) {
         this.memberCredentialValidator = memberCredentialValidator;
         this.memberReader = memberReader;
-        this.memberModifier = memberModifier;
+        this.passwordResetProcessor = passwordResetProcessor;
         this.jwtTokenCodec = jwtTokenCodec;
         this.refreshTokenStore = refreshTokenStore;
-        this.oneTimeTokenStore = oneTimeTokenStore;
-        this.mailGateway = mailGateway;
         this.refreshTokenTtl = refreshTokenTtl;
-        this.passwordResetTokenTtl = passwordResetTokenTtl;
     }
 
     @Operation(summary = "로그인", description = "이메일·비밀번호로 인증하고 액세스·리프레시 토큰을 발급한다.")
@@ -151,16 +137,7 @@ public class AuthController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @PostMapping("/password-reset-request")
     public void requestPasswordReset(@Valid @RequestBody PasswordResetMailRequest request) {
-        MemberInfo member;
-        try {
-            member = memberReader.getMemberByEmail(request.email());
-        } catch (MemberNotFoundException e) {
-            // 계정 존재를 노출하지 않는다 — 미가입 이메일도 동일 응답
-            return;
-        }
-        String token = UUID.randomUUID().toString();
-        oneTimeTokenStore.save(PASSWORD_RESET_NAMESPACE, token, member.id().toString(), passwordResetTokenTtl);
-        mailGateway.sendPasswordResetMail(member.email(), token);
+        passwordResetProcessor.requestReset(request.email());
     }
 
     @Operation(summary = "비밀번호 재설정", description = "재설정 토큰을 검증하고 새 비밀번호로 교체한다. 토큰은 1회용이다.")
@@ -182,10 +159,9 @@ public class AuthController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @PostMapping("/password-reset")
     public void resetPassword(@Valid @RequestBody PasswordResetRequest request) {
-        String memberId = oneTimeTokenStore
-                .consume(PASSWORD_RESET_NAMESPACE, request.token())
-                .orElseThrow(() -> new UnauthenticatedException(WebErrorCode.UNAUTHENTICATED));
-        memberModifier.resetPassword(UUID.fromString(memberId), request.newPassword());
+        if (passwordResetProcessor.reset(request.token(), request.newPassword()).isEmpty()) {
+            throw new UnauthenticatedException(WebErrorCode.UNAUTHENTICATED);
+        }
     }
 
     /** 활성 회원을 조회하고, 탈퇴 등으로 없으면 갱신 거부(401)로 바꾼다. */

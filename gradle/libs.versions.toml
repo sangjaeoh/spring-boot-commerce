@@ -48,6 +48,8 @@ spring-boot-starter-web = { module = "org.springframework.boot:spring-boot-start
 springdoc-openapi-starter-webmvc-ui = { module = "org.springdoc:springdoc-openapi-starter-webmvc-ui", version.ref = "springdoc" }
 spring-boot-starter-actuator = { module = "org.springframework.boot:spring-boot-starter-actuator" }
 slf4j-api = { module = "org.slf4j:slf4j-api" }
+# infra-messaging — 아웃박스 릴레이의 프로퍼티 게이트(@ConditionalOnProperty). 버전은 Spring Boot BOM
+spring-boot-autoconfigure = { module = "org.springframework.boot:spring-boot-autoconfigure" }
 spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-starter-test" }
 
 # infra-redis — Redis 멱등 키·레이트리밋·분산 락 저장소. 버전은 Spring Boot BOM

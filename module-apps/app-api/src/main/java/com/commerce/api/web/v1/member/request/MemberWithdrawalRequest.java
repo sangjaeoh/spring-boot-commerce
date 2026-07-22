@@ -1,6 +1,6 @@
 package com.commerce.api.web.v1.member.request;
 
-import com.commerce.member.entity.WithdrawalReason;
+import com.commerce.member.domain.WithdrawalReason;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 

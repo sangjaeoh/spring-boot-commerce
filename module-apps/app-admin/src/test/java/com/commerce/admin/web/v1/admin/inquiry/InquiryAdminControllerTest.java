@@ -7,9 +7,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.commerce.admin.web.v1.WebIntegrationTest;
 import com.commerce.admin.web.v1.admin.inquiry.request.InquiryAnswerRequest;
-import com.commerce.inquiry.service.InquiryAppender;
-import com.commerce.inquiry.service.InquiryReader;
-import com.commerce.member.service.MemberAppender;
+import com.commerce.inquiry.application.provided.InquiryAppender;
+import com.commerce.inquiry.application.provided.InquiryReader;
+import com.commerce.member.application.provided.MemberAppender;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

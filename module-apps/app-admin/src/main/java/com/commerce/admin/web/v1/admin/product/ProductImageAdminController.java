@@ -2,8 +2,8 @@ package com.commerce.admin.web.v1.admin.product;
 
 import com.commerce.admin.web.auth.Admin;
 import com.commerce.admin.web.v1.admin.product.response.ProductImageUploadResponse;
-import com.commerce.product.service.ProductImageAppender;
-import com.commerce.product.service.ProductImageRemover;
+import com.commerce.product.application.provided.ProductImageAppender;
+import com.commerce.product.application.provided.ProductImageRemover;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;

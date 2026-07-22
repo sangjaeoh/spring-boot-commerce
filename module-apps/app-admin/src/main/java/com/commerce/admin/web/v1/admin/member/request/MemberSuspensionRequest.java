@@ -1,6 +1,6 @@
 package com.commerce.admin.web.v1.admin.member.request;
 
-import com.commerce.member.entity.SuspensionReason;
+import com.commerce.member.domain.SuspensionReason;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 

@@ -1,0 +1,180 @@
+package com.commerce.order.application;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import com.commerce.event.publish.MessagePublisher;
+import com.commerce.order.application.info.OrderInfo;
+import com.commerce.order.application.provided.OrderAppender;
+import com.commerce.order.application.provided.OrderModifier;
+import com.commerce.order.application.provided.OrderReader;
+import com.commerce.order.domain.Address;
+import com.commerce.order.domain.CancellationReason;
+import com.commerce.order.domain.FulfillmentStatus;
+import com.commerce.order.domain.Order;
+import com.commerce.order.domain.OrderLineSnapshot;
+import com.commerce.order.domain.OrderStatus;
+import com.commerce.shared.entity.Money;
+import java.time.Instant;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Objects;
+import java.util.UUID;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
+import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration;
+import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
+import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.test.context.TestConstructor;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.postgresql.PostgreSQLContainer;
+import org.testcontainers.utility.DockerImageName;
+
+/**
+ * order 도메인의 영속 이음새를 실 PostgreSQL로 검증하는 테스트다.
+ *
+ * <p>두 테이블 {@code ddl-auto=validate} 정합, Address 임베디드·Money 컬럼 왕복, 라인 캐스케이드, 이행 전이를 확인한다.
+ */
+@DataJpaTest(
+        properties = {
+            "spring.jpa.hibernate.ddl-auto=validate",
+            "spring.flyway.enabled=true",
+            "spring.flyway.locations=classpath:db/migration/ordering",
+            "spring.flyway.schemas=ordering",
+            "spring.flyway.default-schema=ordering"
+        })
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
+@Testcontainers
+@Import({
+    DefaultOrderAppender.class,
+    DefaultOrderReader.class,
+    DefaultOrderModifier.class,
+    OrderPersistenceTest.NoOpMessagingConfig.class
+})
+@ImportAutoConfiguration(FlywayAutoConfiguration.class)
+@TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
+class OrderPersistenceTest {
+
+    @Container
+    @ServiceConnection
+    static PostgreSQLContainer postgres = new PostgreSQLContainer(DockerImageName.parse("postgres:17-alpine"));
+
+    private final OrderAppender orderAppender;
+    private final OrderReader orderReader;
+    private final OrderModifier orderModifier;
+    private final TestEntityManager em;
+
+    OrderPersistenceTest(
+            OrderAppender orderAppender, OrderReader orderReader, OrderModifier orderModifier, TestEntityManager em) {
+        this.orderAppender = orderAppender;
+        this.orderReader = orderReader;
+        this.orderModifier = orderModifier;
+        this.em = em;
+    }
+
+    private UUID place() {
+        return place(UUID.randomUUID());
+    }
+
+    private UUID place(UUID memberId) {
+        List<OrderLineSnapshot> lines = List.of(
+                new OrderLineSnapshot(UUID.randomUUID(), UUID.randomUUID(), "티셔츠", "Red / L", Money.of(10000L), 2));
+        Address address = Address.of("홍길동", "04524", "서울특별시 중구 세종대로 110", "3층", "010-1234-5678");
+        return orderAppender.place(memberId, lines, address, Money.ZERO, Money.of(3000L), null);
+    }
+
+    @Test
+    @DisplayName("주문 생성 후 조회 왕복 — Address 임베디드·라인 캐스케이드·validate 스키마 정합")
+    void placeThenGetOrder() {
+        UUID orderId = place();
+        em.flush();
+        em.clear();
+
+        OrderInfo order = orderReader.getOrder(orderId);
+
+        assertThat(order.totalAmount()).isEqualTo(Money.of(20000L));
+        assertThat(order.payAmount()).isEqualTo(Money.of(23000L));
+        assertThat(order.status()).isEqualTo(OrderStatus.PENDING);
+        assertThat(order.fulfillmentStatus()).isEqualTo(FulfillmentStatus.NOT_STARTED);
+        assertThat(order.lines()).hasSize(1);
+        assertThat(order.lines().get(0).optionLabel()).isEqualTo("Red / L");
+        assertThat(order.shippingAddress().recipientName()).isEqualTo("홍길동");
+        assertThat(order.orderNumber()).isNotBlank();
+    }
+
+    @Test
+    @DisplayName("결제·출고·배송 완료 이행이 반영되고 운송장 기록이 왕복한다")
+    void fulfillmentFlowPersists() {
+        UUID orderId = place();
+        em.flush();
+        orderModifier.markPaid(orderId);
+        em.flush();
+        orderModifier.ship(orderId, "CJ대한통운", "688900123456");
+        em.flush();
+        orderModifier.confirmDelivery(orderId);
+        em.flush();
+        em.clear();
+
+        OrderInfo order = orderReader.getOrder(orderId);
+        assertThat(order.status()).isEqualTo(OrderStatus.PAID);
+        assertThat(order.fulfillmentStatus()).isEqualTo(FulfillmentStatus.DELIVERED);
+        assertThat(order.carrier()).isEqualTo("CJ대한통운");
+        assertThat(order.trackingNumber()).isEqualTo("688900123456");
+    }
+
+    @Test
+    @DisplayName("취소 전이가 반영되고 낙관락 버전이 증가한다")
+    void cancelPersistsAndIncrementsVersion() {
+        UUID orderId = place();
+        em.flush();
+        em.clear();
+        assertThat(Objects.requireNonNull(em.find(Order.class, orderId)).getVersion())
+                .isZero();
+
+        orderModifier.cancel(orderId, CancellationReason.CUSTOMER_REQUEST);
+        em.flush();
+        em.clear();
+
+        Order reloaded = Objects.requireNonNull(em.find(Order.class, orderId));
+        assertThat(reloaded.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        assertThat(reloaded.getVersion()).isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("같은 생성 시각의 주문 목록 페이지는 id 내림차순 타이브레이커로 결정적 순서를 갖는다")
+    void getOrdersByMemberBreaksCreatedAtTieWithIdDesc() {
+        UUID memberId = UUID.randomUUID();
+        List<UUID> orderIds = List.of(place(memberId), place(memberId), place(memberId));
+        em.flush();
+        em.getEntityManager()
+                .createNativeQuery("update ordering.orders set created_at = :t where member_id = :memberId")
+                .setParameter("t", Instant.parse("2026-01-01T00:00:00Z"))
+                .setParameter("memberId", memberId)
+                .executeUpdate();
+        em.clear();
+
+        Page<OrderInfo> page = orderReader.getOrdersByMember(memberId, PageRequest.of(0, 10));
+
+        List<UUID> expected =
+                orderIds.stream().sorted(Comparator.<UUID>reverseOrder()).toList();
+        assertThat(page.getContent()).extracting(OrderInfo::id).containsExactlyElementsOf(expected);
+        assertThat(page.getTotalElements()).isEqualTo(3);
+    }
+
+    @TestConfiguration
+    static class NoOpMessagingConfig {
+
+        @Bean
+        MessagePublisher messagePublisher() {
+            return event -> {};
+        }
+    }
+}

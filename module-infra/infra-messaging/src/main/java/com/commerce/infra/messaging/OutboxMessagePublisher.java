@@ -1,8 +1,8 @@
 package com.commerce.infra.messaging;
 
 import com.commerce.core.id.UuidV7Generator;
-import com.commerce.messaging.event.DomainEvent;
-import com.commerce.messaging.publish.MessagePublisher;
+import com.commerce.event.event.DomainEvent;
+import com.commerce.event.publish.MessagePublisher;
 import java.sql.Timestamp;
 import java.time.Clock;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -39,7 +39,7 @@ public final class OutboxMessagePublisher implements MessagePublisher {
         jdbcTemplate.update(
                 "INSERT INTO messaging.outbox (id, event_type, payload, created_at) VALUES (?, ?, ?, ?)",
                 UuidV7Generator.generate(),
-                event.getClass().getName(),
+                event.eventType(),
                 objectMapper.writeValueAsString(event),
                 Timestamp.from(clock.instant()));
     }

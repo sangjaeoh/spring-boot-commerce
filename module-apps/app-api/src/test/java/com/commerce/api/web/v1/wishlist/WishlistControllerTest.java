@@ -8,7 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.commerce.api.web.v1.WebIntegrationTest;
 import com.commerce.api.web.v1.wishlist.request.AddWishlistItemRequest;
-import com.commerce.member.service.MemberAppender;
+import com.commerce.member.application.provided.MemberAppender;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

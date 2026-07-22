@@ -1,6 +1,6 @@
 package com.commerce.api.web.v1.order.request;
 
-import com.commerce.payment.entity.PaymentMethod;
+import com.commerce.payment.domain.PaymentMethod;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
