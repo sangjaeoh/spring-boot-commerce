@@ -46,7 +46,7 @@ public class ProductVariantReader {
                 .toList();
     }
 
-    /** 같은 옵션 조합의 비-{@code RETIRED} 변형을 조회한다. 중복 검사와 같은 시그니처 정규화를 쓴다. */
+    /** 같은 옵션 조합의 비-{@code RETIRED} 변형을 조회한다. */
     @Transactional(readOnly = true)
     public Optional<ProductVariantInfo> findNonRetiredByOptions(UUID productId, List<ProductOption> options) {
         String signature = NormalizedOptions.of(options).signature();

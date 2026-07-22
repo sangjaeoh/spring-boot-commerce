@@ -23,6 +23,7 @@ public class StockModifier {
     /**
      * 재고를 차감한다.
      *
+     * @throws StockNotFoundException 재고가 없으면
      * @throws StockShortageException 가용 수량이 부족하면
      */
     @Transactional
@@ -30,7 +31,11 @@ public class StockModifier {
         find(variantId).deduct(amount);
     }
 
-    /** 재고 수량을 되돌린다. */
+    /**
+     * 재고 수량을 되돌린다.
+     *
+     * @throws StockNotFoundException 재고가 없으면
+     */
     @Transactional
     public void restore(UUID variantId, int amount) {
         find(variantId).restore(amount);

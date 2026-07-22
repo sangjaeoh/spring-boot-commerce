@@ -27,7 +27,7 @@ public class OrderLine extends BaseTimeEntity<UUID> {
     @Id
     private UUID id;
 
-    /** 부모 주문. {@code Order.lines}의 mappedBy 대상이자 컬럼 {@code order_id} 소유 필드다. */
+    /** 부모 주문. */
     // Hibernate가 리플렉션으로 읽으나 자바 코드에선 읽지 않는다.
     @Keep
     @ManyToOne(fetch = FetchType.LAZY)
