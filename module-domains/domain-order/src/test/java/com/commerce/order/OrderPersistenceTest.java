@@ -2,7 +2,7 @@ package com.commerce.order;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.commerce.messaging.publish.MessagePublisher;
+import com.commerce.event.publish.MessagePublisher;
 import com.commerce.order.entity.Address;
 import com.commerce.order.entity.CancellationReason;
 import com.commerce.order.entity.FulfillmentStatus;

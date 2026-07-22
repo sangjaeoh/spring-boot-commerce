@@ -10,7 +10,7 @@ restrictProjectDependencies("domain-module") { dependencyPath ->
             ":module-domains:domain-shared",
             ":module-common:common-core",
             ":module-common:common-jpa",
-            ":module-common:common-messaging",
+            ":module-common:common-event",
         )
 }
 

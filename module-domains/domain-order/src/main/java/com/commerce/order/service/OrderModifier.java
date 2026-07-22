@@ -1,6 +1,6 @@
 package com.commerce.order.service;
 
-import com.commerce.messaging.publish.MessagePublisher;
+import com.commerce.event.publish.MessagePublisher;
 import com.commerce.order.entity.CancellationReason;
 import com.commerce.order.entity.HoldReason;
 import com.commerce.order.entity.Order;

@@ -1,6 +1,6 @@
-package com.commerce.messaging.publish;
+package com.commerce.event.publish;
 
-import com.commerce.messaging.event.DomainEvent;
+import com.commerce.event.event.DomainEvent;
 
 /** 도메인 이벤트를 구독자에게 발행하는 벤더 중립 포트다. */
 public interface MessagePublisher {

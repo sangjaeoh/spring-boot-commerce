@@ -1,4 +1,4 @@
-package com.commerce.messaging.outbox;
+package com.commerce.event.outbox;
 
 import java.util.List;
 import java.util.UUID;

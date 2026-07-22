@@ -5,7 +5,7 @@ plugins {
 dependencies {
     implementation(project(":module-common:common-core"))
     implementation(project(":module-common:common-jpa"))
-    implementation(project(":module-common:common-messaging"))
+    implementation(project(":module-common:common-event"))
     implementation(project(":module-common:common-auth"))
     // 컨트롤러가 인증 주체(AuthUser)를 코드 참조한다. 경계 웹 빈(ProblemDetail 핸들러·인증/멱등 필터·
     // 아규먼트 리졸버)은 스테레오타입 스캔으로 조립된다.

@@ -7,7 +7,7 @@ dependencies {
     api(project(":module-domains:domain-shared"))
     implementation(project(":module-common:common-core"))
     implementation(project(":module-common:common-jpa"))
-    implementation(project(":module-common:common-messaging"))
+    implementation(project(":module-common:common-event"))
     testImplementation(libs.spring.boot.starter.test)
     testImplementation(libs.spring.boot.starter.data.jpa.test)
     testImplementation(libs.spring.boot.testcontainers)

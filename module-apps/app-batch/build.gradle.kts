@@ -5,7 +5,7 @@ plugins {
 dependencies {
     implementation(project(":module-common:common-core"))
     implementation(project(":module-common:common-jpa"))
-    implementation(project(":module-common:common-messaging"))
+    implementation(project(":module-common:common-event"))
     implementation(project(":module-domains:domain-order"))
     implementation(project(":module-domains:domain-payment"))
     implementation(project(":module-domains:domain-stock"))

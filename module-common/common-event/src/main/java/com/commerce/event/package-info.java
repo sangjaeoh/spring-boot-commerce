@@ -1,4 +1,4 @@
 @NullMarked
-package com.commerce.messaging;
+package com.commerce.event;
 
 import org.jspecify.annotations.NullMarked;

@@ -1,8 +1,8 @@
 package com.commerce.batch.messaging;
 
-import com.commerce.messaging.event.DomainEvent;
-import com.commerce.messaging.outbox.OutboxMessage;
-import com.commerce.messaging.outbox.OutboxStore;
+import com.commerce.event.event.DomainEvent;
+import com.commerce.event.outbox.OutboxMessage;
+import com.commerce.event.outbox.OutboxStore;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
