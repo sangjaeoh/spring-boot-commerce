@@ -4,17 +4,15 @@ import com.commerce.cart.service.CartModifier;
 import com.commerce.order.event.OrderPaid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.event.TransactionPhase;
-import org.springframework.transaction.event.TransactionalEventListener;
 
 /**
  * {@link OrderPaid}를 소비해 주문된 변형 라인을 장바구니에서 비우는 리스너다.
  *
- * <p>이벤트는 in-process 발행이라 발행 프로세스가 소비도 소유한다 — 스윕·웹훅 확정이 발행하는 이 앱과
- * 동기 체크아웃이 발행하는 app-api에 동명 리스너가 병존한다.
+ * <p>아웃박스 릴레이가 커밋된 이벤트만 재발행하므로 커밋 후 단계 대기 없이 평 리스너로 소비하고, 소비
+ * 쓰기는 자체 트랜잭션으로 커밋한다. 재전달(at-least-once)은 제거의 자연 멱등이 흡수한다.
  */
 @Component
 public class OrderPaidListener {
@@ -27,11 +25,9 @@ public class OrderPaidListener {
         this.cartModifier = cartModifier;
     }
 
-    /** 결제 완료 커밋 후 주문된 변형 라인을 장바구니에서 제거한다. */
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    // 커밋 후 단계에는 방금 커밋된 트랜잭션의 동기화가 아직 살아 있어, 새 트랜잭션 없이 도메인 쓰기를 하면
-    // 재커밋되지 않고 유실된다. REQUIRES_NEW로 별도 트랜잭션을 연다.
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    /** 결제 완료 이벤트를 받아 주문된 변형 라인을 장바구니에서 제거한다. */
+    @EventListener
+    @Transactional
     public void on(OrderPaid event) {
         try {
             cartModifier.removeItems(event.memberId(), event.orderedVariantIds());

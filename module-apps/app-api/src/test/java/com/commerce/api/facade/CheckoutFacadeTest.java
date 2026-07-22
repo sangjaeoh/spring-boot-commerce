@@ -6,7 +6,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.commerce.api.exception.ApiErrorCode;
 import com.commerce.api.exception.ApiException;
 import com.commerce.cart.service.CartAppender;
-import com.commerce.cart.service.CartReader;
 import com.commerce.coupon.entity.Discount;
 import com.commerce.coupon.entity.IssuedCouponStatus;
 import com.commerce.coupon.entity.ValidityPeriod;
@@ -20,6 +19,7 @@ import com.commerce.member.service.MemberModifier;
 import com.commerce.order.entity.Address;
 import com.commerce.order.entity.FulfillmentStatus;
 import com.commerce.order.entity.OrderStatus;
+import com.commerce.order.event.OrderPaid;
 import com.commerce.order.info.OrderInfo;
 import com.commerce.order.service.OrderReader;
 import com.commerce.payment.entity.PaymentMethod;
@@ -31,6 +31,7 @@ import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestConstructor;
 
 @TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
@@ -44,11 +45,11 @@ class CheckoutFacadeTest extends FacadeIntegrationTest {
     private final IssuedCouponAppender issuedCouponAppender;
     private final IssuedCouponModifier issuedCouponModifier;
     private final OrderReader orderReader;
-    private final CartReader cartReader;
     private final ProductModifier productModifier;
     private final ProductVariantReader variantReader;
     private final IssuedCouponReader issuedCouponReader;
     private final StockReader stockReader;
+    private final JdbcTemplate jdbcTemplate;
 
     CheckoutFacadeTest(
             CheckoutFacade checkoutFacade,
@@ -59,11 +60,11 @@ class CheckoutFacadeTest extends FacadeIntegrationTest {
             IssuedCouponAppender issuedCouponAppender,
             IssuedCouponModifier issuedCouponModifier,
             OrderReader orderReader,
-            CartReader cartReader,
             ProductModifier productModifier,
             ProductVariantReader variantReader,
             IssuedCouponReader issuedCouponReader,
-            StockReader stockReader) {
+            StockReader stockReader,
+            JdbcTemplate jdbcTemplate) {
         this.checkoutFacade = checkoutFacade;
         this.memberAppender = memberAppender;
         this.memberModifier = memberModifier;
@@ -72,16 +73,17 @@ class CheckoutFacadeTest extends FacadeIntegrationTest {
         this.issuedCouponAppender = issuedCouponAppender;
         this.issuedCouponModifier = issuedCouponModifier;
         this.orderReader = orderReader;
-        this.cartReader = cartReader;
         this.productModifier = productModifier;
         this.variantReader = variantReader;
         this.issuedCouponReader = issuedCouponReader;
         this.stockReader = stockReader;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     @Test
-    @DisplayName("체크아웃이 주문을 결제하고 재고를 차감하며 커밋 후 장바구니를 비운다")
-    void checkoutPaysOrderDeductsStockAndClearsCart() {
+    @DisplayName("체크아웃이 주문을 결제하고 재고를 차감하며 커밋과 함께 OrderPaid를 아웃박스에 남긴다")
+    // 장바구니 비우기 소비는 아웃박스 릴레이(app-batch) 소유다 — 여기서는 발행의 원자적 영속만 검증한다.
+    void checkoutPaysOrderDeductsStockAndRecordsOutboxEvent() {
         UUID memberId = registerMember();
         UUID variantId = seedProduct(Money.of(10000L), 50);
         cartAppender.addItem(memberId, variantId, 2);
@@ -93,7 +95,12 @@ class CheckoutFacadeTest extends FacadeIntegrationTest {
         assertThat(order.fulfillmentStatus()).isEqualTo(FulfillmentStatus.PREPARING);
         assertThat(order.payAmount()).isEqualTo(Money.of(23000L));
         assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(48);
-        assertThat(cartReader.getCart(memberId).items()).isEmpty();
+        Long outboxCount = jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM messaging.outbox WHERE event_type = ? AND payload LIKE ?",
+                Long.class,
+                OrderPaid.class.getName(),
+                "%" + orderId + "%");
+        assertThat(outboxCount).isEqualTo(1);
     }
 
     @Test

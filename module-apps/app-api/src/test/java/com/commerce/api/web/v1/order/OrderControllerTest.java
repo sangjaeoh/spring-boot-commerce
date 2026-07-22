@@ -50,6 +50,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestConstructor;
 import org.springframework.test.web.servlet.MockMvc;
 import tools.jackson.databind.ObjectMapper;
@@ -64,6 +65,7 @@ class OrderControllerTest extends WebIntegrationTest {
     private final MemberAppender memberAppender;
     private final CartAppender cartAppender;
     private final CartReader cartReader;
+    private final JdbcTemplate jdbcTemplate;
     private final ProductVariantReader variantReader;
     private final CouponAppender couponAppender;
     private final IssuedCouponAppender issuedCouponAppender;
@@ -78,6 +80,7 @@ class OrderControllerTest extends WebIntegrationTest {
             MemberAppender memberAppender,
             CartAppender cartAppender,
             CartReader cartReader,
+            JdbcTemplate jdbcTemplate,
             ProductVariantReader variantReader,
             CouponAppender couponAppender,
             IssuedCouponAppender issuedCouponAppender,
@@ -90,6 +93,7 @@ class OrderControllerTest extends WebIntegrationTest {
         this.memberAppender = memberAppender;
         this.cartAppender = cartAppender;
         this.cartReader = cartReader;
+        this.jdbcTemplate = jdbcTemplate;
         this.variantReader = variantReader;
         this.couponAppender = couponAppender;
         this.issuedCouponAppender = issuedCouponAppender;
@@ -155,7 +159,8 @@ class OrderControllerTest extends WebIntegrationTest {
     }
 
     @Test
-    @DisplayName("선택 체크아웃이 201로 선택 라인만 주문하고 미선택 라인은 장바구니에 남긴다")
+    @DisplayName("선택 체크아웃이 201로 선택 라인만 주문하고 OrderPaid에 선택 라인만 싣는다")
+    // 장바구니 비우기 소비는 아웃박스 릴레이(app-batch) 소유다 — 선택성은 이벤트 페이로드로 검증한다.
     void partialCheckoutOrdersSelectionOnly() throws Exception {
         UUID memberId = registerMember();
         UUID keptVariantId = seedProduct(50);
@@ -181,9 +186,10 @@ class OrderControllerTest extends WebIntegrationTest {
         assertThat(order.payAmount()).isEqualTo(Money.of(23000L));
         assertThat(stockReader.getByVariantId(orderedVariantId).quantity()).isEqualTo(48);
         assertThat(stockReader.getByVariantId(keptVariantId).quantity()).isEqualTo(50);
-        CartInfo cart = cartReader.getCart(memberId);
-        assertThat(cart.items()).hasSize(1);
-        assertThat(cart.items().get(0).variantId()).isEqualTo(keptVariantId);
+        String payload = jdbcTemplate.queryForObject(
+                "SELECT payload FROM messaging.outbox WHERE payload LIKE ?", String.class, "%" + orderId + "%");
+        assertThat(payload).contains(orderedVariantId.toString()).doesNotContain(keptVariantId.toString());
+        assertThat(cartReader.getCart(memberId).items()).hasSize(2);
     }
 
     @Test

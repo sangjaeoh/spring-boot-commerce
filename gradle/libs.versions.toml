@@ -59,6 +59,8 @@ shedlock-spring = { module = "net.javacrumbs.shedlock:shedlock-spring", version.
 shedlock-provider-redis-spring = { module = "net.javacrumbs.shedlock:shedlock-provider-redis-spring", version.ref = "shedlock" }
 
 # common-web — 슬림 스프링 웹 프레임워크(임베디드 서버 스타터 회피). 버전은 Spring Boot BOM
+# infra-messaging — 아웃박스 저장(JdbcTemplate)·트랜잭션 동기화 검사. 버전은 Spring Boot BOM.
+spring-jdbc = { module = "org.springframework:spring-jdbc" }
 spring-webmvc = { module = "org.springframework:spring-webmvc" }
 spring-orm = { module = "org.springframework:spring-orm" }
 jakarta-servlet-api = { module = "jakarta.servlet:jakarta.servlet-api" }

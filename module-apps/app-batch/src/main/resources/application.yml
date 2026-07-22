@@ -47,6 +47,13 @@ management:
         readiness:
           include: readinessState,db,redis
 
+messaging:
+  outbox:
+    relay:
+      # 아웃박스 미발행 이벤트의 재발행 주기. 짧게 두어 커밋-소비 지연을 초 단위로 유지한다(폴링은
+      # 미발행 부분 인덱스만 스캔해 저렴하다).
+      fixed-delay: 1s
+
 order:
   reconciliation:
     # 생성 후 이 유예가 지나도록 PENDING인 주문만 스윕 대상이다. 결제 리컨실 유예 이상으로 두어(진행 중 체크아웃과

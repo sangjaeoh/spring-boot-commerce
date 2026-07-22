@@ -7,9 +7,19 @@ import org.flywaydb.core.Flyway;
 /** 도메인 스키마별로 Flyway를 실행하는 팩토리다. */
 public final class SchemaFlywayFactory {
 
-    // 등록된 도메인 스키마. db/migration/{name}/ 로케이션 규약과 1:1 대응한다.
+    // 등록된 스키마(도메인 + 교차 관심사 messaging 아웃박스). db/migration/{name}/ 로케이션 규약과 1:1 대응한다.
     private static final List<String> SCHEMAS = List.of(
-            "member", "product", "stock", "cart", "coupon", "ordering", "payment", "wishlist", "review", "inquiry");
+            "member",
+            "product",
+            "stock",
+            "cart",
+            "coupon",
+            "ordering",
+            "payment",
+            "wishlist",
+            "review",
+            "inquiry",
+            "messaging");
 
     private SchemaFlywayFactory() {}
 

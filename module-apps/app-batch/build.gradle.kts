@@ -24,7 +24,7 @@ dependencies {
     implementation(libs.swagger.annotations.jakarta)
 
     // 스테레오타입 빈만 조립한다(코드 참조 없음): ProblemDetail 핸들러·보안헤더/요청ID/멱등 필터·결제
-    // 어댑터(PG 상태 조회)·in-process 발행 transport·ShedLock LockProvider·JDBC 드라이버.
+    // 어댑터(PG 상태 조회)·아웃박스 발행 transport와 저장소 포트 구현·ShedLock LockProvider·JDBC 드라이버.
     runtimeOnly(project(":module-common:common-web"))
     runtimeOnly(project(":module-external:external-payment"))
     runtimeOnly(project(":module-infra:infra-messaging"))

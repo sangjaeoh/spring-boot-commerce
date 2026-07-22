@@ -24,7 +24,7 @@ dependencies {
     implementation(libs.spring.boot.starter.actuator)
     implementation(libs.springdoc.openapi.starter.webmvc.ui)
 
-    // 스테레오타입 빈만 조립한다(코드 참조 없음): 환불 PG 취소 어댑터·이미지 저장 어댑터·in-process 발행
+    // 스테레오타입 빈만 조립한다(코드 참조 없음): 환불 PG 취소 어댑터·이미지 저장 어댑터·아웃박스 발행
     // transport·멱등 키 저장소·JDBC 드라이버.
     runtimeOnly(project(":module-external:external-payment"))
     runtimeOnly(project(":module-external:external-storage"))

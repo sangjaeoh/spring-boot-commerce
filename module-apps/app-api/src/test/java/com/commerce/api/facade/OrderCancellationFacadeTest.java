@@ -14,6 +14,7 @@ import static org.mockito.Mockito.verify;
 import com.commerce.api.exception.ApiErrorCode;
 import com.commerce.api.exception.ApiException;
 import com.commerce.cart.service.CartAppender;
+import com.commerce.cart.service.CartModifier;
 import com.commerce.coupon.entity.Discount;
 import com.commerce.coupon.entity.IssuedCouponStatus;
 import com.commerce.coupon.entity.ValidityPeriod;
@@ -46,6 +47,7 @@ import com.commerce.stock.exception.StockShortageException;
 import com.commerce.stock.service.StockModifier;
 import com.commerce.stock.service.StockReader;
 import java.time.Instant;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.CountDownLatch;
@@ -88,6 +90,7 @@ class OrderCancellationFacadeTest extends FacadeIntegrationTest {
     private final CheckoutFacade checkoutFacade;
     private final MemberAppender memberAppender;
     private final CartAppender cartAppender;
+    private final CartModifier cartModifier;
     private final CouponAppender couponAppender;
     private final IssuedCouponAppender issuedCouponAppender;
     private final OrderReader orderReader;
@@ -101,6 +104,7 @@ class OrderCancellationFacadeTest extends FacadeIntegrationTest {
             CheckoutFacade checkoutFacade,
             MemberAppender memberAppender,
             CartAppender cartAppender,
+            CartModifier cartModifier,
             CouponAppender couponAppender,
             IssuedCouponAppender issuedCouponAppender,
             OrderReader orderReader,
@@ -112,6 +116,7 @@ class OrderCancellationFacadeTest extends FacadeIntegrationTest {
         this.checkoutFacade = checkoutFacade;
         this.memberAppender = memberAppender;
         this.cartAppender = cartAppender;
+        this.cartModifier = cartModifier;
         this.couponAppender = couponAppender;
         this.issuedCouponAppender = issuedCouponAppender;
         this.orderReader = orderReader;
@@ -455,6 +460,8 @@ class OrderCancellationFacadeTest extends FacadeIntegrationTest {
         UUID issuedId = issuedCouponAppender.issue(couponId, memberId);
         UUID cancelledOrderId = checkoutFacade.checkout(memberId, address(), Money.ZERO, issuedId, PaymentMethod.CARD);
         orderCancellationFacade.cancel(cancelledOrderId, memberId);
+        // 주문된 라인의 장바구니 제거는 아웃박스 릴레이(app-batch) 소유가 됐다 — 재주문 픽스처가 직접 비운다.
+        cartModifier.removeItems(memberId, Set.of(variantId));
         cartAppender.addItem(memberId, variantId, 2);
         UUID reuseOrderId = checkoutFacade.checkout(memberId, address(), Money.ZERO, issuedId, PaymentMethod.CARD);
 

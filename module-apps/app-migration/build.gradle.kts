@@ -10,7 +10,8 @@ dependencies {
     runtimeOnly(libs.postgresql)
 
     // 도메인은 마이그레이션 리소스(db/migration/{schema})와 엔티티(검증용)만 필요하다 — 도메인 코드
-    // 컴파일 의존은 없으므로 runtimeOnly로 둔다.
+    // 컴파일 의존은 없으므로 runtimeOnly로 둔다. infra-messaging은 아웃박스(messaging 스키마) 리소스 소유자다.
+    runtimeOnly(project(":module-infra:infra-messaging"))
     runtimeOnly(project(":module-domains:domain-member"))
     runtimeOnly(project(":module-domains:domain-product"))
     runtimeOnly(project(":module-domains:domain-stock"))
