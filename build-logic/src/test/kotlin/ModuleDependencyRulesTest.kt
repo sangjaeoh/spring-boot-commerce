@@ -58,4 +58,32 @@ class ModuleDependencyRulesTest {
         owner.configurations.getByName("testImplementation").dependencies.toList()
         owner.configurations.getByName("implementation").dependencies.toList()
     }
+
+    @Test
+    fun acceptsAcyclicDomainEdgeRegistration() {
+        // 검출 함수는 순환이 없으면 예외 없이 끝난다 — 간선 0건(현 상태)과 선형 간선을 함께 확인한다.
+        ensureAcyclicDomainEdges(emptyMap())
+        ensureAcyclicDomainEdges(
+            mapOf(
+                "domain-a" to setOf("domain-b"),
+                "domain-b" to setOf("domain-c"),
+                "domain-c" to emptySet(),
+            ),
+        )
+    }
+
+    @Test
+    fun rejectsCyclicDomainEdgeRegistrationAtConfigurationTime() {
+        val exception = assertThrows<GradleException> {
+            ensureAcyclicDomainEdges(
+                mapOf(
+                    "domain-a" to setOf("domain-b"),
+                    "domain-b" to setOf("domain-a"),
+                ),
+            )
+        }
+
+        assertTrue(exception.message!!.contains("domain-a"))
+        assertTrue(exception.message!!.contains("domain-b"))
+    }
 }

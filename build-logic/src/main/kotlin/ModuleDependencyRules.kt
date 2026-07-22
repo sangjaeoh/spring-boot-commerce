@@ -23,3 +23,31 @@ fun Project.restrictProjectDependencies(ownerDescription: String, isAllowed: (St
         }
     }
 }
+
+/**
+ * 도메인 간 등록 간선(도메인명 → 의존 도메인명 집합)에서 순환을 검출해, 있으면 구성 시점에 빌드를 깨뜨린다.
+ *
+ * docs/architecture.md 모듈 지도의 "명시 등록한 다른 domain-{name} 모듈만 의존 가능" 간선이 순환하면
+ * 도메인 경계가 상호 재귀로 무너지므로 등록 자체를 거부한다.
+ */
+fun ensureAcyclicDomainEdges(edges: Map<String, Collection<String>>) {
+    val visiting = LinkedHashSet<String>()
+    val done = HashSet<String>()
+
+    fun visit(node: String) {
+        if (node in done) {
+            return
+        }
+        if (!visiting.add(node)) {
+            val cycle = visiting.dropWhile { it != node } + node
+            throw GradleException(
+                "도메인 간선 등록에 순환이 있다: ${cycle.joinToString(" -> ")} (docs/architecture.md 모듈 지도)",
+            )
+        }
+        edges[node].orEmpty().forEach { visit(it) }
+        visiting.remove(node)
+        done.add(node)
+    }
+
+    edges.keys.forEach { visit(it) }
+}
