@@ -8,13 +8,21 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.commerce.web.auth.AuthUser;
+import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.authentication.preauth.PreAuthenticatedAuthenticationToken;
 import org.springframework.test.context.TestConstructor;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
@@ -89,5 +97,36 @@ class IdempotencyFilterTest {
     void safeMethodBypasses() throws Exception {
         mvc.perform(get("/test/echo").header(HEADER, "get-1")).andExpect(status().isOk());
         mvc.perform(get("/test/echo").header(HEADER, "get-1")).andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("인증 주체가 다르면 같은 키도 각각 통과한다")
+    void sameKeyDifferentPrincipalsPass() throws Exception {
+        performAs(UUID.randomUUID(), "member-scope-1").andExpect(status().isOk());
+        performAs(UUID.randomUUID(), "member-scope-1").andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("같은 인증 주체의 같은 키 재요청은 409로 거부된다")
+    void sameKeySamePrincipalRejected() throws Exception {
+        UUID memberId = UUID.randomUUID();
+
+        performAs(memberId, "member-scope-2").andExpect(status().isOk());
+        performAs(memberId, "member-scope-2")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("DUPLICATE_REQUEST"));
+    }
+
+    /** 회원을 인증 주체로 실은 시큐리티 컨텍스트에서 키를 실어 요청한다. MockMvc는 호출 스레드에서 동기 실행된다. */
+    private ResultActions performAs(UUID memberId, String key) throws Exception {
+        SecurityContext context = SecurityContextHolder.createEmptyContext();
+        context.setAuthentication(new PreAuthenticatedAuthenticationToken(
+                new AuthUser(memberId, "BUYER"), null, List.of(new SimpleGrantedAuthority("ROLE_BUYER"))));
+        SecurityContextHolder.setContext(context);
+        try {
+            return mvc.perform(post("/test/echo").header(HEADER, key));
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
     }
 }

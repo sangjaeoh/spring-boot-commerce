@@ -38,8 +38,14 @@ import com.commerce.product.service.ProductVariantReader;
 import com.commerce.shared.entity.Money;
 import com.commerce.stock.service.StockReader;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
@@ -502,6 +508,122 @@ class OrderControllerTest extends WebIntegrationTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated());
         mvc.perform(post("/api/v1/orders")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
+                        .header(KEY_HEADER, key)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("DUPLICATE_REQUEST"));
+
+        mvc.perform(get("/api/v1/orders").header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.orders.length()").value(1));
+    }
+
+    @Test
+    @DisplayName("서로 다른 회원이 같은 Idempotency-Key로 체크아웃해도 각자 주문이 생성된다")
+    void sameKeyDifferentMembersEachCreateOrder() throws Exception {
+        String key = UUID.randomUUID().toString();
+        CheckoutRequest request = new CheckoutRequest(null, addressRequest(), 0L, null, PaymentMethod.CARD);
+        UUID firstMemberId = registerMember();
+        cartAppender.addItem(firstMemberId, seedProduct(50), 1);
+        UUID secondMemberId = registerMember();
+        cartAppender.addItem(secondMemberId, seedProduct(50), 1);
+
+        mvc.perform(post("/api/v1/orders")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(firstMemberId))
+                        .header(KEY_HEADER, key)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated());
+        mvc.perform(post("/api/v1/orders")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(secondMemberId))
+                        .header(KEY_HEADER, key)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    @DisplayName("같은 회원이 같은 Idempotency-Key로 동시에 체크아웃하면 1건만 생성되고 나머지는 409로 거부된다")
+    void concurrentSameKeyCheckoutsCreateSingleOrder() throws Exception {
+        UUID memberId = registerMember();
+        cartAppender.addItem(memberId, seedProduct(50), 1);
+        String key = UUID.randomUUID().toString();
+        String authorization = bearer(memberId);
+        String body = objectMapper.writeValueAsString(
+                new CheckoutRequest(null, addressRequest(), 0L, null, PaymentMethod.CARD));
+
+        int threadCount = 4;
+        ExecutorService pool = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch ready = new CountDownLatch(threadCount);
+        CountDownLatch start = new CountDownLatch(1);
+        List<Future<Integer>> results = new ArrayList<>();
+        for (int i = 0; i < threadCount; i++) {
+            results.add(pool.submit(() -> {
+                ready.countDown();
+                start.await();
+                return mvc.perform(post("/api/v1/orders")
+                                .header(HttpHeaders.AUTHORIZATION, authorization)
+                                .header(KEY_HEADER, key)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(body))
+                        .andReturn()
+                        .getResponse()
+                        .getStatus();
+            }));
+        }
+        ready.await();
+        start.countDown();
+        List<Integer> statuses = new ArrayList<>();
+        for (Future<Integer> result : results) {
+            statuses.add(result.get());
+        }
+        pool.shutdown();
+        assertThat(pool.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
+
+        assertThat(statuses.stream().sorted().toList()).isEqualTo(List.of(201, 409, 409, 409));
+        mvc.perform(get("/api/v1/orders").header(HttpHeaders.AUTHORIZATION, authorization))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.orders.length()").value(1));
+    }
+
+    @Test
+    @DisplayName("Idempotency-Key 없는 체크아웃 재요청은 멱등 보장 없이 각각 주문을 생성한다")
+    void checkoutWithoutKeyCreatesOrderEachTime() throws Exception {
+        UUID memberId = registerMember();
+        UUID variantId = seedProduct(50);
+        CheckoutRequest request = new CheckoutRequest(null, addressRequest(), 0L, null, PaymentMethod.CARD);
+
+        cartAppender.addItem(memberId, variantId, 1);
+        checkout(memberId, request);
+        cartAppender.addItem(memberId, variantId, 1);
+        checkout(memberId, request);
+
+        mvc.perform(get("/api/v1/orders").header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.orders.length()").value(2));
+    }
+
+    @Test
+    @DisplayName("같은 Idempotency-Key로 바로구매를 재요청하면 409로 거부되고 주문을 이중 생성하지 않는다")
+    void duplicateKeyedDirectOrderIsRejectedAndDoesNotCreateSecondOrder() throws Exception {
+        UUID memberId = registerMember();
+        DirectOrderRequest request = new DirectOrderRequest(
+                List.of(new DirectOrderItemRequest(seedProduct(50), 1)),
+                addressRequest(),
+                0L,
+                null,
+                PaymentMethod.CARD);
+        String key = UUID.randomUUID().toString();
+
+        mvc.perform(post("/api/v1/orders/direct")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
+                        .header(KEY_HEADER, key)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated());
+        mvc.perform(post("/api/v1/orders/direct")
                         .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
                         .header(KEY_HEADER, key)
                         .contentType(MediaType.APPLICATION_JSON)
