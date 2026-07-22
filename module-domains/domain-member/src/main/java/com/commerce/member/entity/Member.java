@@ -53,6 +53,11 @@ public class Member extends BaseTimeEntity<UUID> {
     @Nullable
     private SuspensionReason suspensionReason;
 
+    /** 이메일 소유 인증 시각. 미인증이면 없다. */
+    @Column(name = "email_verified_at")
+    @Nullable
+    private Instant emailVerifiedAt;
+
     /** 탈퇴(논리삭제) 시각. 탈퇴 여부는 {@code status}가 아니라 이 값의 존재로 나타낸다. */
     @Column(name = "deleted_at")
     @Nullable
@@ -116,6 +121,11 @@ public class Member extends BaseTimeEntity<UUID> {
         this.passwordHash = newPasswordHash;
     }
 
+    /** 이메일 소유 인증을 기록한다. */
+    public void verifyEmail(Instant now) {
+        this.emailVerifiedAt = now;
+    }
+
     /** 탈퇴 사유와 함께 논리삭제한다. */
     public void delete(WithdrawalReason reason, Instant now) {
         this.deletedAt = now;
@@ -149,6 +159,10 @@ public class Member extends BaseTimeEntity<UUID> {
 
     public @Nullable SuspensionReason getSuspensionReason() {
         return suspensionReason;
+    }
+
+    public @Nullable Instant getEmailVerifiedAt() {
+        return emailVerifiedAt;
     }
 
     public @Nullable Instant getDeletedAt() {

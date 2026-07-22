@@ -27,6 +27,15 @@ class MemberTest {
     }
 
     @Test
+    @DisplayName("이메일 인증은 인증 시각을 기록하고 생성 직후에는 없다")
+    void verifyEmailRecordsVerifiedAt() {
+        Member member = activeMember();
+        assertThat(member.getEmailVerifiedAt()).isNull();
+        member.verifyEmail(NOW);
+        assertThat(member.getEmailVerifiedAt()).isEqualTo(NOW);
+    }
+
+    @Test
     @DisplayName("생성 시 받은 역할을 보존한다")
     void createKeepsGivenRole() {
         Member admin = Member.create(Email.of("admin@example.com"), "관리자", "{hashed}password", MemberRole.ADMIN);

@@ -31,8 +31,9 @@ dependencies {
     // 스케줄 스윕의 @SchedulerLock·@EnableSchedulerLock. LockProvider 구현은 infra-redis가 배선한다.
     implementation(libs.shedlock.spring)
 
-    // 스테레오타입 빈만 조립한다(코드 참조 없음): 결제 어댑터·in-process 발행 transport·멱등 키 저장소·JDBC 드라이버.
+    // 스테레오타입 빈만 조립한다(코드 참조 없음): 결제 어댑터·메일 어댑터·in-process 발행 transport·멱등 키 저장소·JDBC 드라이버.
     runtimeOnly(project(":module-external:external-payment"))
+    runtimeOnly(project(":module-external:external-mail"))
     runtimeOnly(project(":module-infra:infra-messaging"))
     runtimeOnly(project(":module-infra:infra-redis"))
     runtimeOnly(libs.postgresql)

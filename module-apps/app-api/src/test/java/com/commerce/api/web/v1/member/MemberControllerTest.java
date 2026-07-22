@@ -2,6 +2,8 @@ package com.commerce.api.web.v1.member;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -16,6 +18,7 @@ import com.commerce.api.facade.ProductRegistrationFacade;
 import com.commerce.api.web.v1.WebIntegrationTest;
 import com.commerce.api.web.v1.admin.member.request.MemberSuspensionRequest;
 import com.commerce.api.web.v1.cart.request.AddCartItemRequest;
+import com.commerce.api.web.v1.member.request.EmailVerificationRequest;
 import com.commerce.api.web.v1.member.request.LoginRequest;
 import com.commerce.api.web.v1.member.request.MemberPasswordReplacementRequest;
 import com.commerce.api.web.v1.member.request.MemberRegistrationRequest;
@@ -28,6 +31,7 @@ import com.commerce.member.entity.SuspensionReason;
 import com.commerce.member.entity.WithdrawalReason;
 import com.commerce.member.exception.MemberNotFoundException;
 import com.commerce.member.info.MemberInfo;
+import com.commerce.member.port.MailGateway;
 import com.commerce.member.service.MemberAppender;
 import com.commerce.member.service.MemberReader;
 import com.commerce.order.entity.Address;
@@ -38,9 +42,11 @@ import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestConstructor;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import tools.jackson.databind.ObjectMapper;
@@ -52,6 +58,9 @@ class MemberControllerTest extends WebIntegrationTest {
     private static final int MAX_ATTEMPTS_PER_WINDOW = 10;
     private static final String SIGNUP_PATH = "/api/v1/members";
     private static final String LOGIN_PATH = "/api/v1/auth/login";
+
+    @MockitoSpyBean
+    private MailGateway mailGateway;
 
     private final MockMvc mvc;
     private final ObjectMapper objectMapper;
@@ -418,6 +427,66 @@ class MemberControllerTest extends WebIntegrationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
                 .andExpect(jsonPath("$.errors").isNotEmpty());
+    }
+
+    @Test
+    @DisplayName("가입이 인증 메일 토큰을 발급하고 검증하면 본인 조회에 인증 시각이 실린다")
+    void registrationIssuesVerificationTokenAndVerificationRecordsTimestamp() throws Exception {
+        String email = "user-" + UUID.randomUUID() + "@example.com";
+        String body = mvc.perform(post("/api/v1/members")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new MemberRegistrationRequest(email, "테스터", "password-123!"))))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        UUID memberId = UUID.fromString(
+                objectMapper.readValue(body, MemberRegistrationResponse.class).memberId());
+        ArgumentCaptor<String> tokenCaptor = ArgumentCaptor.forClass(String.class);
+        verify(mailGateway).sendVerificationMail(eq(email), tokenCaptor.capture());
+
+        mvc.perform(get("/api/v1/members/me").header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.emailVerifiedAt").doesNotExist());
+
+        mvc.perform(post("/api/v1/members/email-verification")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new EmailVerificationRequest(tokenCaptor.getValue()))))
+                .andExpect(status().isNoContent());
+
+        mvc.perform(get("/api/v1/members/me").header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.emailVerifiedAt").exists());
+    }
+
+    @Test
+    @DisplayName("위조·재사용 인증 토큰은 401 UNAUTHENTICATED로 거부된다")
+    void emailVerificationRejectsForgedAndReusedTokens() throws Exception {
+        String email = "user-" + UUID.randomUUID() + "@example.com";
+        mvc.perform(post("/api/v1/members")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new MemberRegistrationRequest(email, "테스터", "password-123!"))))
+                .andExpect(status().isCreated());
+        ArgumentCaptor<String> tokenCaptor = ArgumentCaptor.forClass(String.class);
+        verify(mailGateway).sendVerificationMail(eq(email), tokenCaptor.capture());
+        mvc.perform(post("/api/v1/members/email-verification")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new EmailVerificationRequest(tokenCaptor.getValue()))))
+                .andExpect(status().isNoContent());
+
+        mvc.perform(post("/api/v1/members/email-verification")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new EmailVerificationRequest(tokenCaptor.getValue()))))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+        mvc.perform(post("/api/v1/members/email-verification")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new EmailVerificationRequest(UUID.randomUUID().toString()))))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
     }
 
     private UUID registerMember() {

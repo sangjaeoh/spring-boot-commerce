@@ -17,6 +17,9 @@ public final class SharedPostgresContainer {
             new PostgreSQLContainer(DockerImageName.parse("postgres:17-alpine"));
 
     static {
+        // 컨텍스트 캐시의 컨텍스트마다 Hikari 풀(10)이 붙는다. 기본 max_connections=100은 컨텍스트 10개에서
+        // 소진되므로 상한을 올려 스위트 성장에 여유를 둔다.
+        INSTANCE.setCommand("postgres", "-c", "max_connections=300");
         INSTANCE.start();
         DriverManagerDataSource dataSource =
                 new DriverManagerDataSource(INSTANCE.getJdbcUrl(), INSTANCE.getUsername(), INSTANCE.getPassword());

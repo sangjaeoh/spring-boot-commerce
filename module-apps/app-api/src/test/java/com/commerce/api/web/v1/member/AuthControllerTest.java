@@ -1,6 +1,10 @@
 package com.commerce.api.web.v1.member;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -9,6 +13,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.commerce.api.web.v1.WebIntegrationTest;
 import com.commerce.api.web.v1.member.request.LoginRequest;
+import com.commerce.api.web.v1.member.request.PasswordResetMailRequest;
+import com.commerce.api.web.v1.member.request.PasswordResetRequest;
 import com.commerce.api.web.v1.member.request.RefreshTokenRequest;
 import com.commerce.api.web.v1.member.response.LoginResponse;
 import com.commerce.api.web.v1.member.response.TokenRefreshResponse;
@@ -16,6 +22,7 @@ import com.commerce.auth.token.JwtTokenCodec;
 import com.commerce.auth.token.TokenClaims;
 import com.commerce.member.entity.SuspensionReason;
 import com.commerce.member.entity.WithdrawalReason;
+import com.commerce.member.port.MailGateway;
 import com.commerce.member.service.MemberAppender;
 import com.commerce.member.service.MemberModifier;
 import com.commerce.member.service.MemberRemover;
@@ -23,8 +30,10 @@ import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestConstructor;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import tools.jackson.databind.ObjectMapper;
@@ -33,6 +42,10 @@ import tools.jackson.databind.ObjectMapper;
 class AuthControllerTest extends WebIntegrationTest {
 
     private static final String PASSWORD = "password-123!";
+    private static final String NEW_PASSWORD = "new-password-456!";
+
+    @MockitoSpyBean
+    private MailGateway mailGateway;
 
     // RateLimitConfig의 로그인 창당 한도와 같은 값. 초과 시도가 429로 거부되는지 검증한다.
     private static final int LOGIN_MAX_ATTEMPTS = 10;
@@ -298,5 +311,95 @@ class AuthControllerTest extends WebIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(header().string("X-Content-Type-Options", "nosniff"))
                 .andExpect(header().string("Cache-Control", "no-store"));
+    }
+
+    @Test
+    @DisplayName("재설정 요청·토큰 검증·새 비밀번호 설정 후 새 비밀번호 로그인은 성공하고 기존 비밀번호 로그인은 401이다")
+    void passwordResetFlowReplacesCredential() throws Exception {
+        String email = "user-" + UUID.randomUUID() + "@example.com";
+        memberAppender.register(email, "테스터", PASSWORD);
+        String token = requestPasswordResetToken(email);
+
+        mvc.perform(post("/api/v1/auth/password-reset")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new PasswordResetRequest(token, NEW_PASSWORD))))
+                .andExpect(status().isNoContent());
+
+        mvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new LoginRequest(email, NEW_PASSWORD))))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new LoginRequest(email, PASSWORD))))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("MEMBER_INVALID_CREDENTIALS"));
+    }
+
+    @Test
+    @DisplayName("사용한 재설정 토큰의 재사용과 위조 토큰은 401 UNAUTHENTICATED로 거부된다")
+    void passwordResetRejectsReusedAndForgedTokens() throws Exception {
+        String email = "user-" + UUID.randomUUID() + "@example.com";
+        memberAppender.register(email, "테스터", PASSWORD);
+        String token = requestPasswordResetToken(email);
+        mvc.perform(post("/api/v1/auth/password-reset")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new PasswordResetRequest(token, NEW_PASSWORD))))
+                .andExpect(status().isNoContent());
+
+        mvc.perform(post("/api/v1/auth/password-reset")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new PasswordResetRequest(token, "another-789!"))))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+        mvc.perform(post("/api/v1/auth/password-reset")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new PasswordResetRequest(UUID.randomUUID().toString(), NEW_PASSWORD))))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+    }
+
+    @Test
+    @DisplayName("미가입 이메일의 재설정 요청도 204이고 메일을 보내지 않는다")
+    void passwordResetRequestHidesAccountExistence() throws Exception {
+        mvc.perform(post("/api/v1/auth/password-reset-request")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new PasswordResetMailRequest("unknown-" + UUID.randomUUID() + "@example.com"))))
+                .andExpect(status().isNoContent());
+
+        verify(mailGateway, never()).sendPasswordResetMail(any(), any());
+    }
+
+    @Test
+    @DisplayName("정책 위반 새 비밀번호 재설정은 400으로 거부되고 공백 요청 값은 400 VALIDATION_FAILED다")
+    void passwordResetRejectsInvalidNewPassword() throws Exception {
+        String email = "user-" + UUID.randomUUID() + "@example.com";
+        memberAppender.register(email, "테스터", PASSWORD);
+        String token = requestPasswordResetToken(email);
+
+        mvc.perform(post("/api/v1/auth/password-reset")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new PasswordResetRequest(token, "short"))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("MEMBER_INVALID_PASSWORD_FORMAT"));
+
+        mvc.perform(post("/api/v1/auth/password-reset")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new PasswordResetRequest(" ", NEW_PASSWORD))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+    }
+
+    /** 재설정 메일을 요청하고 게이트웨이로 나간 토큰을 캡처한다. */
+    private String requestPasswordResetToken(String email) throws Exception {
+        mvc.perform(post("/api/v1/auth/password-reset-request")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new PasswordResetMailRequest(email))))
+                .andExpect(status().isNoContent());
+        ArgumentCaptor<String> tokenCaptor = ArgumentCaptor.forClass(String.class);
+        verify(mailGateway).sendPasswordResetMail(eq(email), tokenCaptor.capture());
+        return tokenCaptor.getValue();
     }
 }

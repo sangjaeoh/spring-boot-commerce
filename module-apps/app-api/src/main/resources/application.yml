@@ -67,6 +67,9 @@ auth:
     access-token-ttl: 1h
   # 리프레시 토큰(불투명 랜덤 토큰) 수명. Redis TTL로 강제되고 로그아웃 시 즉시 무효화된다.
   refresh-token-ttl: 336h
+  # 비밀번호 재설정·이메일 인증 토큰(1회용) 수명. Redis TTL로 강제되고 소비 시 즉시 지워진다.
+  password-reset-token-ttl: 30m
+  email-verification-token-ttl: 24h
 
 order:
   reconciliation:

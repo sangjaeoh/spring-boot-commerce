@@ -16,6 +16,7 @@ public record MemberInfo(
         MemberRole role,
         MemberStatus status,
         @Nullable SuspensionReason suspensionReason,
+        @Nullable Instant emailVerifiedAt,
         Instant createdAt,
         Instant updatedAt) {
 
@@ -28,6 +29,7 @@ public record MemberInfo(
                 member.getRole(),
                 member.getStatus(),
                 member.getSuspensionReason(),
+                member.getEmailVerifiedAt(),
                 member.getCreatedAt(),
                 member.getUpdatedAt());
     }

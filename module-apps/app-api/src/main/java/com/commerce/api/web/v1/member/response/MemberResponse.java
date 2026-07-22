@@ -18,6 +18,9 @@ public record MemberResponse(
         @Schema(description = "정지 사유(정지 회원만)", nullable = true) @Nullable
         SuspensionReason suspensionReason,
 
+        @Schema(description = "이메일 인증 시각. 미인증이면 없음", nullable = true) @Nullable
+        Instant emailVerifiedAt,
+
         @Schema(description = "생성 시각") Instant createdAt,
         @Schema(description = "수정 시각") Instant updatedAt) {
 
@@ -29,6 +32,7 @@ public record MemberResponse(
                 member.name(),
                 member.status(),
                 member.suspensionReason(),
+                member.emailVerifiedAt(),
                 member.createdAt(),
                 member.updatedAt());
     }

@@ -25,9 +25,13 @@ public class SecurityConfig {
         "/error", "/actuator/**", "/v3/api-docs", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html"
     };
     private static final String[] PUBLIC_AUTH_PATHS = {
-        "/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/auth/logout"
+        "/api/v1/auth/login",
+        "/api/v1/auth/refresh",
+        "/api/v1/auth/logout",
+        "/api/v1/auth/password-reset-request",
+        "/api/v1/auth/password-reset"
     };
-    private static final String[] PUBLIC_MEMBER_PATHS = {"/api/v1/members"};
+    private static final String[] PUBLIC_MEMBER_PATHS = {"/api/v1/members", "/api/v1/members/email-verification"};
     private static final String[] PUBLIC_PRODUCT_PATHS = {
         "/api/v1/products", "/api/v1/products/*", "/api/v1/products/*/reviews", "/api/v1/products/*/inquiries"
     };

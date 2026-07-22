@@ -9,6 +9,7 @@ import com.commerce.member.exception.MemberStatusException;
 import com.commerce.member.exception.PasswordMismatchException;
 import com.commerce.member.repository.MemberRepository;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
 import java.util.UUID;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -20,10 +21,12 @@ import org.springframework.transaction.annotation.Transactional;
 public class MemberModifier {
 
     private final MemberRepository memberRepository;
+    private final Clock clock;
     private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
-    public MemberModifier(MemberRepository memberRepository) {
+    public MemberModifier(MemberRepository memberRepository, Clock clock) {
         this.memberRepository = memberRepository;
+        this.clock = clock;
     }
 
     /**
@@ -77,6 +80,29 @@ public class MemberModifier {
         }
         MemberAppender.validatePassword(newRawPassword);
         member.replacePassword(passwordEncoder.encode(newRawPassword));
+    }
+
+    /**
+     * 현재 패스워드 대조 없이 새 패스워드로 재설정한다. 재설정 토큰 검증을 마친 호출자만 부른다.
+     *
+     * @throws MemberNotFoundException 활성 회원이 없으면
+     * @throws InvalidPasswordException 새 패스워드가 정책(8자 이상 72바이트 이하)에 어긋날 때
+     */
+    @Transactional
+    public void resetPassword(UUID memberId, String newRawPassword) {
+        Member member = find(memberId);
+        MemberAppender.validatePassword(newRawPassword);
+        member.replacePassword(passwordEncoder.encode(newRawPassword));
+    }
+
+    /**
+     * 이메일 소유 인증을 기록한다.
+     *
+     * @throws MemberNotFoundException 활성 회원이 없으면
+     */
+    @Transactional
+    public void verifyEmail(UUID memberId) {
+        find(memberId).verifyEmail(clock.instant());
     }
 
     /** 활성 회원을 찾고 없으면 거부한다. */
