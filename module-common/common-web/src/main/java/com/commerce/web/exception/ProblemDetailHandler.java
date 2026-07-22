@@ -1,8 +1,7 @@
-package com.commerce.web.error;
+package com.commerce.web.exception;
 
 import com.commerce.core.exception.BaseException;
 import com.commerce.core.exception.ErrorCode;
-import com.commerce.web.exception.WebErrorCode;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
