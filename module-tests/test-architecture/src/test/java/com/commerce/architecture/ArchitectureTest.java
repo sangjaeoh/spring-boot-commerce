@@ -103,6 +103,7 @@ class ArchitectureTest {
                 Set.of(
                         "com.commerce.cart",
                         "com.commerce.coupon",
+                        "com.commerce.inquiry",
                         "com.commerce.jpa",
                         "com.commerce.member",
                         "com.commerce.order",

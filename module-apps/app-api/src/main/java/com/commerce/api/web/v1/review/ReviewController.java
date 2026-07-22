@@ -1,7 +1,6 @@
 package com.commerce.api.web.v1.review;
 
 import com.commerce.api.facade.ReviewWriteFacade;
-import com.commerce.api.web.auth.Anonymous;
 import com.commerce.api.web.auth.Authenticated;
 import com.commerce.api.web.v1.review.request.ReviewRequest;
 import com.commerce.api.web.v1.review.response.ReviewCreationResponse;
@@ -34,9 +33,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 상품 리뷰 작성·수정·삭제·목록 엔드포인트다. */
+/** 상품 리뷰 작성·수정·삭제·목록 엔드포인트다. 목록은 공개, 쓰기는 로그인 주체 전용이다. */
 @Tag(name = "상품 리뷰", description = "구매확정 상품 리뷰 작성·수정·삭제·상품별 목록 조회")
-@Authenticated
 @RestController
 @RequestMapping("/api/v1")
 public class ReviewController {
@@ -73,6 +71,7 @@ public class ReviewController {
                 description = "구매확정 이력 없음 또는 이미 작성한 상품",
                 content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
     })
+    @Authenticated
     @PostMapping("/products/{productId}/reviews")
     @ResponseStatus(HttpStatus.CREATED)
     public ReviewCreationResponse write(
@@ -91,7 +90,7 @@ public class ReviewController {
                 description = "페이지 파라미터 무효",
                 content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
     })
-    @Anonymous
+    // 공개 엔드포인트라 마커를 두지 않는다 — @Anonymous는 익명 전용이라 인증 열람자를 403으로 거부한다.
     @GetMapping("/products/{productId}/reviews")
     public ReviewPageResponse getProductReviews(
             @Parameter(description = "상품 ID") @PathVariable UUID productId,
@@ -116,6 +115,7 @@ public class ReviewController {
                 description = "본인 소유 리뷰 없음",
                 content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
     })
+    @Authenticated
     @PatchMapping("/reviews/{reviewId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void revise(
@@ -137,6 +137,7 @@ public class ReviewController {
                 description = "본인 소유 리뷰 없음",
                 content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
     })
+    @Authenticated
     @DeleteMapping("/reviews/{reviewId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void remove(AuthUser authUser, @Parameter(description = "리뷰 ID") @PathVariable UUID reviewId) {

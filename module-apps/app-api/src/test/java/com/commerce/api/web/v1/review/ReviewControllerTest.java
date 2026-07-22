@@ -139,9 +139,15 @@ class ReviewControllerTest extends WebIntegrationTest {
     }
 
     @Test
-    @DisplayName("목록은 미인증으로 조회되고, 작성은 미인증이면 401로 거부된다")
+    @DisplayName("목록은 미인증·인증 열람자 모두 조회되고, 작성은 미인증이면 401로 거부된다")
     void listIsPublicAndWriteRequiresAuthentication() throws Exception {
         mvc.perform(get("/api/v1/products/{productId}/reviews", UUID.randomUUID()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.reviews.length()").value(0));
+
+        // 인증 열람자도 공개 목록을 본다 — 익명 전용(@Anonymous) 표면이 아니다.
+        mvc.perform(get("/api/v1/products/{productId}/reviews", UUID.randomUUID())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(registerMember())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.reviews.length()").value(0));
 
