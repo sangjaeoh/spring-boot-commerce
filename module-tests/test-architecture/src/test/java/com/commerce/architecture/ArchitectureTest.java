@@ -199,7 +199,10 @@ class ArchitectureTest {
         // 규칙의 변별력은 SOFT_DELETE_ENTITY_NAMES가 채워져 있음에 달렸다 — 비면 규칙이 공허하게 통과하고
         // (failOnEmptyShould는 .that() 필터가 없어 못 잡는다) 실제 위반을 놓친다. 감지 회귀를 여기서 실패시킨다.
         assertEquals(
-                Set.of("com.commerce.member.entity.Member", "com.commerce.product.entity.Product"),
+                Set.of(
+                        "com.commerce.member.entity.Member",
+                        "com.commerce.product.entity.Product",
+                        "com.commerce.product.entity.Category"),
                 SOFT_DELETE_ENTITY_NAMES);
     }
 

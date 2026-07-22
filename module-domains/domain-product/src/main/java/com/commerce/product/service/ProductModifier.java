@@ -1,23 +1,41 @@
 package com.commerce.product.service;
 
 import com.commerce.product.entity.Product;
+import com.commerce.product.exception.CategoryNotFoundException;
 import com.commerce.product.exception.ProductErrorCode;
 import com.commerce.product.exception.ProductNotFoundException;
 import com.commerce.product.exception.ProductStatusException;
+import com.commerce.product.repository.CategoryRepository;
 import com.commerce.product.repository.ProductRepository;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 상품 노출 전환·상품명·설명 변경을 담당하는 서비스다. */
+/** 상품 노출 전환·상품명·설명·분류 변경을 담당하는 서비스다. */
 @Service
 public class ProductModifier {
 
     private final ProductRepository productRepository;
+    private final CategoryRepository categoryRepository;
 
-    public ProductModifier(ProductRepository productRepository) {
+    public ProductModifier(ProductRepository productRepository, CategoryRepository categoryRepository) {
         this.productRepository = productRepository;
+        this.categoryRepository = categoryRepository;
+    }
+
+    /**
+     * 카테고리를 지정한다. null이면 미분류로 해제한다.
+     *
+     * @throws ProductNotFoundException 활성 상품이 없으면
+     * @throws CategoryNotFoundException 지정한 활성 카테고리가 없으면
+     */
+    @Transactional
+    public void assignCategory(UUID productId, @Nullable UUID categoryId) {
+        if (categoryId != null && !categoryRepository.existsByIdAndDeletedAtIsNull(categoryId)) {
+            throw new CategoryNotFoundException(ProductErrorCode.CATEGORY_NOT_FOUND);
+        }
+        find(productId).assignCategory(categoryId);
     }
 
     /**

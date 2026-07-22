@@ -83,7 +83,7 @@ class AdminSeedingTest extends WebIntegrationTest {
                 .hasValueSatisfying(
                         claims -> assertThat(claims.claims().get("role")).isEqualTo("ADMIN"));
 
-        ProductRegistrationRequest request = new ProductRegistrationRequest("시딩검증셔츠", null, 10000L, List.of(), 1);
+        ProductRegistrationRequest request = new ProductRegistrationRequest("시딩검증셔츠", null, null, 10000L, List.of(), 1);
         mvc.perform(post("/api/v1/admin/products")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
                         .contentType(MediaType.APPLICATION_JSON)

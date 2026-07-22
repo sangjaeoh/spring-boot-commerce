@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.commerce.api.web.v1.WebIntegrationTest;
 import com.commerce.api.web.v1.admin.product.request.ProductRegistrationRequest;
 import com.commerce.api.web.v1.admin.product.response.ProductRegistrationResponse;
+import com.commerce.product.service.CategoryAppender;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -23,10 +24,60 @@ class ProductControllerTest extends WebIntegrationTest {
 
     private final MockMvc mvc;
     private final ObjectMapper objectMapper;
+    private final CategoryAppender categoryAppender;
 
-    ProductControllerTest(MockMvc mvc, ObjectMapper objectMapper) {
+    ProductControllerTest(MockMvc mvc, ObjectMapper objectMapper, CategoryAppender categoryAppender) {
         this.mvc = mvc;
         this.objectMapper = objectMapper;
+        this.categoryAppender = categoryAppender;
+    }
+
+    @Test
+    @DisplayName("카테고리 필터가 키워드 검색·가격 정렬과 조합된다")
+    void categoryFilterCombinesWithKeywordAndSort() throws Exception {
+        UUID categoryId = categoryAppender.create("필터분류-" + UUID.randomUUID());
+        UUID otherCategoryId = categoryAppender.create("타분류-" + UUID.randomUUID());
+        String token = UUID.randomUUID().toString().substring(0, 8);
+        UUID pricyId = registerProductViaHttp(token + " 셔츠고가", 30000L, 5, categoryId);
+        UUID cheapId = registerProductViaHttp(token + " 셔츠저가", 10000L, 5, categoryId);
+        registerProductViaHttp(token + " 바지", 20000L, 5, otherCategoryId);
+
+        mvc.perform(get("/api/v1/products").param("categoryId", categoryId.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.products.length()").value(2))
+                .andExpect(jsonPath("$.page.totalElements").value(2));
+
+        mvc.perform(get("/api/v1/products")
+                        .param("categoryId", categoryId.toString())
+                        .param("keyword", "셔츠저가"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.products.length()").value(1))
+                .andExpect(jsonPath("$.products[0].id").value(cheapId.toString()));
+
+        mvc.perform(get("/api/v1/products")
+                        .param("categoryId", categoryId.toString())
+                        .param("sort", "PRICE_ASC"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.products[0].id").value(cheapId.toString()))
+                .andExpect(jsonPath("$.products[1].id").value(pricyId.toString()));
+    }
+
+    @Test
+    @DisplayName("카테고리 안 숨김 상품은 필터 결과에서 제외된다")
+    void hiddenProductExcludedFromCategoryFilter() throws Exception {
+        UUID categoryId = categoryAppender.create("숨김분류-" + UUID.randomUUID());
+        UUID productId = registerProductViaHttp("숨김분류셔츠", 10000L, 5, categoryId);
+        mvc.perform(get("/api/v1/products").param("categoryId", categoryId.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.products[0].id").value(productId.toString()));
+
+        mvc.perform(post("/api/v1/admin/products/{productId}/hide", productId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
+                .andExpect(status().isNoContent());
+
+        mvc.perform(get("/api/v1/products").param("categoryId", categoryId.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.products.length()").value(0));
     }
 
     @Test
@@ -193,8 +244,14 @@ class ProductControllerTest extends WebIntegrationTest {
     }
 
     private UUID registerProductViaHttp(String name, long price, int initialQuantity) throws Exception {
+        return registerProductViaHttp(name, price, initialQuantity, null);
+    }
+
+    private UUID registerProductViaHttp(
+            String name, long price, int initialQuantity, @org.jspecify.annotations.Nullable UUID categoryId)
+            throws Exception {
         ProductRegistrationRequest request =
-                new ProductRegistrationRequest(name, null, price, List.of(), initialQuantity);
+                new ProductRegistrationRequest(name, null, categoryId, price, List.of(), initialQuantity);
         String body = mvc.perform(post("/api/v1/admin/products")
                         .header(HttpHeaders.AUTHORIZATION, adminBearer())
                         .contentType(MediaType.APPLICATION_JSON)

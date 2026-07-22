@@ -17,6 +17,10 @@ public record ProductAdminResponse(
         String description,
 
         @Schema(description = "노출 상태(숨김 포함)") ProductStatus status,
+
+        @Schema(description = "소속 카테고리 ID. 미분류면 없음", nullable = true) @Nullable
+        UUID categoryId,
+
         @Schema(description = "생성 시각") Instant createdAt,
         @Schema(description = "수정 시각") Instant updatedAt) {
 
@@ -27,6 +31,7 @@ public record ProductAdminResponse(
                 product.name(),
                 product.description(),
                 product.status(),
+                product.categoryId(),
                 product.createdAt(),
                 product.updatedAt());
     }

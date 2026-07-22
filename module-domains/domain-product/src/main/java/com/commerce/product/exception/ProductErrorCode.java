@@ -11,6 +11,7 @@ public enum ProductErrorCode implements ErrorCode {
     INVALID_PRICE("PRODUCT_VARIANT_INVALID_PRICE", "변형 가격은 1 이상이어야 한다.", 400),
     INVALID_OPTION("PRODUCT_VARIANT_INVALID_OPTION", "옵션 입력이 올바르지 않다.", 400),
     IMAGE_NOT_FOUND("PRODUCT_IMAGE_NOT_FOUND", "상품 이미지를 찾을 수 없다.", 404),
+    CATEGORY_NOT_FOUND("PRODUCT_CATEGORY_NOT_FOUND", "카테고리를 찾을 수 없다.", 404),
     UNSUPPORTED_IMAGE_FORMAT("PRODUCT_UNSUPPORTED_IMAGE_FORMAT", "지원하지 않는 이미지 형식이다.", 400),
     IMAGE_TOO_LARGE("PRODUCT_IMAGE_TOO_LARGE", "이미지는 5MB 이하여야 한다.", 400);
 

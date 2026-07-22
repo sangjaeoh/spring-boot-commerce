@@ -42,14 +42,15 @@ public class ProductCatalogFacade {
         this.imageReader = imageReader;
     }
 
-    /** 노출 상품 페이지를 대표가·품절과 함께 반환한다. 키워드가 있으면 상품명 부분 일치로 좁히고, 정렬 기준을 따른다. */
-    public Page<ProductSummaryView> getCatalogPage(@Nullable String keyword, ProductSort sort, Pageable pageable) {
+    /** 노출 상품 페이지를 대표가·품절과 함께 반환한다. 키워드는 상품명 부분 일치로, 카테고리는 소속 일치로 좁히고, 정렬 기준을 따른다. */
+    public Page<ProductSummaryView> getCatalogPage(
+            @Nullable String keyword, @Nullable UUID categoryId, ProductSort sort, Pageable pageable) {
         // 1. 노출 상품 페이지 조회
         Page<ProductInfo> products =
                 switch (sort) {
-                    case LATEST -> productReader.getExposedPage(keyword, pageable);
-                    case PRICE_ASC -> productReader.getExposedPageOrderByPriceAsc(keyword, pageable);
-                    case PRICE_DESC -> productReader.getExposedPageOrderByPriceDesc(keyword, pageable);
+                    case LATEST -> productReader.getExposedPage(keyword, categoryId, pageable);
+                    case PRICE_ASC -> productReader.getExposedPageOrderByPriceAsc(keyword, categoryId, pageable);
+                    case PRICE_DESC -> productReader.getExposedPageOrderByPriceDesc(keyword, categoryId, pageable);
                 };
         // 2. 합성 재료 수집 — ACTIVE 변형·재고·대표 이미지
         Map<UUID, List<ProductVariantInfo>> activeVariantsByProduct = activeVariantsByProduct(products.getContent());

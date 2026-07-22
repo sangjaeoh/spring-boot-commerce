@@ -2,6 +2,7 @@ package com.commerce.api.facade;
 
 import com.commerce.product.entity.ProductOption;
 import com.commerce.product.entity.ProductVariantStatus;
+import com.commerce.product.exception.CategoryNotFoundException;
 import com.commerce.product.exception.DuplicateVariantOptionException;
 import com.commerce.product.exception.InvalidVariantException;
 import com.commerce.product.exception.ProductNotFoundException;
@@ -48,19 +49,31 @@ public class ProductRegistrationFacade {
     }
 
     /**
-     * 상품·첫 변형·재고를 시딩하고 판매를 시작한다.
+     * 상품·첫 변형·재고를 시딩하고 판매를 시작한다. 카테고리가 있으면 분류를 지정한다.
      *
+     * @throws CategoryNotFoundException 지정한 활성 카테고리가 없으면
      * @throws InvalidVariantException 옵션이 올바르지 않거나 판매가가 최소가 미만이면
      */
     public UUID registerProduct(
-            String name, @Nullable String description, Money price, List<ProductOption> options, int initialQuantity) {
+            String name,
+            @Nullable String description,
+            @Nullable UUID categoryId,
+            Money price,
+            List<ProductOption> options,
+            int initialQuantity) {
         // 1. 상품 등록(HIDDEN)
-        UUID productId = productAppender.register(name, description);
+        UUID productId = productAppender.register(name, description, categoryId);
         // 2. 첫 변형·재고 시딩
         addVariant(productId, price, options, initialQuantity);
         // 3. 판매 시작(ON_SALE)
         productModifier.show(productId);
         return productId;
+    }
+
+    /** 분류 없이 상품·첫 변형·재고를 시딩하고 판매를 시작한다. */
+    public UUID registerProduct(
+            String name, @Nullable String description, Money price, List<ProductOption> options, int initialQuantity) {
+        return registerProduct(name, description, null, price, options, initialQuantity);
     }
 
     /**

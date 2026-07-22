@@ -37,6 +37,11 @@ public class Product extends BaseTimeEntity<UUID> {
     @Column(name = "status")
     private ProductStatus status;
 
+    /** 소속 카테고리 식별자. 애그리거트 루트 간 ID 참조이며 미분류면 없다. */
+    @Column(name = "category_id")
+    @Nullable
+    private UUID categoryId;
+
     /** 논리삭제 시각. 삭제 전이면 없다. */
     @Column(name = "deleted_at")
     @Nullable
@@ -90,6 +95,11 @@ public class Product extends BaseTimeEntity<UUID> {
         this.description = newDescription;
     }
 
+    /** 카테고리를 지정한다. null이면 미분류로 해제한다. */
+    public void assignCategory(@Nullable UUID categoryId) {
+        this.categoryId = categoryId;
+    }
+
     /** 상품을 논리삭제한다. */
     public void delete(Instant now) {
         this.deletedAt = now;
@@ -110,6 +120,10 @@ public class Product extends BaseTimeEntity<UUID> {
 
     public ProductStatus getStatus() {
         return status;
+    }
+
+    public @Nullable UUID getCategoryId() {
+        return categoryId;
     }
 
     public @Nullable Instant getDeletedAt() {

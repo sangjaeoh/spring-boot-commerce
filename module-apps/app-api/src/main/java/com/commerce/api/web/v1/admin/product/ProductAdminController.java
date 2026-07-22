@@ -81,6 +81,7 @@ public class ProductAdminController {
         UUID productId = productRegistrationFacade.registerProduct(
                 request.name(),
                 request.description(),
+                request.categoryId(),
                 Money.of(request.price()),
                 request.toProductOptions(),
                 request.initialQuantity());
@@ -195,7 +196,7 @@ public class ProductAdminController {
         productModifier.hide(productId);
     }
 
-    @Operation(summary = "상품 편집", description = "상품명·상세 설명을 바꾼다.")
+    @Operation(summary = "상품 편집", description = "상품명·상세 설명·분류를 바꾼다. 분류를 생략하면 미분류로 해제한다.")
     @ApiResponses({
         @ApiResponse(responseCode = "204", description = "편집됨"),
         @ApiResponse(
@@ -212,7 +213,7 @@ public class ProductAdminController {
                 content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
         @ApiResponse(
                 responseCode = "404",
-                description = "상품 없음",
+                description = "상품 또는 카테고리 없음",
                 content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
     })
     @PatchMapping("/{productId}")
@@ -222,6 +223,7 @@ public class ProductAdminController {
             @Valid @RequestBody ProductEditRequest request) {
         productModifier.rename(productId, request.name());
         productModifier.changeDescription(productId, request.description());
+        productModifier.assignCategory(productId, request.categoryId());
     }
 
     @Operation(summary = "상품 논리삭제", description = "상품을 논리삭제한다.")

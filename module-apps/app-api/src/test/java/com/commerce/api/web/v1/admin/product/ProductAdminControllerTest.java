@@ -24,6 +24,7 @@ import com.commerce.order.info.OrderInfo;
 import com.commerce.order.service.OrderReader;
 import com.commerce.payment.entity.PaymentMethod;
 import com.commerce.product.entity.ProductStatus;
+import com.commerce.product.service.CategoryAppender;
 import com.commerce.product.service.ProductReader;
 import com.commerce.product.service.ProductVariantReader;
 import java.util.List;
@@ -48,6 +49,7 @@ class ProductAdminControllerTest extends WebIntegrationTest {
     private final MemberAppender memberAppender;
     private final CartAppender cartAppender;
     private final OrderReader orderReader;
+    private final CategoryAppender categoryAppender;
 
     ProductAdminControllerTest(
             MockMvc mvc,
@@ -56,7 +58,8 @@ class ProductAdminControllerTest extends WebIntegrationTest {
             ProductVariantReader variantReader,
             MemberAppender memberAppender,
             CartAppender cartAppender,
-            OrderReader orderReader) {
+            OrderReader orderReader,
+            CategoryAppender categoryAppender) {
         this.mvc = mvc;
         this.objectMapper = objectMapper;
         this.productReader = productReader;
@@ -64,13 +67,76 @@ class ProductAdminControllerTest extends WebIntegrationTest {
         this.memberAppender = memberAppender;
         this.cartAppender = cartAppender;
         this.orderReader = orderReader;
+        this.categoryAppender = categoryAppender;
+    }
+
+    @Test
+    @DisplayName("카테고리 지정 등록·편집 재지정이 공개 필터와 관리자 목록에 반영된다")
+    void categoryAssignmentOnRegistrationAndEdit() throws Exception {
+        UUID firstCategoryId = categoryAppender.create("분류A-" + UUID.randomUUID());
+        UUID secondCategoryId = categoryAppender.create("분류B-" + UUID.randomUUID());
+        String name = "분류상품-" + UUID.randomUUID();
+        ProductRegistrationRequest request =
+                new ProductRegistrationRequest(name, null, firstCategoryId, 10000L, List.of(), 5);
+        String body = mvc.perform(post("/api/v1/admin/products")
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        UUID productId = UUID.fromString(
+                objectMapper.readValue(body, ProductRegistrationResponse.class).productId());
+
+        mvc.perform(get("/api/v1/products").param("categoryId", firstCategoryId.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.products[0].id").value(productId.toString()));
+        mvc.perform(get("/api/v1/admin/products").header(HttpHeaders.AUTHORIZATION, adminBearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.products[0].id").value(productId.toString()))
+                .andExpect(jsonPath("$.products[0].categoryId").value(firstCategoryId.toString()));
+
+        mvc.perform(patch("/api/v1/admin/products/{productId}", productId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new ProductEditRequest(name, null, secondCategoryId))))
+                .andExpect(status().isNoContent());
+
+        mvc.perform(get("/api/v1/products").param("categoryId", secondCategoryId.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.products[0].id").value(productId.toString()));
+        mvc.perform(get("/api/v1/products").param("categoryId", firstCategoryId.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.products.length()").value(0));
+    }
+
+    @Test
+    @DisplayName("없는 카테고리 지정 등록·편집은 404 PRODUCT_CATEGORY_NOT_FOUND로 거부된다")
+    void categoryAssignmentRejectsMissingCategory() throws Exception {
+        mvc.perform(post("/api/v1/admin/products")
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new ProductRegistrationRequest("셔츠", null, UUID.randomUUID(), 10000L, List.of(), 5))))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("PRODUCT_CATEGORY_NOT_FOUND"));
+
+        UUID productId = registerProductViaHttp("무분류셔츠", 10000L, 5);
+        mvc.perform(patch("/api/v1/admin/products/{productId}", productId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new ProductEditRequest("무분류셔츠", null, UUID.randomUUID()))))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("PRODUCT_CATEGORY_NOT_FOUND"));
     }
 
     @Test
     @DisplayName("상품 등록이 201로 상품 ID를 반환하고 ON_SALE 상품·옵션 변형을 시딩한다")
     void registerReturnsProductId() throws Exception {
-        ProductRegistrationRequest request =
-                new ProductRegistrationRequest("티셔츠", "면 100%", 10000L, List.of(new OptionRequest("색상", "빨강")), 50);
+        ProductRegistrationRequest request = new ProductRegistrationRequest(
+                "티셔츠", "면 100%", null, 10000L, List.of(new OptionRequest("색상", "빨강")), 50);
 
         String body = mvc.perform(post("/api/v1/admin/products")
                         .header(HttpHeaders.AUTHORIZATION, adminBearer())
@@ -91,7 +157,7 @@ class ProductAdminControllerTest extends WebIntegrationTest {
     @Test
     @DisplayName("빈 상품명은 400 problem+json으로 거부된다")
     void registerRejectsBlankName() throws Exception {
-        ProductRegistrationRequest request = new ProductRegistrationRequest("  ", null, 10000L, List.of(), 50);
+        ProductRegistrationRequest request = new ProductRegistrationRequest("  ", null, null, 10000L, List.of(), 50);
 
         mvc.perform(post("/api/v1/admin/products")
                         .header(HttpHeaders.AUTHORIZATION, adminBearer())
@@ -271,7 +337,7 @@ class ProductAdminControllerTest extends WebIntegrationTest {
         cartAppender.addItem(memberId, variantId, 1);
         UUID orderId = checkoutViaHttp(memberId);
 
-        ProductEditRequest edit = new ProductEditRequest("바뀐셔츠", "새 설명");
+        ProductEditRequest edit = new ProductEditRequest("바뀐셔츠", "새 설명", null);
         mvc.perform(patch("/api/v1/admin/products/{productId}", productId)
                         .header(HttpHeaders.AUTHORIZATION, adminBearer())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -302,7 +368,7 @@ class ProductAdminControllerTest extends WebIntegrationTest {
     @DisplayName("구매자 토큰의 상품 등록은 403 FORBIDDEN으로 거부된다")
     void registerRejectsBuyerToken() throws Exception {
         UUID buyerId = memberAppender.register("user-" + UUID.randomUUID() + "@example.com", "테스터", "password-123!");
-        ProductRegistrationRequest request = new ProductRegistrationRequest("셔츠", null, 10000L, List.of(), 5);
+        ProductRegistrationRequest request = new ProductRegistrationRequest("셔츠", null, null, 10000L, List.of(), 5);
 
         mvc.perform(post("/api/v1/admin/products")
                         .header(HttpHeaders.AUTHORIZATION, bearer(buyerId))
@@ -360,7 +426,7 @@ class ProductAdminControllerTest extends WebIntegrationTest {
     @Test
     @DisplayName("같은 Idempotency-Key 재요청은 409 DUPLICATE_REQUEST로 거부된다")
     void duplicateIdempotencyKeyRejected() throws Exception {
-        ProductRegistrationRequest request = new ProductRegistrationRequest("모자", null, 5000L, List.of(), 10);
+        ProductRegistrationRequest request = new ProductRegistrationRequest("모자", null, null, 5000L, List.of(), 10);
         String json = objectMapper.writeValueAsString(request);
         String key = "product-" + UUID.randomUUID();
 
@@ -396,7 +462,7 @@ class ProductAdminControllerTest extends WebIntegrationTest {
 
     private UUID registerProductViaHttp(String name, long price, int initialQuantity) throws Exception {
         ProductRegistrationRequest request =
-                new ProductRegistrationRequest(name, null, price, List.of(), initialQuantity);
+                new ProductRegistrationRequest(name, null, null, price, List.of(), initialQuantity);
         String body = mvc.perform(post("/api/v1/admin/products")
                         .header(HttpHeaders.AUTHORIZATION, adminBearer())
                         .contentType(MediaType.APPLICATION_JSON)

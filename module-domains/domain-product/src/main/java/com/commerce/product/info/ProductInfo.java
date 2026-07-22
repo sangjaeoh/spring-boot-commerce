@@ -12,6 +12,7 @@ public record ProductInfo(
         String name,
         @Nullable String description,
         ProductStatus status,
+        @Nullable UUID categoryId,
         Instant createdAt,
         Instant updatedAt) {
 
@@ -22,6 +23,7 @@ public record ProductInfo(
                 product.getName(),
                 product.getDescription(),
                 product.getStatus(),
+                product.getCategoryId(),
                 product.getCreatedAt(),
                 product.getUpdatedAt());
     }

@@ -9,6 +9,7 @@ import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import java.util.List;
+import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
 @Schema(description = "상품 등록 요청(첫 변형·초기 재고 시딩 포함)")
@@ -17,6 +18,9 @@ public record ProductRegistrationRequest(
 
         @Schema(description = "상품 상세 설명", nullable = true) @Nullable
         String description,
+
+        @Schema(description = "소속 카테고리 ID. 생략하면 미분류", nullable = true) @Nullable
+        UUID categoryId,
 
         @Schema(description = "판매가(원 단위, 1 이상)") @NotNull @Positive
         Long price,
