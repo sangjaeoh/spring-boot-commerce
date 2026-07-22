@@ -1,9 +1,9 @@
-package com.commerce.api.web.v1.payment;
+package com.commerce.batch.web.v1.payment;
 
-import com.commerce.api.exception.ApiErrorCode;
-import com.commerce.api.exception.ApiException;
-import com.commerce.api.facade.PaymentConfirmationFacade;
-import com.commerce.api.web.v1.payment.request.PaymentWebhookRequest;
+import com.commerce.batch.exception.BatchErrorCode;
+import com.commerce.batch.exception.BatchException;
+import com.commerce.batch.facade.PaymentConfirmationFacade;
+import com.commerce.batch.web.v1.payment.request.PaymentWebhookRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -81,7 +81,7 @@ public class PaymentWebhookController {
     /** 본문 서명이 공유 시크릿으로 만든 서명과 일치하는지 확인한다. */
     private void requireValidSignature(String rawBody, @Nullable String signature) {
         if (signature == null || !MessageDigest.isEqual(sign(rawBody), signature.getBytes(StandardCharsets.UTF_8))) {
-            throw new ApiException(ApiErrorCode.WEBHOOK_SIGNATURE_INVALID);
+            throw new BatchException(BatchErrorCode.WEBHOOK_SIGNATURE_INVALID);
         }
     }
 
@@ -103,7 +103,7 @@ public class PaymentWebhookController {
         try {
             return objectMapper.readValue(rawBody, PaymentWebhookRequest.class);
         } catch (JacksonException e) {
-            throw new ApiException(ApiErrorCode.WEBHOOK_PAYLOAD_INVALID);
+            throw new BatchException(BatchErrorCode.WEBHOOK_PAYLOAD_INVALID);
         }
     }
 }

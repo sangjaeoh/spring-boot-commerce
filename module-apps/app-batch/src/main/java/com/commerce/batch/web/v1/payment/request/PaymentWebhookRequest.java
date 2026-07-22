@@ -1,4 +1,4 @@
-package com.commerce.api.web.v1.payment.request;
+package com.commerce.batch.web.v1.payment.request;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.Objects;

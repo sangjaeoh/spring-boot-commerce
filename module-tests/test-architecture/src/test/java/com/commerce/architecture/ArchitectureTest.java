@@ -169,7 +169,7 @@ class ArchitectureTest {
     void appBasePackagesAreDetected() {
         // 앱 대상 규칙(리포지토리 직접 접근·컨트롤러 단일 도메인)의 변별력은 이 집합이 채워져 있음에 달렸다 —
         // 비면 검사할 앱이 없어 규칙이 공허해진다. @SpringBootApplication 감지 회귀를 여기서 고정한다.
-        assertEquals(Set.of("com.commerce.api", "com.commerce.migration"), APP_BASE_PACKAGES);
+        assertEquals(Set.of("com.commerce.api", "com.commerce.batch", "com.commerce.migration"), APP_BASE_PACKAGES);
     }
 
     @Test

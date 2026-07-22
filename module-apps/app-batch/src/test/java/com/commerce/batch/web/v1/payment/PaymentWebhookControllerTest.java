@@ -1,11 +1,10 @@
-package com.commerce.api.web.v1.payment;
+package com.commerce.batch.web.v1.payment;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.commerce.api.facade.ProductRegistrationFacade;
-import com.commerce.api.web.v1.WebIntegrationTest;
+import com.commerce.batch.BatchIntegrationTest;
 import com.commerce.member.service.MemberAppender;
 import com.commerce.order.entity.Address;
 import com.commerce.order.entity.OrderLineSnapshot;
@@ -30,6 +29,7 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestConstructor;
@@ -42,7 +42,8 @@ import org.springframework.test.web.servlet.MockMvc;
  * 유예({@code stale-after})가 지나야 하므로 생성 시각을 SQL로 과거로 되돌려 재현한다.
  */
 @TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
-class PaymentWebhookControllerTest extends WebIntegrationTest {
+@AutoConfigureMockMvc
+class PaymentWebhookControllerTest extends BatchIntegrationTest {
 
     private static final String WEBHOOK_PATH = "/api/v1/payments/webhook";
     private static final String SIGNATURE_HEADER = "X-Webhook-Signature";
@@ -50,7 +51,6 @@ class PaymentWebhookControllerTest extends WebIntegrationTest {
     private final MockMvc mvc;
     private final JdbcTemplate jdbcTemplate;
     private final MemberAppender memberAppender;
-    private final ProductRegistrationFacade productRegistrationFacade;
     private final ProductVariantReader variantReader;
     private final OrderAppender orderAppender;
     private final OrderReader orderReader;
@@ -63,7 +63,6 @@ class PaymentWebhookControllerTest extends WebIntegrationTest {
             MockMvc mvc,
             JdbcTemplate jdbcTemplate,
             MemberAppender memberAppender,
-            ProductRegistrationFacade productRegistrationFacade,
             ProductVariantReader variantReader,
             OrderAppender orderAppender,
             OrderReader orderReader,
@@ -74,7 +73,6 @@ class PaymentWebhookControllerTest extends WebIntegrationTest {
         this.mvc = mvc;
         this.jdbcTemplate = jdbcTemplate;
         this.memberAppender = memberAppender;
-        this.productRegistrationFacade = productRegistrationFacade;
         this.variantReader = variantReader;
         this.orderAppender = orderAppender;
         this.orderReader = orderReader;
@@ -184,7 +182,7 @@ class PaymentWebhookControllerTest extends WebIntegrationTest {
     /** 주문 PENDING·재고 차감·결제 REQUESTED에 PG측 승인 거래만 남은 응답 유실 상태를 재현한다. */
     private LostResponsePayment lostResponseApprovedPayment(boolean agedPastStaleAfter) {
         UUID memberId = memberAppender.register("user-" + UUID.randomUUID() + "@example.com", "테스터", "password-123!");
-        UUID productId = productRegistrationFacade.registerProduct("상품", null, Money.of(10000L), List.of(), 50);
+        UUID productId = seedOnSaleProduct(Money.of(10000L), 50);
         ProductVariantInfo variant = variantReader.getByProductId(productId).get(0);
         OrderLineSnapshot snapshot =
                 new OrderLineSnapshot(variant.id(), productId, "상품", variant.optionLabel(), variant.price(), 2);

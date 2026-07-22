@@ -35,7 +35,6 @@ public class SecurityConfig {
     private static final String[] PUBLIC_PRODUCT_PATHS = {
         "/api/v1/products", "/api/v1/products/*", "/api/v1/products/*/reviews", "/api/v1/products/*/inquiries"
     };
-    private static final String[] PUBLIC_PAYMENT_PATHS = {"/api/v1/payments/webhook"};
     private static final String[] ADMIN_PATHS = {"/api/v1/admin/**"};
 
     /**
@@ -57,8 +56,6 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, PUBLIC_MEMBER_PATHS)
                         .permitAll()
                         .requestMatchers(HttpMethod.GET, PUBLIC_PRODUCT_PATHS)
-                        .permitAll()
-                        .requestMatchers(HttpMethod.POST, PUBLIC_PAYMENT_PATHS)
                         .permitAll()
                         .requestMatchers(ADMIN_PATHS)
                         .hasRole("ADMIN")

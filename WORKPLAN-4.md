@@ -23,7 +23,7 @@
 
 ### 1. app-batch 분리
 
-- 진행: [ ] 설계 / [ ] 설계 리뷰 / [ ] 구현 / [ ] 코드 리뷰 / [ ] 게이트·커밋
+- 진행: [x] 설계 / [x] 설계 리뷰 / [x] 구현 / [x] 코드 리뷰 / [x] 게이트·커밋
 - 목표: 스케줄러(미결 주문 스윕 등)를 `app-batch` 앱으로 이전해 `docs/architecture.md`의 앱 4종 구조와 실제를 일치시킨다.
 - 배경: `PendingOrderSweepFacade`·`SchedulingConfig`·스케줄러 락이 app-api에서 돌고 있다.
 - 범위: `module-apps/app-batch` 모듈 신설(`convention.app-module`), 스윕 잡·스케줄링 설정·락 이전, 배치 전용 읽기가 필요하면 `infrastructure/reader` 격리 구역 사용. app-api에서 스케줄링 잔재를 제거한다. 배포 편의 옵션(프로파일 등)은 넣지 않는다 — 요청된 분리만 한다.

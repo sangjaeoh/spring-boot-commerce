@@ -1,9 +1,8 @@
-package com.commerce.api.facade;
+package com.commerce.batch.facade;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.commerce.cart.service.CartAppender;
+import com.commerce.batch.BatchIntegrationTest;
 import com.commerce.coupon.entity.Discount;
 import com.commerce.coupon.entity.IssuedCouponStatus;
 import com.commerce.coupon.entity.ValidityPeriod;
@@ -38,7 +37,6 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.TestConstructor;
 
 /**
@@ -49,13 +47,10 @@ import org.springframework.test.context.TestConstructor;
  * 거래 유무에 따라 리컨실이 승인 확정 또는 보상을 태우는지, 반복 실행이 멱등한지 확인한다.
  */
 @TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
-class PaymentReconciliationTest extends FacadeIntegrationTest {
+class PaymentReconciliationTest extends BatchIntegrationTest {
 
     private final PaymentConfirmationFacade paymentConfirmationFacade;
-    private final CheckoutFacade checkoutFacade;
-    private final ProductRegistrationFacade productRegistrationFacade;
     private final MemberAppender memberAppender;
-    private final CartAppender cartAppender;
     private final OrderAppender orderAppender;
     private final OrderModifier orderModifier;
     private final OrderReader orderReader;
@@ -72,10 +67,7 @@ class PaymentReconciliationTest extends FacadeIntegrationTest {
 
     PaymentReconciliationTest(
             PaymentConfirmationFacade paymentConfirmationFacade,
-            CheckoutFacade checkoutFacade,
-            ProductRegistrationFacade productRegistrationFacade,
             MemberAppender memberAppender,
-            CartAppender cartAppender,
             OrderAppender orderAppender,
             OrderModifier orderModifier,
             OrderReader orderReader,
@@ -90,10 +82,7 @@ class PaymentReconciliationTest extends FacadeIntegrationTest {
             IssuedCouponReader issuedCouponReader,
             ProductVariantReader variantReader) {
         this.paymentConfirmationFacade = paymentConfirmationFacade;
-        this.checkoutFacade = checkoutFacade;
-        this.productRegistrationFacade = productRegistrationFacade;
         this.memberAppender = memberAppender;
-        this.cartAppender = cartAppender;
         this.orderAppender = orderAppender;
         this.orderModifier = orderModifier;
         this.orderReader = orderReader;
@@ -181,25 +170,20 @@ class PaymentReconciliationTest extends FacadeIntegrationTest {
     @DisplayName("지연 승인 전에 주문이 동기 보상으로 취소됐으면 리컨실이 고아 청구를 환불한다")
     void reconcileRefundsOrphanedChargeOfCancelledOrder() {
         UUID memberId = registerMember();
-        // 5,499 × 2 = 10,998 — fake PG 응답 유실 트리거(끝 세 자리 998): 승인은 PG에 남고 체크아웃은 예외로 보상한다
-        UUID variantId = seedProduct(Money.of(5499L), 50);
-        cartAppender.addItem(memberId, variantId, 2);
-        assertThatThrownBy(() -> checkoutFacade.checkout(memberId, address(), Money.ZERO, null, PaymentMethod.CARD))
-                .isInstanceOf(RuntimeException.class);
-        OrderInfo order = orderReader
-                .getOrdersByMember(memberId, PageRequest.of(0, 1))
-                .getContent()
-                .get(0);
-        assertThat(order.status()).isEqualTo(OrderStatus.CANCELLED);
-        assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(50);
+        UUID variantId = seedProduct(Money.of(5000L), 50);
+        // 승인은 PG에 남고 응답이 유실돼 동기 체크아웃 보상이 주문 취소·재고 복원까지 마친 고아 청구 상태를 재현한다
+        InterruptedCheckout state = interruptCheckoutBeforeApproval(memberId, variantId, 2, Money.of(10000L));
+        paymentGateway.approve(state.paymentId(), Money.of(10000L), PaymentMethod.CARD);
+        orderModifier.cancel(state.orderId(), CancellationReason.PAYMENT_FAILED);
+        stockModifier.restore(variantId, 2);
 
         paymentConfirmationFacade.reconcile(Instant.now());
 
-        PaymentInfo payment = paymentReader.getByOrderId(order.id());
+        PaymentInfo payment = paymentReader.getPayment(state.paymentId());
         assertThat(payment.status()).isEqualTo(PaymentStatus.CANCELLED);
         assertThat(payment.pgTransactionId()).isNotNull();
         assertThat(payment.pgCancelTransactionId()).isNotNull();
-        assertThat(orderReader.getOrder(order.id()).status()).isEqualTo(OrderStatus.CANCELLED);
+        assertThat(orderReader.getOrder(state.orderId()).status()).isEqualTo(OrderStatus.CANCELLED);
         assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(50);
     }
 
@@ -208,7 +192,7 @@ class PaymentReconciliationTest extends FacadeIntegrationTest {
     }
 
     private UUID seedProduct(Money price, int quantity) {
-        UUID productId = productRegistrationFacade.registerProduct("상품", null, price, List.of(), quantity);
+        UUID productId = seedOnSaleProduct(price, quantity);
         return variantReader.getByProductId(productId).get(0).id();
     }
 

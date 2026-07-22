@@ -24,8 +24,3 @@ auth:
     # 로컬 전용 관리자 시딩 계정 — README 스모크(상품 등록)가 쓴다. 운영은 환경변수로만 주입한다.
     email: ${AUTH_ADMIN_EMAIL:admin@local.dev}
     password: ${AUTH_ADMIN_PASSWORD:local-admin-password}
-
-payment:
-  webhook:
-    # 로컬 전용 개발 시크릿. 운영 시크릿은 환경변수(PAYMENT_WEBHOOK_SECRET)로만 주입한다.
-    secret: ${PAYMENT_WEBHOOK_SECRET:local-dev-only-webhook-secret}

@@ -16,9 +16,7 @@ public enum ApiErrorCode implements ErrorCode {
     ORDER_NOT_REFUNDABLE("API_ORDER_NOT_REFUNDABLE", "환불할 수 없는 주문 상태다.", 409),
     ORDER_RETURN_NOT_REQUESTED("API_ORDER_RETURN_NOT_REQUESTED", "반품 요청 상태의 주문이 아니다.", 409),
     WITHDRAWAL_BLOCKED("API_WITHDRAWAL_BLOCKED", "미배송 결제 주문이 있어 탈퇴할 수 없다.", 409),
-    REVIEW_NOT_ELIGIBLE("API_REVIEW_NOT_ELIGIBLE", "구매확정(배송 완료)한 상품만 리뷰를 쓸 수 있다.", 409),
-    WEBHOOK_SIGNATURE_INVALID("API_WEBHOOK_SIGNATURE_INVALID", "웹훅 서명이 유효하지 않다.", 401),
-    WEBHOOK_PAYLOAD_INVALID("API_WEBHOOK_PAYLOAD_INVALID", "웹훅 페이로드를 해석할 수 없다.", 400);
+    REVIEW_NOT_ELIGIBLE("API_REVIEW_NOT_ELIGIBLE", "구매확정(배송 완료)한 상품만 리뷰를 쓸 수 있다.", 409);
 
     private final String code;
     private final String message;

@@ -18,10 +18,7 @@ spring:
       ddl-auto: validate
   lifecycle:
     # graceful 종료가 진행 중 요청을 마칠 최대 대기. 동기 결제 최대 처리 시간을 넘도록 두되 배포
-    # 오케스트레이터의 종료 유예 안에 들도록 30s로 둔다. @Scheduled 리컨실·PENDING 스윕은 확정이
-    # 멱등이라(REQUIREMENTS 비기능·제약) 종료 중 중단돼도 다음 주기가 수렴시키므로 별도 대기를 두지 않는다.
-    # 단 비정상 종료(SIGKILL 등)로 스윕 분산 락이 남으면 전 노드의 해당 스윕 재개가 lockAtMostFor(10분)
-    # 만료까지 늦어진다(REQUIREMENTS 제약·전제).
+    # 오케스트레이터의 종료 유예 안에 들도록 30s로 둔다.
     timeout-per-shutdown-phase: 30s
   datasource:
     hikari:
@@ -51,8 +48,8 @@ management:
   endpoints:
     web:
       exposure:
-        # 관측 최소셋 — health와 metrics만. metrics는 커넥션 풀(hikari)·HTTP 상태(409 비율)·스윕/보상
-        # 카운터를 노출해 조용한 잔존·보상 실패를 감지한다(내부망 전제, PII·시크릿 미포함).
+        # 관측 최소셋 — health와 metrics만. metrics는 커넥션 풀(hikari)·HTTP 상태(409 비율)를 노출한다
+        # (내부망 전제, PII·시크릿 미포함).
         include: health,metrics
   endpoint:
     health:
@@ -75,19 +72,3 @@ auth:
   # 비밀번호 재설정·이메일 인증 토큰(1회용) 수명. Redis TTL로 강제되고 소비 시 즉시 지워진다.
   password-reset-token-ttl: 30m
   email-verification-token-ttl: 24h
-
-order:
-  reconciliation:
-    # 생성 후 이 유예가 지나도록 PENDING인 주문만 스윕 대상이다. 결제 리컨실 유예 이상으로 두어(진행 중 체크아웃과
-    # 경합 차단 + payment 행 있는 PENDING은 결제 리컨실에 먼저 잡힘), payment 행 없는 잔여만 스윕이 종결한다.
-    stale-after: 15m
-    fixed-delay: 5m
-
-payment:
-  reconciliation:
-    # 생성 후 이 유예가 지나도록 REQUESTED인 결제만 리컨실·웹훅 확정 대상이다(동기 체크아웃과의 경합 차단).
-    stale-after: 10m
-    fixed-delay: 1m
-  webhook:
-    # PG와 공유하는 HMAC-SHA256 서명 시크릿. 기본값 없이 환경변수로만 주입한다(JWT 키와 동일 규약).
-    secret: ${PAYMENT_WEBHOOK_SECRET}

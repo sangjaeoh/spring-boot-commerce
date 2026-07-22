@@ -1,4 +1,4 @@
-package com.commerce.api.config;
+package com.commerce.batch.config;
 
 import net.javacrumbs.shedlock.spring.annotation.EnableSchedulerLock;
 import org.springframework.context.annotation.Configuration;

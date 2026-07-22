@@ -1,7 +1,8 @@
-package com.commerce.api.facade;
+package com.commerce.batch.facade;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.commerce.batch.BatchIntegrationTest;
 import com.commerce.coupon.entity.Discount;
 import com.commerce.coupon.entity.IssuedCouponStatus;
 import com.commerce.coupon.entity.ValidityPeriod;
@@ -53,10 +54,9 @@ import org.springframework.test.context.TestConstructor;
  * 지나야 하므로 생성 시각을 SQL로 과거로 되돌려 재현한다.
  */
 @TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
-class PendingOrderSweepTest extends FacadeIntegrationTest {
+class PendingOrderSweepTest extends BatchIntegrationTest {
 
     private final PendingOrderSweepFacade pendingOrderSweepFacade;
-    private final ProductRegistrationFacade productRegistrationFacade;
     private final MemberAppender memberAppender;
     private final MemberRemover memberRemover;
     private final OrderAppender orderAppender;
@@ -77,7 +77,6 @@ class PendingOrderSweepTest extends FacadeIntegrationTest {
 
     PendingOrderSweepTest(
             PendingOrderSweepFacade pendingOrderSweepFacade,
-            ProductRegistrationFacade productRegistrationFacade,
             MemberAppender memberAppender,
             MemberRemover memberRemover,
             OrderAppender orderAppender,
@@ -96,7 +95,6 @@ class PendingOrderSweepTest extends FacadeIntegrationTest {
             JdbcTemplate jdbcTemplate,
             MeterRegistry meterRegistry) {
         this.pendingOrderSweepFacade = pendingOrderSweepFacade;
-        this.productRegistrationFacade = productRegistrationFacade;
         this.memberAppender = memberAppender;
         this.memberRemover = memberRemover;
         this.orderAppender = orderAppender;
@@ -342,7 +340,7 @@ class PendingOrderSweepTest extends FacadeIntegrationTest {
     }
 
     private UUID seedProduct(Money price, int quantity) {
-        UUID productId = productRegistrationFacade.registerProduct("상품", null, price, List.of(), quantity);
+        UUID productId = seedOnSaleProduct(price, quantity);
         return variantReader.getByProductId(productId).get(0).id();
     }
 

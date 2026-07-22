@@ -1,10 +1,11 @@
-package com.commerce.api.facade;
+package com.commerce.batch.facade;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 
+import com.commerce.batch.BatchIntegrationTest;
 import com.commerce.member.service.MemberAppender;
 import com.commerce.order.entity.Address;
 import com.commerce.order.entity.OrderLineSnapshot;
@@ -39,13 +40,12 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
  * 재시도 상한(3회) 안의 연속 충돌 2회를 주입해 상한 경계까지 확인한다.
  */
 @TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
-class CompensationRestoreRetryTest extends FacadeIntegrationTest {
+class CompensationRestoreRetryTest extends BatchIntegrationTest {
 
     @MockitoSpyBean
     private StockModifier stockModifier;
 
     private final PendingOrderSweepFacade pendingOrderSweepFacade;
-    private final ProductRegistrationFacade productRegistrationFacade;
     private final MemberAppender memberAppender;
     private final OrderAppender orderAppender;
     private final OrderModifier orderModifier;
@@ -58,7 +58,6 @@ class CompensationRestoreRetryTest extends FacadeIntegrationTest {
 
     CompensationRestoreRetryTest(
             PendingOrderSweepFacade pendingOrderSweepFacade,
-            ProductRegistrationFacade productRegistrationFacade,
             MemberAppender memberAppender,
             OrderAppender orderAppender,
             OrderModifier orderModifier,
@@ -69,7 +68,6 @@ class CompensationRestoreRetryTest extends FacadeIntegrationTest {
             ProductVariantReader variantReader,
             JdbcTemplate jdbcTemplate) {
         this.pendingOrderSweepFacade = pendingOrderSweepFacade;
-        this.productRegistrationFacade = productRegistrationFacade;
         this.memberAppender = memberAppender;
         this.orderAppender = orderAppender;
         this.orderModifier = orderModifier;
@@ -140,7 +138,7 @@ class CompensationRestoreRetryTest extends FacadeIntegrationTest {
     }
 
     private UUID seedProduct(Money price, int quantity) {
-        UUID productId = productRegistrationFacade.registerProduct("상품", null, price, List.of(), quantity);
+        UUID productId = seedOnSaleProduct(price, quantity);
         return variantReader.getByProductId(productId).get(0).id();
     }
 

@@ -1,7 +1,7 @@
 # 기본(프로필 없음)은 로컬 실행용 PostgreSQL·Redis를 띄운다. DB·계정·포트는 app-api/app-migration의
 # local 프로필과 일치한다. 호스트 포트는 개발자 로컬의 기존 PostgreSQL(5432)·Redis(6379)와 충돌하지
 # 않도록 55432·56379를 쓴다.
-# --profile full은 앱 이미지를 빌드해 postgres → migration(원샷) → api 순서로 풀스택을 띄운다.
+# --profile full은 앱 이미지를 빌드해 postgres → migration(원샷) → api·batch 순서로 풀스택을 띄운다.
 # 컨테이너 안에서는 호스트 포트가 아닌 서비스명(postgres:5432)으로 접속하므로 local 프로필 대신
 # datasource를 환경변수로 주입한다.
 # 장수 서비스(postgres·redis·api)는 restart: unless-stopped로 죽으면 다시 뜬다(migration은 원샷이라 제외).
@@ -75,7 +75,6 @@ services:
       SPRING_DATA_REDIS_HOST: redis
       # 로컬 전용 개발 시크릿·관리자 시딩 계정 — application-local.yml의 기본값과 같은 값이다. 운영은 별도 주입.
       AUTH_JWT_SECRET: local-dev-only-secret-key-32bytes-min!
-      PAYMENT_WEBHOOK_SECRET: local-dev-only-webhook-secret
       AUTH_ADMIN_EMAIL: admin@local.dev
       AUTH_ADMIN_PASSWORD: local-admin-password
       # 로컬 컨테이너 스택도 개발 환경이라 API 문서·swagger-ui를 연다(기본은 비노출).
@@ -85,6 +84,38 @@ services:
       # JRE 베이스 이미지에 curl/wget이 없어 bash /dev/tcp로 직접 HTTP GET을 보내 readiness 프로브를 확인한다.
       # readiness 그룹은 DB·Redis 상태를 포함하므로(app-api management 설정) 리슨만 보던 이전과 달리
       # 의존 저장소 불능이 healthy로 오판되지 않는다. 내부(localhost) 호출이라 /actuator 외부 미노출 전제와 무관하다.
+      test: ["CMD", "bash", "-c", 'exec 3<>/dev/tcp/127.0.0.1/8080 && printf ''GET /actuator/health/readiness HTTP/1.0\r\nHost: localhost\r\n\r\n'' >&3 && grep -q ''"status":"UP"'' <&3']
+      interval: 2s
+      timeout: 2s
+      retries: 30
+      start_period: 10s
+
+  batch:
+    build:
+      context: .
+      target: app-batch
+    container_name: commerce-batch
+    restart: unless-stopped
+    # graceful 종료(app-batch의 timeout-per-shutdown-phase=30s)가 SIGKILL 전에 끝나도록 기본 10s보다 크게 둔다.
+    stop_grace_period: 40s
+    profiles: ["full"]
+    depends_on:
+      migration:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    ports:
+      # 스케줄 스윕과 PG 웹훅 수신(/api/v1/payments/webhook)을 서빙한다. api(8080)와 다른 호스트 포트를 쓴다.
+      - "8081:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/commerce
+      SPRING_DATASOURCE_USERNAME: commerce
+      SPRING_DATASOURCE_PASSWORD: commerce
+      SPRING_DATA_REDIS_HOST: redis
+      # 로컬 전용 개발 시크릿 — application-local.yml의 기본값과 같은 값이다. 운영은 별도 주입.
+      PAYMENT_WEBHOOK_SECRET: local-dev-only-webhook-secret
+    healthcheck:
+      # app-api와 같은 방식 — readiness 그룹(DB·Redis 포함)을 bash /dev/tcp로 확인한다.
       test: ["CMD", "bash", "-c", 'exec 3<>/dev/tcp/127.0.0.1/8080 && printf ''GET /actuator/health/readiness HTTP/1.0\r\nHost: localhost\r\n\r\n'' >&3 && grep -q ''"status":"UP"'' <&3']
       interval: 2s
       timeout: 2s

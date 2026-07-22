@@ -1,4 +1,4 @@
-package com.commerce.api.facade;
+package com.commerce.batch.facade;
 
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;

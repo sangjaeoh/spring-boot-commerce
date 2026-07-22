@@ -1,4 +1,4 @@
-package com.commerce.api.facade;
+package com.commerce.batch.facade;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
@@ -8,6 +8,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import com.commerce.batch.BatchIntegrationTest;
 import com.commerce.payment.service.PaymentReader;
 import java.time.Duration;
 import java.time.Instant;
@@ -40,7 +41,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
  * 지운다.
  */
 @TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
-class SchedulerLockTest extends FacadeIntegrationTest {
+class SchedulerLockTest extends BatchIntegrationTest {
 
     @MockitoSpyBean
     private PaymentReader paymentReader;
