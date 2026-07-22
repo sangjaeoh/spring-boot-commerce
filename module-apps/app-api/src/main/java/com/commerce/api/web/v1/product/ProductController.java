@@ -2,6 +2,7 @@ package com.commerce.api.web.v1.product;
 
 import com.commerce.api.facade.ProductCatalogFacade;
 import com.commerce.api.facade.ProductDetailFacade;
+import com.commerce.api.facade.ProductSort;
 import com.commerce.api.web.v1.product.response.ProductDetailResponse;
 import com.commerce.api.web.v1.product.response.ProductPageResponse;
 import com.commerce.web.paging.PaginationRequest;
@@ -14,12 +15,14 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -40,7 +43,7 @@ public class ProductController {
         this.productDetailFacade = productDetailFacade;
     }
 
-    @Operation(summary = "상품 목록 조회", description = "노출 상품 목록을 대표가·품절과 함께 최신 등록순 페이지로 조회한다.")
+    @Operation(summary = "상품 목록 조회", description = "노출 상품 목록을 대표가·품절과 함께 페이지로 조회한다. 상품명 키워드 검색과 최신순·가격순 정렬을 지원한다.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "조회됨"),
         @ApiResponse(
@@ -49,9 +52,13 @@ public class ProductController {
                 content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
     })
     @GetMapping
-    public ProductPageResponse getProducts(@Valid @ParameterObject PaginationRequest pagination) {
-        return ProductPageResponse.from(
-                productCatalogFacade.getCatalogPage(PageRequest.of(pagination.zeroBasedPage(), pagination.size())));
+    public ProductPageResponse getProducts(
+            @Valid @ParameterObject PaginationRequest pagination,
+            @Parameter(description = "상품명 키워드(부분 일치, 대소문자 무시). 생략하면 전체") @RequestParam(required = false) @Nullable
+                    String keyword,
+            @Parameter(description = "정렬 기준(생략 시 최신 등록순)") @RequestParam(defaultValue = "LATEST") ProductSort sort) {
+        return ProductPageResponse.from(productCatalogFacade.getCatalogPage(
+                keyword, sort, PageRequest.of(pagination.zeroBasedPage(), pagination.size())));
     }
 
     @Operation(summary = "상품 상세 조회", description = "상품 상세를 ACTIVE 변형·주문가능·품절·대표가와 함께 조회한다.")

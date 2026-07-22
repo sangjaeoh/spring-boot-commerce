@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
@@ -34,10 +35,15 @@ public class ProductCatalogFacade {
         this.stockReader = stockReader;
     }
 
-    /** 노출 상품 페이지를 대표가·품절과 함께 최신 등록순으로 반환한다. */
-    public Page<ProductSummaryView> getCatalogPage(Pageable pageable) {
+    /** 노출 상품 페이지를 대표가·품절과 함께 반환한다. 키워드가 있으면 상품명 부분 일치로 좁히고, 정렬 기준을 따른다. */
+    public Page<ProductSummaryView> getCatalogPage(@Nullable String keyword, ProductSort sort, Pageable pageable) {
         // 1. 노출 상품 페이지 조회
-        Page<ProductInfo> products = productReader.getExposedPage(pageable);
+        Page<ProductInfo> products =
+                switch (sort) {
+                    case LATEST -> productReader.getExposedPage(keyword, pageable);
+                    case PRICE_ASC -> productReader.getExposedPageOrderByPriceAsc(keyword, pageable);
+                    case PRICE_DESC -> productReader.getExposedPageOrderByPriceDesc(keyword, pageable);
+                };
         // 2. 합성 재료 수집 — ACTIVE 변형·재고
         Map<UUID, List<ProductVariantInfo>> activeVariantsByProduct = activeVariantsByProduct(products.getContent());
         Set<UUID> orderableVariantIds = orderableVariantIds(activeVariantsByProduct);

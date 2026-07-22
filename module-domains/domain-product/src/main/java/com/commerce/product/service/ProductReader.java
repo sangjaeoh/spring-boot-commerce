@@ -10,6 +10,7 @@ import com.commerce.product.repository.ProductRepository;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -62,11 +63,30 @@ public class ProductReader {
                 .toList();
     }
 
-    /** 카탈로그 노출 상품 페이지를 최신 등록순으로 조회한다. 노출은 판매중·미삭제·{@code ACTIVE} 변형 1개 이상인 상품이다. */
+    /**
+     * 카탈로그 노출 상품 페이지를 최신 등록순으로 조회한다. 노출은 판매중·미삭제·{@code ACTIVE} 변형 1개 이상인
+     * 상품이다. 키워드가 있으면 상품명 부분 일치(대소문자 무시)로 좁힌다.
+     */
     @Transactional(readOnly = true)
-    public Page<ProductInfo> getExposedPage(Pageable pageable) {
+    public Page<ProductInfo> getExposedPage(@Nullable String keyword, Pageable pageable) {
         return productRepository
-                .findExposedPage(ProductStatus.ON_SALE, ProductVariantStatus.ACTIVE, pageable)
+                .findExposedPage(ProductStatus.ON_SALE, ProductVariantStatus.ACTIVE, keyword, pageable)
+                .map(ProductInfo::from);
+    }
+
+    /** 카탈로그 노출 상품 페이지를 대표가(ACTIVE 변형 최저가) 낮은순으로 조회한다. 키워드 의미는 {@link #getExposedPage}와 같다. */
+    @Transactional(readOnly = true)
+    public Page<ProductInfo> getExposedPageOrderByPriceAsc(@Nullable String keyword, Pageable pageable) {
+        return productRepository
+                .findExposedPageOrderByPriceAsc(ProductStatus.ON_SALE, ProductVariantStatus.ACTIVE, keyword, pageable)
+                .map(ProductInfo::from);
+    }
+
+    /** 카탈로그 노출 상품 페이지를 대표가(ACTIVE 변형 최저가) 높은순으로 조회한다. 키워드 의미는 {@link #getExposedPage}와 같다. */
+    @Transactional(readOnly = true)
+    public Page<ProductInfo> getExposedPageOrderByPriceDesc(@Nullable String keyword, Pageable pageable) {
+        return productRepository
+                .findExposedPageOrderByPriceDesc(ProductStatus.ON_SALE, ProductVariantStatus.ACTIVE, keyword, pageable)
                 .map(ProductInfo::from);
     }
 

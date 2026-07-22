@@ -63,7 +63,8 @@ class ProductCatalogFacadeTest extends FacadeIntegrationTest {
         UUID noActive = registerExposed("변형없음", 10000L, 5);
         variantModifier.disable(firstVariantId(noActive));
 
-        Page<ProductSummaryView> page = productCatalogFacade.getCatalogPage(PageRequest.of(0, 20));
+        Page<ProductSummaryView> page =
+                productCatalogFacade.getCatalogPage(null, ProductSort.LATEST, PageRequest.of(0, 20));
 
         List<UUID> ids = page.getContent().stream().map(ProductSummaryView::id).toList();
         assertThat(ids).contains(exposed).doesNotContain(hidden, deleted, noActive);
@@ -115,8 +116,10 @@ class ProductCatalogFacadeTest extends FacadeIntegrationTest {
                 .sorted(Comparator.<UUID>naturalOrder().reversed())
                 .toList();
 
-        Page<ProductSummaryView> page0 = productCatalogFacade.getCatalogPage(PageRequest.of(0, 2));
-        Page<ProductSummaryView> page1 = productCatalogFacade.getCatalogPage(PageRequest.of(1, 2));
+        Page<ProductSummaryView> page0 =
+                productCatalogFacade.getCatalogPage(null, ProductSort.LATEST, PageRequest.of(0, 2));
+        Page<ProductSummaryView> page1 =
+                productCatalogFacade.getCatalogPage(null, ProductSort.LATEST, PageRequest.of(1, 2));
 
         assertThat(page0.getContent())
                 .extracting(ProductSummaryView::id)
@@ -124,7 +127,7 @@ class ProductCatalogFacadeTest extends FacadeIntegrationTest {
         assertThat(page1.getContent().get(0).id()).isEqualTo(newestFirst.get(2));
         assertThat(page0.getTotalElements()).isGreaterThanOrEqualTo(3);
         assertThat(productCatalogFacade
-                        .getCatalogPage(PageRequest.of(1_000_000, 2))
+                        .getCatalogPage(null, ProductSort.LATEST, PageRequest.of(1_000_000, 2))
                         .getContent())
                 .isEmpty();
     }
@@ -145,7 +148,10 @@ class ProductCatalogFacadeTest extends FacadeIntegrationTest {
     }
 
     private ProductSummaryView findSummary(UUID productId) {
-        return productCatalogFacade.getCatalogPage(PageRequest.of(0, 20)).getContent().stream()
+        return productCatalogFacade
+                .getCatalogPage(null, ProductSort.LATEST, PageRequest.of(0, 20))
+                .getContent()
+                .stream()
                 .filter(summary -> summary.id().equals(productId))
                 .findFirst()
                 .orElseThrow();

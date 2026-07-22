@@ -90,6 +90,71 @@ class ProductControllerTest extends WebIntegrationTest {
     }
 
     @Test
+    @DisplayName("키워드 검색이 상품명 부분 일치 상품만 반환한다")
+    void listFiltersByKeyword() throws Exception {
+        String token = "검색토큰" + UUID.randomUUID().toString().substring(0, 8);
+        UUID matchedId = registerProductViaHttp(token + " 셔츠", 10000L, 5);
+        registerProductViaHttp("무관한 바지", 10000L, 5);
+
+        mvc.perform(get("/api/v1/products").param("keyword", token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.products.length()").value(1))
+                .andExpect(jsonPath("$.products[0].id").value(matchedId.toString()))
+                .andExpect(jsonPath("$.page.totalElements").value(1));
+    }
+
+    @Test
+    @DisplayName("일치 상품이 없는 키워드 검색은 빈 목록을 반환한다")
+    void listReturnsEmptyForUnmatchedKeyword() throws Exception {
+        mvc.perform(get("/api/v1/products").param("keyword", "없는키워드" + UUID.randomUUID()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.products.length()").value(0))
+                .andExpect(jsonPath("$.page.totalElements").value(0));
+    }
+
+    @Test
+    @DisplayName("숨긴 상품은 키워드 검색에서도 제외된다")
+    void listKeywordSearchExcludesHiddenProduct() throws Exception {
+        String token = "숨김토큰" + UUID.randomUUID().toString().substring(0, 8);
+        UUID productId = registerProductViaHttp(token + " 셔츠", 10000L, 5);
+
+        mvc.perform(post("/api/v1/admin/products/{productId}/hide", productId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
+                .andExpect(status().isNoContent());
+
+        mvc.perform(get("/api/v1/products").param("keyword", token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.products.length()").value(0));
+    }
+
+    @Test
+    @DisplayName("가격순 정렬이 대표가 기준으로 정렬하고 기본은 최신 등록순이다")
+    void listSortsByPriceAndDefaultsToLatest() throws Exception {
+        String token = "정렬토큰" + UUID.randomUUID().toString().substring(0, 8);
+        UUID expensiveId = registerProductViaHttp(token + " 고가", 30000L, 5);
+        UUID cheapId = registerProductViaHttp(token + " 저가", 10000L, 5);
+        UUID middleId = registerProductViaHttp(token + " 중가", 20000L, 5);
+
+        mvc.perform(get("/api/v1/products").param("keyword", token).param("sort", "PRICE_ASC"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.products[0].id").value(cheapId.toString()))
+                .andExpect(jsonPath("$.products[1].id").value(middleId.toString()))
+                .andExpect(jsonPath("$.products[2].id").value(expensiveId.toString()));
+
+        mvc.perform(get("/api/v1/products").param("keyword", token).param("sort", "PRICE_DESC"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.products[0].id").value(expensiveId.toString()))
+                .andExpect(jsonPath("$.products[1].id").value(middleId.toString()))
+                .andExpect(jsonPath("$.products[2].id").value(cheapId.toString()));
+
+        mvc.perform(get("/api/v1/products").param("keyword", token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.products[0].id").value(middleId.toString()))
+                .andExpect(jsonPath("$.products[1].id").value(cheapId.toString()))
+                .andExpect(jsonPath("$.products[2].id").value(expensiveId.toString()));
+    }
+
+    @Test
     @DisplayName("1 미만 page·size는 400 VALIDATION_FAILED로 거부된다")
     void listRejectsInvalidPageParams() throws Exception {
         mvc.perform(get("/api/v1/products").param("page", "0"))
