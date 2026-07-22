@@ -19,6 +19,7 @@ dependencies {
     runtimeOnly(project(":module-domains:domain-order"))
     runtimeOnly(project(":module-domains:domain-payment"))
     runtimeOnly(project(":module-domains:domain-wishlist"))
+    runtimeOnly(project(":module-domains:domain-review"))
 
     testImplementation(libs.spring.boot.starter.test)
     testImplementation(libs.testcontainers.postgresql)

@@ -9,7 +9,7 @@ public final class SchemaFlywayFactory {
 
     // 등록된 도메인 스키마. db/migration/{name}/ 로케이션 규약과 1:1 대응한다.
     private static final List<String> SCHEMAS =
-            List.of("member", "product", "stock", "cart", "coupon", "ordering", "payment", "wishlist");
+            List.of("member", "product", "stock", "cart", "coupon", "ordering", "payment", "wishlist", "review");
 
     private SchemaFlywayFactory() {}
 

@@ -28,7 +28,9 @@ public class SecurityConfig {
         "/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/auth/logout"
     };
     private static final String[] PUBLIC_MEMBER_PATHS = {"/api/v1/members"};
-    private static final String[] PUBLIC_PRODUCT_PATHS = {"/api/v1/products", "/api/v1/products/*"};
+    private static final String[] PUBLIC_PRODUCT_PATHS = {
+        "/api/v1/products", "/api/v1/products/*", "/api/v1/products/*/reviews"
+    };
     private static final String[] PUBLIC_PAYMENT_PATHS = {"/api/v1/payments/webhook"};
     private static final String[] ADMIN_PATHS = {"/api/v1/admin/**"};
 

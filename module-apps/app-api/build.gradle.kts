@@ -19,6 +19,7 @@ dependencies {
     implementation(project(":module-domains:domain-order"))
     implementation(project(":module-domains:domain-payment"))
     implementation(project(":module-domains:domain-wishlist"))
+    implementation(project(":module-domains:domain-review"))
     implementation(libs.spring.boot.starter.web)
     // 무상태 JWT SecurityFilterChain(SecurityConfig)이 조립하는 시큐리티 런타임(오토컨피그 포함).
     implementation(libs.spring.boot.starter.security)

@@ -59,6 +59,12 @@ public class OrderReader {
                 memberId, OrderStatus.PAID, FulfillmentStatus.DELIVERED);
     }
 
+    /** 회원이 결제 완료·배송 완료 주문으로 상품을 받은 적이 있는지 본다. */
+    @Transactional(readOnly = true)
+    public boolean hasDeliveredProduct(UUID memberId, UUID productId) {
+        return orderRepository.existsDeliveredLineByMemberIdAndProductId(memberId, productId);
+    }
+
     /** 회원의 주문 목록을 최신순 페이지로 조회한다. 없으면 빈 페이지다. 같은 생성 시각은 id로 결정적 순서를 둔다. */
     @Transactional(readOnly = true)
     public Page<OrderInfo> getOrdersByMember(UUID memberId, Pageable pageable) {

@@ -108,6 +108,7 @@ class ArchitectureTest {
                         "com.commerce.order",
                         "com.commerce.payment",
                         "com.commerce.product",
+                        "com.commerce.review",
                         "com.commerce.stock",
                         "com.commerce.wishlist"),
                 ENTITY_OWNING_BASE_PACKAGES);
