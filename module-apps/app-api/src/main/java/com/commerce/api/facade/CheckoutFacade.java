@@ -42,7 +42,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 
-/** 장바구니 전체를 주문·결제로 전환하는 체크아웃 흐름과 그 금액 미리보기를 조율하는 파사드다. */
+/** 장바구니 전체(체크아웃) 또는 요청 라인(바로구매)을 주문·결제로 전환하는 흐름과 금액 미리보기를 조율하는 파사드다. */
 @Component
 public class CheckoutFacade {
 
@@ -101,25 +101,61 @@ public class CheckoutFacade {
         requireEligibleMember(memberId);
         // 2. 장바구니를 주문 라인 스냅샷으로 변환
         List<OrderLineSnapshot> snapshots = buildOrderableSnapshots(requireNonEmptyCart(memberId));
-        // 3. 할인·실청구액 산출
+        // 3. 주문·결제 실행
+        return placeAndPay(memberId, snapshots, shippingAddress, shippingFee, issuedCouponId, method);
+    }
+
+    /**
+     * 장바구니를 거치지 않고 요청 라인으로 주문·결제를 수행하고 결제 완료된 주문 ID를 반환한다. 장바구니는 변경하지
+     * 않으며, 실패하면 그 콜스택에서 동기 보상한다.
+     *
+     * @throws ApiException 회원 자격·주문 가능·쿠폰 적용성·결제 거절 등 크로스 도메인 정책 거부
+     */
+    public UUID orderDirect(
+            UUID memberId,
+            List<DirectOrderLine> lines,
+            Address shippingAddress,
+            Money shippingFee,
+            @Nullable UUID issuedCouponId,
+            @Nullable PaymentMethod method) {
+        // 1. 회원 자격 확인
+        requireEligibleMember(memberId);
+        // 2. 요청 라인을 주문 라인 스냅샷으로 변환
+        List<OrderLineSnapshot> snapshots = new ArrayList<>();
+        for (DirectOrderLine line : lines) {
+            snapshots.add(orderableSnapshotOf(line.variantId(), line.quantity()));
+        }
+        // 3. 주문·결제 실행
+        return placeAndPay(memberId, snapshots, shippingAddress, shippingFee, issuedCouponId, method);
+    }
+
+    /** 금액을 산출하고 주문 생성→재고 차감→쿠폰 사용→결제 승인→완료 확정을 실행한다. 실패하면 그 콜스택에서 동기 보상한다. */
+    private UUID placeAndPay(
+            UUID memberId,
+            List<OrderLineSnapshot> snapshots,
+            Address shippingAddress,
+            Money shippingFee,
+            @Nullable UUID issuedCouponId,
+            @Nullable PaymentMethod method) {
+        // 1. 할인·실청구액 산출
         Money totalAmount = totalOf(snapshots);
         Money discountAmount =
                 issuedCouponId != null ? resolveCouponDiscount(issuedCouponId, memberId, totalAmount) : Money.ZERO;
         Money payAmount = totalAmount.minus(discountAmount).plus(shippingFee);
         PaymentMethod resolvedMethod = payAmount.isZero() ? null : requireMethod(method);
 
-        // 4. 주문 생성 — 이후 단계 실패 시 보상 앵커
+        // 2. 주문 생성 — 이후 단계 실패 시 보상 앵커
         UUID orderId =
                 orderAppender.place(memberId, snapshots, shippingAddress, discountAmount, shippingFee, issuedCouponId);
-        // 5. 재고 차감
+        // 3. 재고 차감
         deductStockOrCompensate(orderId, snapshots);
-        // 6. 쿠폰 사용 확정
+        // 4. 쿠폰 사용 확정
         if (issuedCouponId != null) {
             useCouponOrCompensate(orderId, memberId, issuedCouponId, snapshots);
         }
-        // 7. 결제 승인
+        // 5. 결제 승인
         approvePaymentOrCompensate(orderId, snapshots, issuedCouponId, payAmount, resolvedMethod);
-        // 8. 결제 완료 확정
+        // 6. 결제 완료 확정
         orderModifier.markPaid(orderId);
         return orderId;
     }
@@ -163,22 +199,22 @@ public class CheckoutFacade {
     private List<OrderLineSnapshot> buildOrderableSnapshots(List<CartItemInfo> items) {
         List<OrderLineSnapshot> snapshots = new ArrayList<>();
         for (CartItemInfo item : items) {
-            // 1. 변형 활성 확인
-            ProductVariantInfo variant = requireActiveVariant(item.variantId());
-            // 2. 변형이 속한 상품 판매중 확인
-            ProductInfo product = requireOnSaleProduct(variant.productId());
-            // 3. 재고 판매 가능·수량 확인
-            requireSellableStock(item.variantId(), item.quantity());
-            // 4. 주문 라인 스냅샷 적재
-            snapshots.add(new OrderLineSnapshot(
-                    variant.id(),
-                    product.id(),
-                    product.name(),
-                    variant.optionLabel(),
-                    variant.price(),
-                    item.quantity()));
+            snapshots.add(orderableSnapshotOf(item.variantId(), item.quantity()));
         }
         return snapshots;
+    }
+
+    /** 라인 하나를 주문 가능 게이트에 통과시켜 주문 라인 스냅샷으로 만든다. */
+    private OrderLineSnapshot orderableSnapshotOf(UUID variantId, int quantity) {
+        // 1. 변형 활성 확인
+        ProductVariantInfo variant = requireActiveVariant(variantId);
+        // 2. 변형이 속한 상품 판매중 확인
+        ProductInfo product = requireOnSaleProduct(variant.productId());
+        // 3. 재고 판매 가능·수량 확인
+        requireSellableStock(variantId, quantity);
+        // 4. 주문 라인 스냅샷 생성
+        return new OrderLineSnapshot(
+                variant.id(), product.id(), product.name(), variant.optionLabel(), variant.price(), quantity);
     }
 
     /** 스냅샷 단가와 수량을 곱해 합산한 라인 합계를 계산한다. */

@@ -12,9 +12,14 @@ import com.commerce.api.web.v1.admin.order.request.OrderShipRequest;
 import com.commerce.api.web.v1.order.request.AddressRequest;
 import com.commerce.api.web.v1.order.request.CheckoutPreviewRequest;
 import com.commerce.api.web.v1.order.request.CheckoutRequest;
+import com.commerce.api.web.v1.order.request.DirectOrderItemRequest;
+import com.commerce.api.web.v1.order.request.DirectOrderRequest;
 import com.commerce.api.web.v1.order.response.CheckoutResponse;
+import com.commerce.api.web.v1.order.response.DirectOrderResponse;
 import com.commerce.api.web.v1.payment.response.PaymentResponse;
+import com.commerce.cart.info.CartInfo;
 import com.commerce.cart.service.CartAppender;
+import com.commerce.cart.service.CartReader;
 import com.commerce.coupon.entity.Discount;
 import com.commerce.coupon.entity.ValidityPeriod;
 import com.commerce.coupon.service.CouponAppender;
@@ -52,6 +57,7 @@ class OrderControllerTest extends WebIntegrationTest {
     private final ObjectMapper objectMapper;
     private final MemberAppender memberAppender;
     private final CartAppender cartAppender;
+    private final CartReader cartReader;
     private final ProductRegistrationFacade productRegistrationFacade;
     private final ProductVariantReader variantReader;
     private final CouponAppender couponAppender;
@@ -66,6 +72,7 @@ class OrderControllerTest extends WebIntegrationTest {
             ObjectMapper objectMapper,
             MemberAppender memberAppender,
             CartAppender cartAppender,
+            CartReader cartReader,
             ProductRegistrationFacade productRegistrationFacade,
             ProductVariantReader variantReader,
             CouponAppender couponAppender,
@@ -78,6 +85,7 @@ class OrderControllerTest extends WebIntegrationTest {
         this.objectMapper = objectMapper;
         this.memberAppender = memberAppender;
         this.cartAppender = cartAppender;
+        this.cartReader = cartReader;
         this.productRegistrationFacade = productRegistrationFacade;
         this.variantReader = variantReader;
         this.couponAppender = couponAppender;
@@ -140,6 +148,112 @@ class OrderControllerTest extends WebIntegrationTest {
         // 미리보기가 부작용을 남기지 않아 같은 장바구니·쿠폰으로 체크아웃이 그대로 성공한다.
         UUID orderId = checkout(memberId, new CheckoutRequest(addressRequest(), 3000L, issuedId, PaymentMethod.CARD));
         assertThat(orderReader.getOrder(orderId, memberId).payAmount()).isEqualTo(Money.of(21000L));
+    }
+
+    @Test
+    @DisplayName("바로구매가 201로 주문을 결제하고 장바구니를 건드리지 않는다")
+    void directOrderPaysWithoutTouchingCart() throws Exception {
+        UUID memberId = registerMember();
+        UUID cartVariantId = seedProduct(50);
+        cartAppender.addItem(memberId, cartVariantId, 1);
+        UUID directVariantId = seedProduct(50);
+        DirectOrderRequest request = new DirectOrderRequest(
+                List.of(new DirectOrderItemRequest(directVariantId, 2)),
+                addressRequest(),
+                3000L,
+                null,
+                PaymentMethod.CARD);
+
+        String body = mvc.perform(post("/api/v1/orders/direct")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.orderId").exists())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        UUID orderId = UUID.fromString(
+                objectMapper.readValue(body, DirectOrderResponse.class).orderId());
+        OrderInfo order = orderReader.getOrder(orderId, memberId);
+        assertThat(order.status()).isEqualTo(OrderStatus.PAID);
+        assertThat(order.payAmount()).isEqualTo(Money.of(23000L));
+        assertThat(stockReader.getByVariantId(directVariantId).quantity()).isEqualTo(48);
+        CartInfo cart = cartReader.getCart(memberId);
+        assertThat(cart.items()).hasSize(1);
+        assertThat(cart.items().get(0).variantId()).isEqualTo(cartVariantId);
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 변형 바로구매는 409 API_NOT_ORDERABLE로 거부된다")
+    void directOrderRejectsUnknownVariant() throws Exception {
+        UUID memberId = registerMember();
+        DirectOrderRequest request = new DirectOrderRequest(
+                List.of(new DirectOrderItemRequest(UUID.randomUUID(), 1)),
+                addressRequest(),
+                0L,
+                null,
+                PaymentMethod.CARD);
+
+        mvc.perform(post("/api/v1/orders/direct")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("API_NOT_ORDERABLE"));
+    }
+
+    @Test
+    @DisplayName("재고 부족 바로구매는 409 API_INSUFFICIENT_STOCK로 거부된다")
+    void directOrderRejectsInsufficientStock() throws Exception {
+        UUID memberId = registerMember();
+        UUID variantId = seedProduct(1);
+        DirectOrderRequest request = new DirectOrderRequest(
+                List.of(new DirectOrderItemRequest(variantId, 2)), addressRequest(), 0L, null, PaymentMethod.CARD);
+
+        mvc.perform(post("/api/v1/orders/direct")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("API_INSUFFICIENT_STOCK"));
+    }
+
+    @Test
+    @DisplayName("결제 거절 바로구매는 402 API_PAYMENT_DECLINED로 거부되고 재고를 원복한다")
+    void directOrderCompensatesOnPaymentDecline() throws Exception {
+        UUID memberId = registerMember();
+        UUID variantId = seedProduct(50);
+        // 결제 예정액 20999 — 끝 세 자리 999는 fake PG의 거절 트리거다.
+        DirectOrderRequest request = new DirectOrderRequest(
+                List.of(new DirectOrderItemRequest(variantId, 2)), addressRequest(), 999L, null, PaymentMethod.CARD);
+
+        mvc.perform(post("/api/v1/orders/direct")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isPaymentRequired())
+                .andExpect(jsonPath("$.code").value("API_PAYMENT_DECLINED"));
+
+        assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(50);
+    }
+
+    @Test
+    @DisplayName("미인증 바로구매는 401 UNAUTHENTICATED로 거부된다")
+    void directOrderRejectsUnauthenticated() throws Exception {
+        DirectOrderRequest request = new DirectOrderRequest(
+                List.of(new DirectOrderItemRequest(UUID.randomUUID(), 1)),
+                addressRequest(),
+                0L,
+                null,
+                PaymentMethod.CARD);
+
+        mvc.perform(post("/api/v1/orders/direct")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
     }
 
     @Test
