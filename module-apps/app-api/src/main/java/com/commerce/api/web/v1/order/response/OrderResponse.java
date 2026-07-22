@@ -5,6 +5,7 @@ import com.commerce.order.entity.FulfillmentStatus;
 import com.commerce.order.entity.HoldReason;
 import com.commerce.order.entity.OrderStatus;
 import com.commerce.order.entity.RefundReason;
+import com.commerce.order.entity.ReturnStatus;
 import com.commerce.order.info.OrderInfo;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
@@ -60,7 +61,16 @@ public record OrderResponse(
         Instant refundedAt,
 
         @Schema(description = "환불 사유. 미환불이면 없음", nullable = true) @Nullable
-        RefundReason refundReason) {
+        RefundReason refundReason,
+
+        @Schema(description = "반품 요청 축 상태. 요청이 없으면 없음", nullable = true) @Nullable
+        ReturnStatus returnStatus,
+
+        @Schema(description = "반품 요청 시각. 요청이 없으면 없음", nullable = true) @Nullable
+        Instant returnRequestedAt,
+
+        @Schema(description = "반품 요청 사유. 요청이 없으면 없음", nullable = true) @Nullable
+        RefundReason returnReason) {
 
     public OrderResponse {
         lines = List.copyOf(lines);
@@ -94,6 +104,9 @@ public record OrderResponse(
                 order.cancellationReason(),
                 order.holdReason(),
                 order.refundedAt(),
-                order.refundReason());
+                order.refundReason(),
+                order.returnStatus(),
+                order.returnRequestedAt(),
+                order.returnReason());
     }
 }

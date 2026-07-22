@@ -306,6 +306,85 @@ class OrderAdminControllerTest extends WebIntegrationTest {
     }
 
     @Test
+    @DisplayName("반품 요청 승인은 204로 환불을 완결하고 반품을 COMPLETED로 닫는다")
+    void returnApprovalRefundsRequestedOrder() throws Exception {
+        UUID memberId = registerMember();
+        UUID orderId = checkoutForMember(memberId);
+        orderModifier.ship(orderId, "CJ대한통운", "688900123456");
+        orderModifier.confirmDelivery(orderId);
+        orderModifier.requestReturn(orderId, memberId, RefundReason.PRODUCT_DEFECT);
+
+        mvc.perform(post("/api/v1/admin/orders/{orderId}/return-approval", orderId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
+                .andExpect(status().isNoContent());
+
+        mvc.perform(get("/api/v1/orders/{orderId}", orderId).header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("REFUNDED"))
+                .andExpect(jsonPath("$.returnStatus").value("COMPLETED"))
+                .andExpect(jsonPath("$.refundReason").value("PRODUCT_DEFECT"))
+                .andExpect(jsonPath("$.refundedAt").exists());
+    }
+
+    @Test
+    @DisplayName("반품 요청 거절은 204로 주문을 PAID·DELIVERED로 남기고 REJECTED를 기록한다")
+    void returnRejectionKeepsOrderPaid() throws Exception {
+        UUID memberId = registerMember();
+        UUID orderId = checkoutForMember(memberId);
+        orderModifier.ship(orderId, "CJ대한통운", "688900123456");
+        orderModifier.confirmDelivery(orderId);
+        orderModifier.requestReturn(orderId, memberId, RefundReason.CHANGE_OF_MIND);
+
+        mvc.perform(post("/api/v1/admin/orders/{orderId}/return-rejection", orderId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
+                .andExpect(status().isNoContent());
+
+        mvc.perform(get("/api/v1/orders/{orderId}", orderId).header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PAID"))
+                .andExpect(jsonPath("$.fulfillmentStatus").value("DELIVERED"))
+                .andExpect(jsonPath("$.returnStatus").value("REJECTED"))
+                .andExpect(jsonPath("$.refundedAt").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("반품 요청 없는 주문 승인은 409 API_ORDER_RETURN_NOT_REQUESTED로 거부된다")
+    void returnApprovalRejectsWithoutRequest() throws Exception {
+        UUID memberId = registerMember();
+        UUID orderId = checkoutForMember(memberId);
+        orderModifier.ship(orderId, "CJ대한통운", "688900123456");
+        orderModifier.confirmDelivery(orderId);
+
+        mvc.perform(post("/api/v1/admin/orders/{orderId}/return-approval", orderId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("API_ORDER_RETURN_NOT_REQUESTED"));
+
+        assertThat(orderReader.getOrder(orderId, memberId).status()).isEqualTo(OrderStatus.PAID);
+    }
+
+    @Test
+    @DisplayName("구매자 토큰의 반품 승인·거절은 403 FORBIDDEN으로 거부된다")
+    void returnDecisionRejectsBuyerToken() throws Exception {
+        UUID memberId = registerMember();
+        UUID orderId = checkoutForMember(memberId);
+        orderModifier.ship(orderId, "CJ대한통운", "688900123456");
+        orderModifier.confirmDelivery(orderId);
+        orderModifier.requestReturn(orderId, memberId, RefundReason.CHANGE_OF_MIND);
+
+        mvc.perform(post("/api/v1/admin/orders/{orderId}/return-approval", orderId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+        mvc.perform(post("/api/v1/admin/orders/{orderId}/return-rejection", orderId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        assertThat(orderReader.getOrder(orderId, memberId).status()).isEqualTo(OrderStatus.PAID);
+    }
+
+    @Test
     @DisplayName("관리자 주문 목록은 200으로 결제완료·준비중 주문을 최신순 페이지로 싣고 이행 축 상태를 따른다")
     void adminOrderListReturnsPaidPreparingOrdersAndFollowsFulfillment() throws Exception {
         UUID orderId = checkoutForMember(registerMember());

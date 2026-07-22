@@ -292,4 +292,101 @@ class OrderTest {
         order.releaseFulfillment();
         assertThat(order.getFulfillmentStatus()).isEqualTo(FulfillmentStatus.PREPARING);
     }
+
+    @Test
+    @DisplayName("배송 완료 결제 주문에 반품을 요청하면 REQUESTED와 사유·시각이 기록된다")
+    void requestReturnRecordsRequest() {
+        Order order = deliveredOrder();
+        order.requestReturn(RefundReason.PRODUCT_DEFECT, NOW);
+        assertThat(order.getReturnStatus()).isEqualTo(ReturnStatus.REQUESTED);
+        assertThat(order.getReturnReason()).isEqualTo(RefundReason.PRODUCT_DEFECT);
+        assertThat(order.getReturnRequestedAt()).isEqualTo(NOW);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
+    }
+
+    @Test
+    @DisplayName("배송 완료 아닌(준비·출고·미결제) 주문은 반품을 요청할 수 없다")
+    void requestReturnRejectsUndelivered() {
+        assertThatThrownBy(() -> paidOrder().requestReturn(RefundReason.CHANGE_OF_MIND, NOW))
+                .isInstanceOfSatisfying(
+                        OrderStatusException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(OrderErrorCode.RETURN_NOT_ALLOWED));
+
+        Order shipped = paidOrder();
+        shipped.ship(CARRIER, TRACKING_NUMBER, NOW);
+        assertThatThrownBy(() -> shipped.requestReturn(RefundReason.CHANGE_OF_MIND, NOW))
+                .isInstanceOf(OrderStatusException.class);
+
+        Order pending = place(Money.ZERO, Money.ZERO, null);
+        assertThatThrownBy(() -> pending.requestReturn(RefundReason.CHANGE_OF_MIND, NOW))
+                .isInstanceOf(OrderStatusException.class);
+    }
+
+    @Test
+    @DisplayName("환불 완료된 주문은 반품을 요청할 수 없다")
+    void requestReturnRejectsRefundedOrder() {
+        Order order = deliveredOrder();
+        order.refund(RefundReason.CS_MANUAL, NOW);
+        assertThatThrownBy(() -> order.requestReturn(RefundReason.CHANGE_OF_MIND, NOW))
+                .isInstanceOf(OrderStatusException.class);
+    }
+
+    @Test
+    @DisplayName("반품 요청 중 재요청은 거부된다")
+    void requestReturnRejectsDuplicate() {
+        Order order = deliveredOrder();
+        order.requestReturn(RefundReason.PRODUCT_DEFECT, NOW);
+        assertThatThrownBy(() -> order.requestReturn(RefundReason.PRODUCT_DEFECT, NOW))
+                .isInstanceOfSatisfying(
+                        OrderStatusException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(OrderErrorCode.RETURN_ALREADY_REQUESTED));
+    }
+
+    @Test
+    @DisplayName("반품 거절은 REJECTED로 전이하고 주문은 PAID·DELIVERED로 남는다")
+    void rejectReturnKeepsOrderState() {
+        Order order = deliveredOrder();
+        order.requestReturn(RefundReason.CHANGE_OF_MIND, NOW);
+        order.rejectReturn();
+        assertThat(order.getReturnStatus()).isEqualTo(ReturnStatus.REJECTED);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
+        assertThat(order.getFulfillmentStatus()).isEqualTo(FulfillmentStatus.DELIVERED);
+        assertThat(order.getRefundedAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("요청 상태가 아니면 반품을 거절할 수 없다")
+    void rejectReturnRequiresRequested() {
+        Order order = deliveredOrder();
+        assertThatThrownBy(order::rejectReturn)
+                .isInstanceOfSatisfying(
+                        OrderStatusException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(OrderErrorCode.RETURN_NOT_REQUESTED));
+
+        order.requestReturn(RefundReason.CHANGE_OF_MIND, NOW);
+        order.rejectReturn();
+        assertThatThrownBy(order::rejectReturn).isInstanceOf(OrderStatusException.class);
+    }
+
+    @Test
+    @DisplayName("거절 후 재요청은 허용된다")
+    void requestReturnAllowedAfterRejection() {
+        Order order = deliveredOrder();
+        order.requestReturn(RefundReason.CHANGE_OF_MIND, NOW);
+        order.rejectReturn();
+        order.requestReturn(RefundReason.PRODUCT_DEFECT, NOW.plusSeconds(60));
+        assertThat(order.getReturnStatus()).isEqualTo(ReturnStatus.REQUESTED);
+        assertThat(order.getReturnReason()).isEqualTo(RefundReason.PRODUCT_DEFECT);
+        assertThat(order.getReturnRequestedAt()).isEqualTo(NOW.plusSeconds(60));
+    }
+
+    @Test
+    @DisplayName("반품 요청된 주문이 환불되면 반품은 COMPLETED로 완결된다")
+    void refundCompletesRequestedReturn() {
+        Order order = deliveredOrder();
+        order.requestReturn(RefundReason.PRODUCT_DEFECT, NOW);
+        order.refund(RefundReason.PRODUCT_DEFECT, NOW);
+        assertThat(order.getReturnStatus()).isEqualTo(ReturnStatus.COMPLETED);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.REFUNDED);
+    }
 }

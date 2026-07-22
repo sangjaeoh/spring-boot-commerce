@@ -83,6 +83,58 @@ public class OrderAdminController {
         orderRefundFacade.refund(orderId, request.reason());
     }
 
+    @Operation(summary = "반품 요청 승인", description = "반품 요청된 주문의 환불을 완결하고 재고·쿠폰을 복원한다.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "204", description = "반품 승인·환불·복원 완료"),
+        @ApiResponse(
+                responseCode = "401",
+                description = "미인증",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+        @ApiResponse(
+                responseCode = "403",
+                description = "권한 없음",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+        @ApiResponse(
+                responseCode = "404",
+                description = "주문 없음",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+        @ApiResponse(
+                responseCode = "409",
+                description = "반품 요청 상태의 주문이 아님",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+    })
+    @PostMapping("/{orderId}/return-approval")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void approveReturn(@Parameter(description = "주문 ID") @PathVariable UUID orderId) {
+        orderRefundFacade.approveReturn(orderId);
+    }
+
+    @Operation(summary = "반품 요청 거절", description = "반품 요청을 거절한다. 주문은 결제 완료·배송 완료로 남는다.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "204", description = "반품 거절 완료"),
+        @ApiResponse(
+                responseCode = "401",
+                description = "미인증",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+        @ApiResponse(
+                responseCode = "403",
+                description = "권한 없음",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+        @ApiResponse(
+                responseCode = "404",
+                description = "주문 없음",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+        @ApiResponse(
+                responseCode = "409",
+                description = "반품 요청 상태의 주문이 아님",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+    })
+    @PostMapping("/{orderId}/return-rejection")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void rejectReturn(@Parameter(description = "주문 ID") @PathVariable UUID orderId) {
+        orderModifier.rejectReturn(orderId);
+    }
+
     @Operation(summary = "출고 처리", description = "결제 완료 주문을 택배사·운송장 번호와 함께 출고 처리한다.")
     @ApiResponses({
         @ApiResponse(responseCode = "204", description = "출고 처리 완료"),

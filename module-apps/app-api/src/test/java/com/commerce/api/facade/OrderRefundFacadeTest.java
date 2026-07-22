@@ -23,7 +23,9 @@ import com.commerce.order.entity.Address;
 import com.commerce.order.entity.FulfillmentStatus;
 import com.commerce.order.entity.OrderStatus;
 import com.commerce.order.entity.RefundReason;
+import com.commerce.order.entity.ReturnStatus;
 import com.commerce.order.exception.OrderErrorCode;
+import com.commerce.order.exception.OrderNotFoundException;
 import com.commerce.order.exception.OrderStatusException;
 import com.commerce.order.info.OrderInfo;
 import com.commerce.order.service.OrderModifier;
@@ -319,6 +321,84 @@ class OrderRefundFacadeTest extends FacadeIntegrationTest {
         assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(50);
         assertThat(issuedCouponReader.getIssuedCoupon(issuedId, memberId).status())
                 .isEqualTo(IssuedCouponStatus.ISSUED);
+    }
+
+    @Test
+    @DisplayName("반품 요청된 주문 승인이 환불을 완결하고 재고·쿠폰을 복원하며 반품을 COMPLETED로 닫는다")
+    void approveReturnRefundsAndRestores() {
+        UUID memberId = registerMember();
+        UUID variantId = seedProduct(Money.of(10000L), 50);
+        cartAppender.addItem(memberId, variantId, 4);
+        UUID couponId =
+                couponAppender.create("정액 1000", Discount.fixed(Money.of(1000L)), Money.ZERO, validity(), 30, null);
+        UUID issuedId = issuedCouponAppender.issue(couponId, memberId);
+        UUID orderId = deliveredCheckout(memberId, issuedId);
+        orderModifier.requestReturn(orderId, memberId, RefundReason.PRODUCT_DEFECT);
+
+        orderRefundFacade.approveReturn(orderId);
+
+        OrderInfo order = orderReader.getOrder(orderId);
+        assertThat(order.status()).isEqualTo(OrderStatus.REFUNDED);
+        assertThat(order.returnStatus()).isEqualTo(ReturnStatus.COMPLETED);
+        assertThat(order.refundReason()).isEqualTo(RefundReason.PRODUCT_DEFECT);
+        assertThat(paymentReader.getByOrderId(orderId).status()).isEqualTo(PaymentStatus.CANCELLED);
+        assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(50);
+        assertThat(issuedCouponReader.getIssuedCoupon(issuedId, memberId).status())
+                .isEqualTo(IssuedCouponStatus.ISSUED);
+    }
+
+    @Test
+    @DisplayName("반품 요청 없는 주문 승인은 거부되고 아무것도 복원하지 않는다")
+    void approveReturnRejectsWithoutRequest() {
+        UUID memberId = registerMember();
+        UUID variantId = seedProduct(Money.of(10000L), 50);
+        cartAppender.addItem(memberId, variantId, 1);
+        UUID orderId = deliveredCheckout(memberId, null);
+
+        assertThatThrownBy(() -> orderRefundFacade.approveReturn(orderId))
+                .isInstanceOfSatisfying(
+                        ApiException.class,
+                        ex -> assertThat(ex.getErrorCode()).isEqualTo(ApiErrorCode.ORDER_RETURN_NOT_REQUESTED));
+
+        assertThat(orderReader.getOrder(orderId).status()).isEqualTo(OrderStatus.PAID);
+        assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(49);
+    }
+
+    @Test
+    @DisplayName("반품 거절은 주문을 PAID·DELIVERED로 남기고 이후 재요청·승인이 가능하다")
+    void rejectReturnKeepsOrderAndAllowsReRequest() {
+        UUID memberId = registerMember();
+        UUID variantId = seedProduct(Money.of(10000L), 50);
+        cartAppender.addItem(memberId, variantId, 1);
+        UUID orderId = deliveredCheckout(memberId, null);
+        orderModifier.requestReturn(orderId, memberId, RefundReason.CHANGE_OF_MIND);
+
+        orderModifier.rejectReturn(orderId);
+
+        OrderInfo order = orderReader.getOrder(orderId);
+        assertThat(order.status()).isEqualTo(OrderStatus.PAID);
+        assertThat(order.fulfillmentStatus()).isEqualTo(FulfillmentStatus.DELIVERED);
+        assertThat(order.returnStatus()).isEqualTo(ReturnStatus.REJECTED);
+        assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(49);
+        assertThatThrownBy(() -> orderRefundFacade.approveReturn(orderId)).isInstanceOf(ApiException.class);
+
+        orderModifier.requestReturn(orderId, memberId, RefundReason.PRODUCT_DEFECT);
+        orderRefundFacade.approveReturn(orderId);
+        assertThat(orderReader.getOrder(orderId).status()).isEqualTo(OrderStatus.REFUNDED);
+        assertThat(stockReader.getByVariantId(variantId).quantity()).isEqualTo(50);
+    }
+
+    @Test
+    @DisplayName("타인 주문 반품 요청은 미존재로 거부된다")
+    void requestReturnRejectsForeignOrder() {
+        UUID memberId = registerMember();
+        UUID variantId = seedProduct(Money.of(10000L), 50);
+        cartAppender.addItem(memberId, variantId, 1);
+        UUID orderId = deliveredCheckout(memberId, null);
+        UUID otherMemberId = registerMember();
+
+        assertThatThrownBy(() -> orderModifier.requestReturn(orderId, otherMemberId, RefundReason.CHANGE_OF_MIND))
+                .isInstanceOf(OrderNotFoundException.class);
     }
 
     private UUID deliveredCheckout(UUID memberId, @org.jspecify.annotations.Nullable UUID issuedCouponId) {

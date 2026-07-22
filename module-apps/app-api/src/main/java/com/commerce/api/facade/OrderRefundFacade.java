@@ -6,6 +6,7 @@ import com.commerce.coupon.service.IssuedCouponModifier;
 import com.commerce.order.entity.FulfillmentStatus;
 import com.commerce.order.entity.OrderStatus;
 import com.commerce.order.entity.RefundReason;
+import com.commerce.order.entity.ReturnStatus;
 import com.commerce.order.info.OrderInfo;
 import com.commerce.order.info.OrderLineInfo;
 import com.commerce.order.service.OrderModifier;
@@ -75,6 +76,23 @@ public class OrderRefundFacade {
         for (OrderLineInfo line : order.lines()) {
             stockModifier.restore(line.variantId(), line.quantity());
         }
+    }
+
+    /**
+     * 반품 요청을 승인해 요청 사유로 환불을 완결하고 재고·쿠폰을 복원한다. 이미 완료된 반품은 멱등 통과한다.
+     *
+     * @throws ApiException 반품 요청 상태의 주문이 아니면
+     */
+    public void approveReturn(UUID orderId) {
+        OrderInfo order = orderReader.getOrder(orderId);
+        if (order.returnStatus() == ReturnStatus.COMPLETED) {
+            return;
+        }
+        RefundReason reason = order.returnReason();
+        if (order.returnStatus() != ReturnStatus.REQUESTED || reason == null) {
+            throw new ApiException(ApiErrorCode.ORDER_RETURN_NOT_REQUESTED);
+        }
+        refund(orderId, reason);
     }
 
     /** 결제 완료이면서 배송 완료된 주문만 통과시킨다. */

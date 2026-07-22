@@ -7,12 +7,14 @@ import com.commerce.api.web.auth.Authenticated;
 import com.commerce.api.web.v1.order.request.CheckoutPreviewRequest;
 import com.commerce.api.web.v1.order.request.CheckoutRequest;
 import com.commerce.api.web.v1.order.request.DirectOrderRequest;
+import com.commerce.api.web.v1.order.request.OrderReturnRequest;
 import com.commerce.api.web.v1.order.response.CheckoutPreviewResponse;
 import com.commerce.api.web.v1.order.response.CheckoutResponse;
 import com.commerce.api.web.v1.order.response.DirectOrderResponse;
 import com.commerce.api.web.v1.order.response.OrderPageResponse;
 import com.commerce.api.web.v1.order.response.OrderResponse;
 import com.commerce.api.web.v1.payment.response.PaymentResponse;
+import com.commerce.order.service.OrderModifier;
 import com.commerce.order.service.OrderReader;
 import com.commerce.shared.entity.Money;
 import com.commerce.web.auth.AuthUser;
@@ -49,16 +51,19 @@ public class OrderController {
     private final OrderCancellationFacade orderCancellationFacade;
     private final OrderPaymentFacade orderPaymentFacade;
     private final OrderReader orderReader;
+    private final OrderModifier orderModifier;
 
     public OrderController(
             CheckoutFacade checkoutFacade,
             OrderCancellationFacade orderCancellationFacade,
             OrderPaymentFacade orderPaymentFacade,
-            OrderReader orderReader) {
+            OrderReader orderReader,
+            OrderModifier orderModifier) {
         this.checkoutFacade = checkoutFacade;
         this.orderCancellationFacade = orderCancellationFacade;
         this.orderPaymentFacade = orderPaymentFacade;
         this.orderReader = orderReader;
+        this.orderModifier = orderModifier;
     }
 
     @Operation(summary = "체크아웃", description = "본인 장바구니(전체 또는 선택 라인)를 주문·결제로 전환하고 결제 완료된 주문 ID를 반환한다.")
@@ -169,6 +174,35 @@ public class OrderController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void cancel(AuthUser authUser, @Parameter(description = "주문 ID") @PathVariable UUID orderId) {
         orderCancellationFacade.cancel(orderId, authUser.memberId());
+    }
+
+    @Operation(summary = "반품 요청", description = "배송 완료된 본인 주문의 반품을 요청한다. 관리자 승인 시 환불·복원된다.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "204", description = "반품 요청 완료"),
+        @ApiResponse(
+                responseCode = "400",
+                description = "요청 값 무효",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+        @ApiResponse(
+                responseCode = "401",
+                description = "미인증",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+        @ApiResponse(
+                responseCode = "404",
+                description = "주문 없음 또는 타인 주문",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+        @ApiResponse(
+                responseCode = "409",
+                description = "반품을 요청할 수 없는 주문 상태(배송 완료 결제 주문만 가능) 또는 요청 중복",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+    })
+    @PostMapping("/{orderId}/return-request")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void requestReturn(
+            AuthUser authUser,
+            @Parameter(description = "주문 ID") @PathVariable UUID orderId,
+            @Valid @RequestBody OrderReturnRequest request) {
+        orderModifier.requestReturn(orderId, authUser.memberId(), request.reason());
     }
 
     @Operation(summary = "주문 상세 조회", description = "본인 주문 상세를 조회한다.")

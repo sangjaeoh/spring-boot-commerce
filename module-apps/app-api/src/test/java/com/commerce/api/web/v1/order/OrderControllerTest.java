@@ -14,6 +14,7 @@ import com.commerce.api.web.v1.order.request.CheckoutPreviewRequest;
 import com.commerce.api.web.v1.order.request.CheckoutRequest;
 import com.commerce.api.web.v1.order.request.DirectOrderItemRequest;
 import com.commerce.api.web.v1.order.request.DirectOrderRequest;
+import com.commerce.api.web.v1.order.request.OrderReturnRequest;
 import com.commerce.api.web.v1.order.response.CheckoutResponse;
 import com.commerce.api.web.v1.order.response.DirectOrderResponse;
 import com.commerce.api.web.v1.payment.response.PaymentResponse;
@@ -29,6 +30,7 @@ import com.commerce.order.entity.Address;
 import com.commerce.order.entity.FulfillmentStatus;
 import com.commerce.order.entity.OrderLineSnapshot;
 import com.commerce.order.entity.OrderStatus;
+import com.commerce.order.entity.RefundReason;
 import com.commerce.order.info.OrderInfo;
 import com.commerce.order.service.OrderAppender;
 import com.commerce.order.service.OrderModifier;
@@ -468,6 +470,82 @@ class OrderControllerTest extends WebIntegrationTest {
         OrderInfo order = orderReader.getOrder(orderId, memberId);
         assertThat(order.status()).isEqualTo(OrderStatus.PAID);
         assertThat(order.fulfillmentStatus()).isEqualTo(FulfillmentStatus.SHIPPED);
+    }
+
+    @Test
+    @DisplayName("배송 완료 주문 반품 요청은 204로 성공하고 상세에 요청 상태·사유·시각을 싣는다. 중복 요청은 409다")
+    void returnRequestSucceedsForDeliveredOrderAndRejectsDuplicate() throws Exception {
+        UUID memberId = registerMember();
+        UUID orderId = checkoutForMember(memberId);
+        orderModifier.ship(orderId, "CJ대한통운", "688900123456");
+        orderModifier.confirmDelivery(orderId);
+
+        mvc.perform(post("/api/v1/orders/{orderId}/return-request", orderId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new OrderReturnRequest(RefundReason.PRODUCT_DEFECT))))
+                .andExpect(status().isNoContent());
+
+        mvc.perform(get("/api/v1/orders/{orderId}", orderId).header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PAID"))
+                .andExpect(jsonPath("$.returnStatus").value("REQUESTED"))
+                .andExpect(jsonPath("$.returnReason").value("PRODUCT_DEFECT"))
+                .andExpect(jsonPath("$.returnRequestedAt").exists());
+
+        mvc.perform(post("/api/v1/orders/{orderId}/return-request", orderId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new OrderReturnRequest(RefundReason.PRODUCT_DEFECT))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("ORDER_RETURN_ALREADY_REQUESTED"));
+    }
+
+    @Test
+    @DisplayName("배송 완료 전 주문 반품 요청은 409 ORDER_RETURN_NOT_ALLOWED로 거부된다")
+    void returnRequestRejectsUndeliveredOrder() throws Exception {
+        UUID memberId = registerMember();
+        UUID orderId = checkoutForMember(memberId);
+
+        mvc.perform(post("/api/v1/orders/{orderId}/return-request", orderId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new OrderReturnRequest(RefundReason.CHANGE_OF_MIND))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("ORDER_RETURN_NOT_ALLOWED"));
+    }
+
+    @Test
+    @DisplayName("타인 주문 반품 요청은 404 ORDER_NOT_FOUND로 거부되고 상태를 바꾸지 않는다")
+    void returnRequestRejectsOtherMembersOrder() throws Exception {
+        UUID ownerId = registerMember();
+        UUID orderId = checkoutForMember(ownerId);
+        orderModifier.ship(orderId, "CJ대한통운", "688900123456");
+        orderModifier.confirmDelivery(orderId);
+        UUID intruderId = registerMember();
+
+        mvc.perform(post("/api/v1/orders/{orderId}/return-request", orderId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(intruderId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new OrderReturnRequest(RefundReason.CHANGE_OF_MIND))))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("ORDER_NOT_FOUND"));
+
+        assertThat(orderReader.getOrder(orderId, ownerId).returnStatus()).isNull();
+    }
+
+    @Test
+    @DisplayName("사유가 없는 반품 요청은 400 VALIDATION_FAILED로 거부된다")
+    void returnRequestRejectsMissingReason() throws Exception {
+        UUID memberId = registerMember();
+        UUID orderId = checkoutForMember(memberId);
+
+        mvc.perform(post("/api/v1/orders/{orderId}/return-request", orderId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
     }
 
     @Test

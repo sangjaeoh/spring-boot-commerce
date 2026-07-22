@@ -148,6 +148,23 @@ public class Order extends BaseTimeEntity<UUID> {
     @Nullable
     private RefundReason refundReason;
 
+    /** 반품 요청 축 상태. 요청이 없으면 없다. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "return_status")
+    @Nullable
+    private ReturnStatus returnStatus;
+
+    /** 반품 요청 시각. */
+    @Column(name = "return_requested_at")
+    @Nullable
+    private Instant returnRequestedAt;
+
+    /** 반품 요청 사유. 승인되면 이 사유로 환불한다. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "return_reason")
+    @Nullable
+    private RefundReason returnReason;
+
     /** 낙관락 버전. */
     @Version
     @Column(name = "version")
@@ -270,6 +287,38 @@ public class Order extends BaseTimeEntity<UUID> {
         this.status = OrderStatus.REFUNDED;
         this.refundedAt = now;
         this.refundReason = reason;
+        if (returnStatus == ReturnStatus.REQUESTED) {
+            this.returnStatus = ReturnStatus.COMPLETED;
+        }
+    }
+
+    /**
+     * 반품을 요청한다. 거절된 요청은 새 요청으로 덮어쓴다.
+     *
+     * @throws OrderStatusException 이미 요청 중이거나, 배송 완료된 결제 주문이 아니면
+     */
+    public void requestReturn(RefundReason reason, Instant now) {
+        if (returnStatus == ReturnStatus.REQUESTED) {
+            throw new OrderStatusException(OrderErrorCode.RETURN_ALREADY_REQUESTED);
+        }
+        if (status != OrderStatus.PAID || fulfillmentStatus != FulfillmentStatus.DELIVERED) {
+            throw new OrderStatusException(OrderErrorCode.RETURN_NOT_ALLOWED);
+        }
+        this.returnStatus = ReturnStatus.REQUESTED;
+        this.returnRequestedAt = now;
+        this.returnReason = reason;
+    }
+
+    /**
+     * 반품 요청을 거절한다. 주문은 PAID·DELIVERED로 남는다.
+     *
+     * @throws OrderStatusException 반품 요청 상태가 아니면
+     */
+    public void rejectReturn() {
+        if (returnStatus != ReturnStatus.REQUESTED) {
+            throw new OrderStatusException(OrderErrorCode.RETURN_NOT_REQUESTED);
+        }
+        this.returnStatus = ReturnStatus.REJECTED;
     }
 
     /**
@@ -467,6 +516,18 @@ public class Order extends BaseTimeEntity<UUID> {
 
     public @Nullable RefundReason getRefundReason() {
         return refundReason;
+    }
+
+    public @Nullable ReturnStatus getReturnStatus() {
+        return returnStatus;
+    }
+
+    public @Nullable Instant getReturnRequestedAt() {
+        return returnRequestedAt;
+    }
+
+    public @Nullable RefundReason getReturnReason() {
+        return returnReason;
     }
 
     /** 주문 라인 집합을 변경 불가 뷰로 반환한다. */

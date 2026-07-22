@@ -89,6 +89,31 @@ public class OrderModifier {
     }
 
     /**
+     * 회원 본인 주문의 반품을 요청한다. 타인 주문은 미존재로 취급한다.
+     *
+     * @throws OrderNotFoundException 본인 주문이 없으면
+     * @throws OrderStatusException 이미 요청 중이거나, 배송 완료된 결제 주문이 아니면
+     */
+    @Transactional
+    public void requestReturn(UUID orderId, UUID memberId, RefundReason reason) {
+        Order order = orderRepository
+                .findByIdAndMemberId(orderId, memberId)
+                .orElseThrow(() -> new OrderNotFoundException(OrderErrorCode.ORDER_NOT_FOUND));
+        order.requestReturn(reason, clock.instant());
+    }
+
+    /**
+     * 반품 요청을 거절한다. 주문은 PAID·DELIVERED로 남는다.
+     *
+     * @throws OrderNotFoundException 주문이 없으면
+     * @throws OrderStatusException 반품 요청 상태가 아니면
+     */
+    @Transactional
+    public void rejectReturn(UUID orderId) {
+        find(orderId).rejectReturn();
+    }
+
+    /**
      * 출고한다. 택배사·운송장 번호를 기록한다.
      *
      * @throws OrderNotFoundException 주문이 없으면

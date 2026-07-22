@@ -6,6 +6,7 @@ import com.commerce.order.entity.HoldReason;
 import com.commerce.order.entity.Order;
 import com.commerce.order.entity.OrderStatus;
 import com.commerce.order.entity.RefundReason;
+import com.commerce.order.entity.ReturnStatus;
 import com.commerce.shared.entity.Money;
 import java.time.Instant;
 import java.util.List;
@@ -37,6 +38,9 @@ public record OrderInfo(
         @Nullable HoldReason holdReason,
         @Nullable Instant refundedAt,
         @Nullable RefundReason refundReason,
+        @Nullable ReturnStatus returnStatus,
+        @Nullable Instant returnRequestedAt,
+        @Nullable RefundReason returnReason,
         Instant createdAt,
         Instant updatedAt) {
 
@@ -70,6 +74,9 @@ public record OrderInfo(
                 order.getHoldReason(),
                 order.getRefundedAt(),
                 order.getRefundReason(),
+                order.getReturnStatus(),
+                order.getReturnRequestedAt(),
+                order.getReturnReason(),
                 order.getCreatedAt(),
                 order.getUpdatedAt());
     }
