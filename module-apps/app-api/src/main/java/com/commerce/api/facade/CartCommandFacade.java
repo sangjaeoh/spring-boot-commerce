@@ -2,6 +2,8 @@ package com.commerce.api.facade;
 
 import com.commerce.api.exception.ApiErrorCode;
 import com.commerce.api.exception.ApiException;
+import com.commerce.cart.exception.CartItemNotFoundException;
+import com.commerce.cart.exception.InvalidCartItemException;
 import com.commerce.cart.service.CartAppender;
 import com.commerce.cart.service.CartModifier;
 import com.commerce.cart.service.CartReader;
@@ -49,6 +51,7 @@ public class CartCommandFacade {
      * 변형을 장바구니에 담는다. 같은 변형은 수량을 합산한다.
      *
      * @throws ApiException 회원 자격 비활성; 주문 불가(변형 비활성·상품 HIDDEN·삭제)
+     * @throws InvalidCartItemException 합산 수량이 한도를 넘으면
      */
     public void addItem(UUID memberId, UUID variantId, int quantity) {
         // 1. 주문 자격 게이트
@@ -61,6 +64,7 @@ public class CartCommandFacade {
      * 라인 수량을 바꾼다. 증량은 담기와 같은 자격 게이트를, 감량·유지는 게이트 없이 적용한다.
      *
      * @throws ApiException 증량 시 회원 자격 비활성; 주문 불가(변형 비활성·상품 HIDDEN·삭제)
+     * @throws CartItemNotFoundException 장바구니나 라인이 없으면
      */
     public void changeItemQuantity(UUID memberId, UUID variantId, int quantity) {
         // 1. 증량이면 담기와 같은 주문 자격 게이트
@@ -71,7 +75,11 @@ public class CartCommandFacade {
         cartModifier.changeItemQuantity(memberId, variantId, quantity);
     }
 
-    /** 라인을 제거한다. 자격 게이트 없이 허용한다. */
+    /**
+     * 라인을 제거한다. 자격 게이트 없이 허용한다.
+     *
+     * @throws CartItemNotFoundException 장바구니나 라인이 없으면
+     */
     public void removeItem(UUID memberId, UUID variantId) {
         cartModifier.removeItem(memberId, variantId);
     }

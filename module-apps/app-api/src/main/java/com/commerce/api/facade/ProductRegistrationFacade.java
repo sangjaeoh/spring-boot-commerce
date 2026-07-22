@@ -2,6 +2,9 @@ package com.commerce.api.facade;
 
 import com.commerce.product.entity.ProductOption;
 import com.commerce.product.entity.ProductVariantStatus;
+import com.commerce.product.exception.DuplicateVariantOptionException;
+import com.commerce.product.exception.InvalidVariantException;
+import com.commerce.product.exception.ProductNotFoundException;
 import com.commerce.product.service.ProductAppender;
 import com.commerce.product.service.ProductModifier;
 import com.commerce.product.service.ProductVariantAppender;
@@ -44,7 +47,11 @@ public class ProductRegistrationFacade {
         this.productModifier = productModifier;
     }
 
-    /** 상품·첫 변형·재고를 시딩하고 판매를 시작한다. */
+    /**
+     * 상품·첫 변형·재고를 시딩하고 판매를 시작한다.
+     *
+     * @throws InvalidVariantException 옵션이 올바르지 않거나 판매가가 최소가 미만이면
+     */
     public UUID registerProduct(
             String name, @Nullable String description, Money price, List<ProductOption> options, int initialQuantity) {
         // 1. 상품 등록(HIDDEN)
@@ -62,6 +69,10 @@ public class ProductRegistrationFacade {
      * <p>같은 옵션 조합의 DISABLED 변형이 있으면 남은 단계를 재개한다. 재개는 기존 변형의 가격을 유지하고
      * 재고가 이미 있으면 초기수량을 쓰지 않으며, 관리자가 비활성화한 동일 옵션 변형도 같은 경로로
      * 재활성화된다. 완결(ACTIVE) 변형은 중복으로 거부된다.
+     *
+     * @throws ProductNotFoundException 활성 상품이 없으면
+     * @throws DuplicateVariantOptionException 완결(ACTIVE) 변형과 옵션 조합이 겹치면
+     * @throws InvalidVariantException 옵션이 올바르지 않거나 판매가가 최소가 미만이면
      */
     public UUID addVariant(UUID productId, Money price, List<ProductOption> options, int initialQuantity) {
         return variantReader
