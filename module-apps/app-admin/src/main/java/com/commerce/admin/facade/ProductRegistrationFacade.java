@@ -1,10 +1,10 @@
 package com.commerce.admin.facade;
 
-import com.commerce.product.application.ProductAppender;
-import com.commerce.product.application.ProductModifier;
-import com.commerce.product.application.ProductVariantAppender;
-import com.commerce.product.application.ProductVariantModifier;
-import com.commerce.product.application.ProductVariantReader;
+import com.commerce.product.application.provided.ProductAppender;
+import com.commerce.product.application.provided.ProductModifier;
+import com.commerce.product.application.provided.ProductVariantAppender;
+import com.commerce.product.application.provided.ProductVariantModifier;
+import com.commerce.product.application.provided.ProductVariantReader;
 import com.commerce.product.domain.CategoryNotFoundException;
 import com.commerce.product.domain.DuplicateVariantOptionException;
 import com.commerce.product.domain.InvalidVariantException;
@@ -12,8 +12,8 @@ import com.commerce.product.domain.ProductNotFoundException;
 import com.commerce.product.domain.ProductOption;
 import com.commerce.product.domain.ProductVariantStatus;
 import com.commerce.shared.entity.Money;
-import com.commerce.stock.application.StockAppender;
-import com.commerce.stock.application.StockReader;
+import com.commerce.stock.application.provided.StockAppender;
+import com.commerce.stock.application.provided.StockReader;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;

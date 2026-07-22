@@ -3,7 +3,7 @@ package com.commerce.api.web.v1.coupon;
 import com.commerce.api.web.auth.Authenticated;
 import com.commerce.api.web.v1.coupon.response.DiscountPreviewResponse;
 import com.commerce.api.web.v1.coupon.response.IssuedCouponResponse;
-import com.commerce.coupon.application.IssuedCouponReader;
+import com.commerce.coupon.application.provided.IssuedCouponReader;
 import com.commerce.shared.entity.Money;
 import com.commerce.web.auth.AuthUser;
 import io.swagger.v3.oas.annotations.Operation;

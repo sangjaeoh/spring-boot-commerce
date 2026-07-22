@@ -1,0 +1,41 @@
+package com.commerce.member.application;
+
+import com.commerce.member.application.info.MemberInfo;
+import com.commerce.member.application.provided.MemberReader;
+import com.commerce.member.application.required.MemberRepository;
+import com.commerce.member.domain.Email;
+import com.commerce.member.domain.Member;
+import com.commerce.member.domain.MemberErrorCode;
+import com.commerce.member.domain.MemberNotFoundException;
+import java.util.UUID;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+/** {@link MemberReader}의 기본 구현이다. */
+@Service
+class DefaultMemberReader implements MemberReader {
+
+    private final MemberRepository memberRepository;
+
+    DefaultMemberReader(MemberRepository memberRepository) {
+        this.memberRepository = memberRepository;
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public MemberInfo getMember(UUID memberId) {
+        Member member = memberRepository
+                .findByIdAndDeletedAtIsNull(memberId)
+                .orElseThrow(() -> new MemberNotFoundException(MemberErrorCode.MEMBER_NOT_FOUND));
+        return MemberInfo.from(member);
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public MemberInfo getMemberByEmail(String email) {
+        Member member = memberRepository
+                .findByEmailAndDeletedAtIsNull(Email.of(email))
+                .orElseThrow(() -> new MemberNotFoundException(MemberErrorCode.MEMBER_NOT_FOUND));
+        return MemberInfo.from(member);
+    }
+}

@@ -1,20 +1,20 @@
 package com.commerce.batch.facade;
 
-import com.commerce.coupon.application.IssuedCouponModifier;
-import com.commerce.order.application.OrderModifier;
-import com.commerce.order.application.OrderReader;
+import com.commerce.coupon.application.provided.IssuedCouponModifier;
 import com.commerce.order.application.info.OrderInfo;
 import com.commerce.order.application.info.OrderLineInfo;
+import com.commerce.order.application.provided.OrderModifier;
+import com.commerce.order.application.provided.OrderReader;
 import com.commerce.order.domain.CancellationReason;
 import com.commerce.order.domain.OrderStatus;
-import com.commerce.payment.application.PaymentProcessor;
-import com.commerce.payment.application.PaymentReader;
 import com.commerce.payment.application.info.GatewayTransactionInfo;
 import com.commerce.payment.application.info.PaymentInfo;
+import com.commerce.payment.application.provided.PaymentProcessor;
+import com.commerce.payment.application.provided.PaymentReader;
 import com.commerce.payment.domain.FailureReason;
 import com.commerce.payment.domain.PaymentNotFoundException;
 import com.commerce.payment.domain.PaymentStatus;
-import com.commerce.stock.application.StockModifier;
+import com.commerce.stock.application.provided.StockModifier;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;

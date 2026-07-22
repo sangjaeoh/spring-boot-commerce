@@ -10,11 +10,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.commerce.admin.facade.ProductRegistrationFacade;
 import com.commerce.admin.web.v1.WebIntegrationTest;
 import com.commerce.admin.web.v1.admin.stock.request.StockIncreaseRequest;
-import com.commerce.member.application.MemberAppender;
-import com.commerce.product.application.ProductVariantReader;
+import com.commerce.member.application.provided.MemberAppender;
+import com.commerce.product.application.provided.ProductVariantReader;
 import com.commerce.shared.entity.Money;
-import com.commerce.stock.application.StockModifier;
-import com.commerce.stock.application.StockReader;
+import com.commerce.stock.application.provided.StockModifier;
+import com.commerce.stock.application.provided.StockReader;
 import com.commerce.stock.domain.StockShortageException;
 import com.commerce.stock.domain.StockStatus;
 import java.util.List;

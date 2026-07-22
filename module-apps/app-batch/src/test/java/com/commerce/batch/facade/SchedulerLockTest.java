@@ -9,7 +9,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.commerce.batch.BatchIntegrationTest;
-import com.commerce.payment.application.PaymentReader;
+import com.commerce.payment.application.provided.PaymentReader;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;

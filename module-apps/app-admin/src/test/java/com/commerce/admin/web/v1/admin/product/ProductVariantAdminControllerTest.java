@@ -8,10 +8,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.commerce.admin.facade.ProductRegistrationFacade;
 import com.commerce.admin.web.v1.WebIntegrationTest;
 import com.commerce.admin.web.v1.admin.product.request.VariantPriceChangeRequest;
-import com.commerce.member.application.MemberAppender;
-import com.commerce.order.application.OrderReader;
+import com.commerce.member.application.provided.MemberAppender;
 import com.commerce.order.application.info.OrderInfo;
-import com.commerce.product.application.ProductVariantReader;
+import com.commerce.order.application.provided.OrderReader;
+import com.commerce.product.application.provided.ProductVariantReader;
 import com.commerce.product.domain.ProductVariantStatus;
 import com.commerce.shared.entity.Money;
 import java.util.List;

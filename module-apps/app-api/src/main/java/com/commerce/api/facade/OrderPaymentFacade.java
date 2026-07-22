@@ -1,9 +1,9 @@
 package com.commerce.api.facade;
 
-import com.commerce.order.application.OrderReader;
+import com.commerce.order.application.provided.OrderReader;
 import com.commerce.order.domain.OrderNotFoundException;
-import com.commerce.payment.application.PaymentReader;
 import com.commerce.payment.application.info.PaymentInfo;
+import com.commerce.payment.application.provided.PaymentReader;
 import com.commerce.payment.domain.PaymentNotFoundException;
 import java.util.UUID;
 import org.springframework.stereotype.Component;

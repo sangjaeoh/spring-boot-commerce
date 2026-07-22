@@ -10,12 +10,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.commerce.api.web.v1.WebIntegrationTest;
 import com.commerce.api.web.v1.order.request.AddressRequest;
 import com.commerce.api.web.v1.order.request.CheckoutRequest;
-import com.commerce.cart.application.CartAppender;
-import com.commerce.member.application.MemberAppender;
+import com.commerce.cart.application.provided.CartAppender;
+import com.commerce.member.application.provided.MemberAppender;
 import com.commerce.payment.domain.PaymentMethod;
-import com.commerce.product.application.ProductVariantReader;
+import com.commerce.product.application.provided.ProductVariantReader;
 import com.commerce.shared.entity.Money;
-import com.commerce.stock.application.StockModifier;
+import com.commerce.stock.application.provided.StockModifier;
 import com.commerce.stock.domain.Stock;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;

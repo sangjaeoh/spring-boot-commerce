@@ -2,9 +2,9 @@ package com.commerce.api.facade;
 
 import com.commerce.api.exception.ApiErrorCode;
 import com.commerce.api.exception.ApiException;
-import com.commerce.coupon.application.IssuedCouponAppender;
-import com.commerce.member.application.MemberReader;
+import com.commerce.coupon.application.provided.IssuedCouponAppender;
 import com.commerce.member.application.info.MemberInfo;
+import com.commerce.member.application.provided.MemberReader;
 import com.commerce.member.domain.MemberStatus;
 import java.util.UUID;
 import org.springframework.stereotype.Component;

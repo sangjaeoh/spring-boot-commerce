@@ -8,9 +8,9 @@ import com.commerce.admin.web.v1.admin.product.request.VariantRegistrationReques
 import com.commerce.admin.web.v1.admin.product.response.ProductAdminPageResponse;
 import com.commerce.admin.web.v1.admin.product.response.ProductRegistrationResponse;
 import com.commerce.admin.web.v1.admin.product.response.VariantRegistrationResponse;
-import com.commerce.product.application.ProductModifier;
-import com.commerce.product.application.ProductReader;
-import com.commerce.product.application.ProductRemover;
+import com.commerce.product.application.provided.ProductModifier;
+import com.commerce.product.application.provided.ProductReader;
+import com.commerce.product.application.provided.ProductRemover;
 import com.commerce.shared.entity.Money;
 import com.commerce.web.paging.PaginationRequest;
 import io.swagger.v3.oas.annotations.Operation;

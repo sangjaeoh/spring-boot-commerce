@@ -2,6 +2,8 @@ package com.commerce.cart.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.commerce.cart.application.provided.CartAppender;
+import com.commerce.cart.application.provided.CartReader;
 import com.commerce.event.order.OrderPaid;
 import com.commerce.jpa.config.JpaAuditingConfig;
 import java.util.Set;
@@ -31,7 +33,13 @@ import org.testcontainers.utility.DockerImageName;
         })
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Testcontainers
-@Import({OrderPaidListener.class, CartModifier.class, CartAppender.class, CartReader.class, JpaAuditingConfig.class})
+@Import({
+    OrderPaidListener.class,
+    DefaultCartModifier.class,
+    DefaultCartAppender.class,
+    DefaultCartReader.class,
+    JpaAuditingConfig.class
+})
 @ImportAutoConfiguration(FlywayAutoConfiguration.class)
 @TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 class OrderPaidListenerTest {

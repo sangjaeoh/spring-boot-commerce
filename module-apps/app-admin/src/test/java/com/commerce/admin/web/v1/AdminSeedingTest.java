@@ -7,8 +7,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.commerce.admin.web.v1.admin.product.request.ProductRegistrationRequest;
 import com.commerce.auth.token.JwtTokenCodec;
-import com.commerce.member.application.MemberCredentialValidator;
 import com.commerce.member.application.info.MemberInfo;
+import com.commerce.member.application.provided.MemberCredentialValidator;
 import com.commerce.member.domain.MemberRole;
 import java.util.List;
 import java.util.Map;

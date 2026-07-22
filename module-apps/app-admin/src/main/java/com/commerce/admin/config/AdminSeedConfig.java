@@ -1,6 +1,6 @@
 package com.commerce.admin.config;
 
-import com.commerce.member.application.MemberAppender;
+import com.commerce.member.application.provided.MemberAppender;
 import com.commerce.member.domain.DuplicateEmailException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

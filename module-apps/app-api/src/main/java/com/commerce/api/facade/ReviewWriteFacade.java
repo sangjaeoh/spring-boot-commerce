@@ -2,8 +2,8 @@ package com.commerce.api.facade;
 
 import com.commerce.api.exception.ApiErrorCode;
 import com.commerce.api.exception.ApiException;
-import com.commerce.order.application.OrderReader;
-import com.commerce.review.application.ReviewAppender;
+import com.commerce.order.application.provided.OrderReader;
+import com.commerce.review.application.provided.ReviewAppender;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 

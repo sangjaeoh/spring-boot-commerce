@@ -5,11 +5,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.commerce.api.web.v1.WebIntegrationTest;
-import com.commerce.coupon.application.CouponAppender;
-import com.commerce.coupon.application.IssuedCouponAppender;
+import com.commerce.coupon.application.provided.CouponAppender;
+import com.commerce.coupon.application.provided.IssuedCouponAppender;
 import com.commerce.coupon.domain.Discount;
 import com.commerce.coupon.domain.ValidityPeriod;
-import com.commerce.member.application.MemberAppender;
+import com.commerce.member.application.provided.MemberAppender;
 import com.commerce.shared.entity.Money;
 import java.time.Instant;
 import java.util.UUID;

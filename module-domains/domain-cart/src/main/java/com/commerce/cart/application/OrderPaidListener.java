@@ -1,5 +1,6 @@
 package com.commerce.cart.application;
 
+import com.commerce.cart.application.provided.CartModifier;
 import com.commerce.event.order.OrderPaid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

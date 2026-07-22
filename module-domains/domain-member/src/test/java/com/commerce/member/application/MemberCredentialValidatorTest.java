@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.commerce.member.application.provided.MemberCredentialValidator;
 import com.commerce.member.application.required.MemberRepository;
 import com.commerce.member.domain.Email;
 import com.commerce.member.domain.InvalidCredentialsException;
@@ -32,7 +33,7 @@ class MemberCredentialValidatorTest {
     private final MemberRepository memberRepository = mock(MemberRepository.class);
     private final RecordingPasswordEncoder passwordEncoder = new RecordingPasswordEncoder();
     private final MemberCredentialValidator validator =
-            new MemberCredentialValidator(memberRepository, passwordEncoder);
+            new DefaultMemberCredentialValidator(memberRepository, passwordEncoder);
 
     @Test
     @DisplayName("미존재 계정도 고정 더미 해시로 bcrypt를 한 번 태우고 거부한다")

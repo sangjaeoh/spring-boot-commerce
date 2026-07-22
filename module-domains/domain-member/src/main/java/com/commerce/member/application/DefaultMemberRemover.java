@@ -1,0 +1,34 @@
+package com.commerce.member.application;
+
+import com.commerce.member.application.provided.MemberRemover;
+import com.commerce.member.application.required.MemberRepository;
+import com.commerce.member.domain.Member;
+import com.commerce.member.domain.MemberErrorCode;
+import com.commerce.member.domain.MemberNotFoundException;
+import com.commerce.member.domain.WithdrawalReason;
+import java.time.Clock;
+import java.util.UUID;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+/** {@link MemberRemover}의 기본 구현이다. */
+@Service
+class DefaultMemberRemover implements MemberRemover {
+
+    private final MemberRepository memberRepository;
+    private final Clock clock;
+
+    DefaultMemberRemover(MemberRepository memberRepository, Clock clock) {
+        this.memberRepository = memberRepository;
+        this.clock = clock;
+    }
+
+    @Transactional
+    @Override
+    public void delete(UUID memberId, WithdrawalReason reason) {
+        Member member = memberRepository
+                .findByIdAndDeletedAtIsNull(memberId)
+                .orElseThrow(() -> new MemberNotFoundException(MemberErrorCode.MEMBER_NOT_FOUND));
+        member.delete(reason, clock.instant());
+    }
+}

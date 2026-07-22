@@ -4,12 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.commerce.batch.BatchIntegrationTest;
-import com.commerce.cart.application.CartAppender;
-import com.commerce.cart.application.CartReader;
+import com.commerce.cart.application.provided.CartAppender;
+import com.commerce.cart.application.provided.CartReader;
 import com.commerce.event.order.OrderPaid;
 import com.commerce.event.publish.MessagePublisher;
-import com.commerce.member.application.MemberAppender;
-import com.commerce.product.application.ProductVariantReader;
+import com.commerce.member.application.provided.MemberAppender;
+import com.commerce.product.application.provided.ProductVariantReader;
 import com.commerce.shared.entity.Money;
 import java.sql.Timestamp;
 import java.time.Instant;

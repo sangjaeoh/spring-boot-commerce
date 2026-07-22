@@ -2,18 +2,18 @@ package com.commerce.api.facade;
 
 import com.commerce.api.exception.ApiErrorCode;
 import com.commerce.api.exception.ApiException;
-import com.commerce.coupon.application.IssuedCouponModifier;
-import com.commerce.order.application.OrderModifier;
-import com.commerce.order.application.OrderReader;
+import com.commerce.coupon.application.provided.IssuedCouponModifier;
 import com.commerce.order.application.info.OrderInfo;
 import com.commerce.order.application.info.OrderLineInfo;
+import com.commerce.order.application.provided.OrderModifier;
+import com.commerce.order.application.provided.OrderReader;
 import com.commerce.order.domain.CancellationReason;
 import com.commerce.order.domain.FulfillmentStatus;
 import com.commerce.order.domain.OrderStatus;
-import com.commerce.payment.application.PaymentProcessor;
-import com.commerce.payment.application.PaymentReader;
 import com.commerce.payment.application.info.PaymentInfo;
-import com.commerce.stock.application.StockModifier;
+import com.commerce.payment.application.provided.PaymentProcessor;
+import com.commerce.payment.application.provided.PaymentReader;
+import com.commerce.stock.application.provided.StockModifier;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 
