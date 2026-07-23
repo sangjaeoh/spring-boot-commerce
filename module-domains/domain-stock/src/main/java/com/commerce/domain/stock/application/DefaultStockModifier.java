@@ -1,10 +1,14 @@
 package com.commerce.domain.stock.application;
 
+import com.commerce.common.core.id.UuidV7Generator;
+import com.commerce.common.event.publish.MessagePublisher;
 import com.commerce.domain.stock.application.provided.StockModifier;
 import com.commerce.domain.stock.application.required.StockRepository;
 import com.commerce.domain.stock.domain.Stock;
 import com.commerce.domain.stock.domain.exception.StockErrorCode;
 import com.commerce.domain.stock.domain.exception.StockNotFoundException;
+import com.commerce.event.stock.StockRestocked;
+import java.time.Clock;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,9 +18,13 @@ import org.springframework.transaction.annotation.Transactional;
 class DefaultStockModifier implements StockModifier {
 
     private final StockRepository stockRepository;
+    private final MessagePublisher messagePublisher;
+    private final Clock clock;
 
-    DefaultStockModifier(StockRepository stockRepository) {
+    DefaultStockModifier(StockRepository stockRepository, MessagePublisher messagePublisher, Clock clock) {
         this.stockRepository = stockRepository;
+        this.messagePublisher = messagePublisher;
+        this.clock = clock;
     }
 
     @Transactional
@@ -47,6 +55,8 @@ class DefaultStockModifier implements StockModifier {
     @Override
     public void markSellable(UUID variantId) {
         find(variantId).markSellable();
+        // 품절→판매 가능 전이가 곧 재입고다 — 엔티티 가드가 그 외 전이를 거부한다.
+        messagePublisher.publish(new StockRestocked(UuidV7Generator.generate(), variantId, clock.instant()));
     }
 
     @Transactional

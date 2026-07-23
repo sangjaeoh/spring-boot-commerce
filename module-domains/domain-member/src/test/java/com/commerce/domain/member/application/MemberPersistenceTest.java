@@ -17,6 +17,7 @@ import com.commerce.domain.member.domain.WithdrawalReason;
 import com.commerce.domain.member.domain.exception.DuplicateEmailException;
 import com.commerce.domain.member.domain.exception.InvalidCredentialsException;
 import com.commerce.domain.member.domain.exception.InvalidPasswordException;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -200,5 +201,17 @@ class MemberPersistenceTest {
 
         assertThatThrownBy(() -> memberCredentialValidator.authenticate("gone@example.com", PASSWORD))
                 .isInstanceOf(InvalidCredentialsException.class);
+    }
+
+    @Test
+    @DisplayName("회원 ID 집합 벌크 조회는 활성 회원만 반환한다")
+    void bulkGetMembersReturnsActiveOnly() {
+        UUID activeId = memberAppender.register("bulk-active-" + UUID.randomUUID() + "@example.com", "활성", PASSWORD);
+        UUID withdrawnId = memberAppender.register("bulk-gone-" + UUID.randomUUID() + "@example.com", "탈퇴", PASSWORD);
+        memberRemover.delete(withdrawnId, WithdrawalReason.NO_LONGER_USED);
+
+        List<MemberInfo> members = memberReader.getMembers(List.of(activeId, withdrawnId));
+
+        assertThat(members).extracting(MemberInfo::id).containsExactly(activeId);
     }
 }

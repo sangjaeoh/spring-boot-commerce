@@ -2,7 +2,11 @@ package com.commerce.domain.stock.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
+import com.commerce.common.event.publish.MessagePublisher;
 import com.commerce.domain.stock.application.info.StockInfo;
 import com.commerce.domain.stock.application.provided.StockAppender;
 import com.commerce.domain.stock.application.provided.StockModifier;
@@ -10,10 +14,12 @@ import com.commerce.domain.stock.application.provided.StockReader;
 import com.commerce.domain.stock.domain.Stock;
 import com.commerce.domain.stock.domain.StockStatus;
 import com.commerce.domain.stock.domain.exception.DuplicateStockException;
+import com.commerce.event.stock.StockRestocked;
 import java.util.Objects;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration;
@@ -22,6 +28,7 @@ import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.TestConstructor;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
@@ -55,6 +62,9 @@ class StockPersistenceTest {
     private final StockModifier stockModifier;
     private final StockReader stockReader;
     private final TestEntityManager em;
+
+    @MockitoBean
+    private MessagePublisher messagePublisher;
 
     StockPersistenceTest(
             StockAppender stockAppender, StockModifier stockModifier, StockReader stockReader, TestEntityManager em) {
@@ -106,5 +116,33 @@ class StockPersistenceTest {
         Stock reloaded = Objects.requireNonNull(em.find(Stock.class, stockId));
         assertThat(reloaded.getQuantity()).isEqualTo(7);
         assertThat(reloaded.getVersion()).isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("품절 재고의 판매 가능 전환은 StockRestocked를 발행한다")
+    void markSellablePublishesStockRestocked() {
+        UUID variantId = UUID.randomUUID();
+        stockAppender.create(variantId, 0);
+        stockModifier.markSoldOut(variantId);
+
+        stockModifier.markSellable(variantId);
+
+        ArgumentCaptor<StockRestocked> captor = ArgumentCaptor.forClass(StockRestocked.class);
+        verify(messagePublisher).publish(captor.capture());
+        StockRestocked event = captor.getValue();
+        assertThat(event.variantId()).isEqualTo(variantId);
+        assertThat(event.eventId()).isNotNull();
+        assertThat(event.occurredAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("단순 증량은 재입고 이벤트를 발행하지 않는다")
+    void increaseDoesNotPublishRestocked() {
+        UUID variantId = UUID.randomUUID();
+        stockAppender.create(variantId, 1);
+
+        stockModifier.increase(variantId, 5);
+
+        verify(messagePublisher, never()).publish(any());
     }
 }

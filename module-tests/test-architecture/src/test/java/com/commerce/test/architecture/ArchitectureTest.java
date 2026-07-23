@@ -387,8 +387,16 @@ class ArchitectureTest {
     @DisplayName("이벤트 발행·소비 도메인 감지가 기대 집합과 일치한다")
     void eventPublisherAndConsumerDomainsAreDetected() {
         // 소비 커버리지 규칙의 변별력은 두 맵이 실제 발행·소비를 담고 있음에 달렸다 — 감지 회귀를 여기서 고정한다.
-        assertEquals(Map.of("com.commerce.event.order.OrderPaid", Set.of("order")), EVENT_PUBLISHER_DOMAINS);
-        assertEquals(Map.of("com.commerce.event.order.OrderPaid", Set.of("cart")), EVENT_CONSUMER_DOMAINS);
+        assertEquals(
+                Map.of(
+                        "com.commerce.event.order.OrderPaid", Set.of("order"),
+                        "com.commerce.event.stock.StockRestocked", Set.of("stock")),
+                EVENT_PUBLISHER_DOMAINS);
+        assertEquals(
+                Map.of(
+                        "com.commerce.event.order.OrderPaid", Set.of("cart"),
+                        "com.commerce.event.stock.StockRestocked", Set.of("wishlist")),
+                EVENT_CONSUMER_DOMAINS);
     }
 
     @Test

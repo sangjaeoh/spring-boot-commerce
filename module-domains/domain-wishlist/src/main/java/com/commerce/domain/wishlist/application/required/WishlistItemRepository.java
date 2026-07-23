@@ -12,5 +12,7 @@ public interface WishlistItemRepository extends JpaRepository<WishlistItem, UUID
     // UUIDv7 ID가 생성 시각 순서라 ID 내림차순이 최신 찜 우선 정렬을 겸한다.
     List<WishlistItem> findAllByMemberIdOrderByIdDesc(UUID memberId);
 
+    List<WishlistItem> findAllByProductId(UUID productId);
+
     void deleteByMemberIdAndProductId(UUID memberId, UUID productId);
 }
