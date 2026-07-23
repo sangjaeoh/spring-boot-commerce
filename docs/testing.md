@@ -6,8 +6,6 @@
 - 검증 시나리오 목록을 만들고 합의받을 때.
 - 시나리오를 어디까지 파생하고 테스트 추가를 어디서 멈출지 판정할 때.
 - 테스트 레벨·목 허용 범위·픽스처 형태·테스트 도구를 결정할 때.
-- 모듈 경계·의존 방향 검증은 → [architecture](architecture.md)의 아키텍처 테스트 모듈.
-- 포맷·null·정적분석 게이트는 → [code-quality](code-quality.md).
 
 ## 규칙
 
@@ -49,7 +47,8 @@
 | 단위 | 엔티티 메서드·값 객체·`Validator`·순수 로직 | 컨텍스트 없는 JVM | 협력자 없이 검증 가능한 행동 |
 | 영속 슬라이스 | 리포지토리·도메인 서비스·query 조회·이벤트 소비자 | `@DataJpaTest` + 실 DB | DB 왕복이 행동의 일부 |
 | 웹 슬라이스 | 컨트롤러·예외 매핑·인가 게이트 | `@WebMvcTest` | HTTP 계약이 행동의 일부 |
-| 통합 | 앱 경계 대표 시나리오 | `@SpringBootTest` + 실 DB | 계층 조립 자체가 검증 대상 |
+| HTTP 어댑터 슬라이스 | `adapter/integration` 구현 | `@RestClientTest` + `MockRestServiceServer` | 외부 HTTP 왕복이 행동의 일부 |
+| 통합 | 앱 경계 대표 시나리오 | `@SpringBootTest` + 실 DB(캐시 무효화 축은 캐시 저장소 포함) | 계층 조립 자체가 검증 대상 |
 | 아키텍처 | 모듈 경계·의존 방향 | → [architecture](architecture.md) | — |
 
 - 통합 테스트는 대표 경로 소수만 둔다.
@@ -102,6 +101,8 @@
 | 이벤트 발행 | 쓰기 행동 성공 시 도메인 이벤트 발행과 페이로드, 검증 실패 시 미발행 | → [architecture](architecture.md) |
 | 이벤트 소비 | 리스너의 멱등 소비(중복 이벤트에 1회 효과) | → [architecture](architecture.md) |
 | 크로스 도메인 조회 | query provided 조회의 축(필터·정렬·페이지) 결과 | → [architecture](architecture.md) |
+| 캐시 무효화 | 쓰기 성공 후 조회의 최신값 반환 | → [caching](caching.md) |
+| 외부 호출 실패 | Gateway 실패의 도메인 예외·실패 값 변환, timeout 초과의 실패 처리 | → [integration](integration.md) |
 
 ### 시나리오 충분성
 
@@ -124,11 +125,12 @@
 - 어느 테스트에도 단언되지 않는 `ErrorCode` 상수는 시나리오 누락 또는 데드 코드로 보고한다.
 - 열거 자체(상수 존재·값 나열)는 검증하지 않는다.
 - 열거에 걸린 행동만 검증한다.
-- 무한 입력은 계약이 구분하는 동등 클래스로 분할하고 클래스당 대표 하나를 검증한다.
+- 무한 입력은 계약이 구분하는 동등 클래스로 분할한다.
+- 클래스당 대표 하나를 검증한다.
 - 인접 클래스의 경계는 경계값과 경계 밖 첫 값으로 검증한다.
 - 경계값이 클래스 대표를 겸하면 별도 대표를 두지 않는다.
 - 아래 표준 클래스는 계약이 해당 구분을 가질 때만 적용한다.
-- null 계약이 소거한 클래스는 테스트하지 않는다(→ [code-quality](code-quality.md)의 NullAway).
+- null 계약이 소거한 클래스는 테스트하지 않는다(→ [code-quality](code-quality.md)의 NullAway + JSpecify).
 
 | 입력 | 표준 클래스 |
 |---|---|
@@ -144,7 +146,8 @@
 - 픽스처가 조합의 기준점이다.
 - 요인을 동시에 바꾸는 조합 시나리오는 규칙 문서·합의 목록에 상호작용 규칙이 명시된 경우에만 둔다.
 - 스레드 동시 실행 재현 테스트를 두지 않는다.
-- 경합 계약은 낙관락 축이, 중복 계약은 이벤트 소비의 순차 중복 호출이 소유한다.
+- 경합 계약은 낙관락 축이 소유한다.
+- 중복 계약은 이벤트 소비의 순차 중복 호출이 소유한다.
 - 중지 규칙: 필수 시나리오 축·유한 계약·동등 클래스의 각 항목에 시나리오가 하나씩 대응하면 목록은 완결이다.
 - 새 시나리오가 새 계약 항목·새 동등 클래스를 검증하지 않으면 추가하지 않는다.
 
@@ -156,7 +159,7 @@
 - `ddl-auto`로 생성하지 않는다.
 - 도메인 서비스는 `@DataJpaTest` + `@Import`로 실 리포지토리와 함께 검증한다.
 - QueryDSL 설정은 `@Import`로 명시 로딩한다.
-- required 계약 협력자(`Gateway`·`Store`·`Publisher`)는 `@MockitoBean`으로 대체한다.
+- required·발행 계약 협력자(`Gateway`·`Store`·`Publisher`)는 `@MockitoBean`으로 대체한다.
 - 슬라이스는 테스트 단위 트랜잭션 롤백으로 격리한다.
 - 수정 행동은 flush 후 재조회로 검증한다.
 - 관리 엔티티에 `save()`를 호출하지 않는다(→ [entity-persistence](entity-persistence.md)).
@@ -172,9 +175,10 @@
 ### 목·스텁
 
 - 목은 Mockito를 사용한다.
-- 목 허용 경계는 두 곳이다.
-  - required 계약(`Gateway`·`Store`·`Publisher`): 실 벤더는 테스트에서 실행 불가·비결정이다.
+- Mockito 목 허용 경계는 두 곳이다.
+  - required·발행 계약(`Gateway`·`Store`·`Publisher`): 실 벤더는 테스트에서 실행 불가·비결정이다.
   - 웹 슬라이스의 파사드·주입된 provided: HTTP 계약 검증에서 조립·조회는 대상이 아니다.
+- 외부 HTTP 왕복은 목 대신 `MockRestServiceServer` 스텁으로 검증한다(→ 도구).
 - 리포지토리·도메인 서비스는 목으로 대체하지 않는다.
 - 실 DB 슬라이스로 검증한다.
   - 도메인 내부 협력을 목으로 고정하면 테스트가 구현 세부에 결합된다.
@@ -186,7 +190,8 @@
 - `Fixture` 접미사는 → [coding-conventions](coding-conventions.md), 테스트 소스 소유는 → [architecture](architecture.md)를 따른다.
 - 픽스처는 유효한 기본값 객체를 만드는 정적 팩토리다.
 - 시나리오가 바꾸는 값만 파라미터로 받는다.
-- 두 모듈 이상이 쓰는 픽스처만 소유 모듈이 `java-test-fixtures`로 방출하고, `testFixtures(...)` 의존으로 소비한다.
+- 두 모듈 이상이 쓰는 픽스처만 소유 모듈이 `java-test-fixtures`로 방출한다.
+- 방출 픽스처는 `testFixtures(...)` 의존으로 소비한다.
 - 단일 모듈 픽스처는 방출하지 않는다.
 - 여러 테스트가 공유하는 전역 seed 데이터를 두지 않는다.
 - 각 테스트가 자기 데이터를 만든다.
@@ -225,13 +230,16 @@
 | 러너 | JUnit 5 (Jupiter) |
 | 단언 | AssertJ |
 | 목 | Mockito |
-| 테스트 DB 연결 | Testcontainers + `@ServiceConnection` |
+| 테스트 DB·캐시 저장소 연결 | Testcontainers + `@ServiceConnection` |
 | 비동기 대기 | Awaitility |
+| HTTP 스텁 | `MockRestServiceServer` (`@RestClientTest`) |
 
 - Kotest·Spock은 사용하지 않는다.
 - 사용하면 빌드에 Kotlin·Groovy 툴체인이 추가된다.
 - Hamcrest 단언은 작성하지 않는다.
 - 스타터에 포함돼도 단언은 AssertJ로 통일한다.
+- WireMock은 도입하지 않는다.
+- 외부 HTTP 검증은 `MockRestServiceServer`로 통일한다.
 - JUnit 4(vintage)는 사용하지 않는다.
 - 커버리지 도구는 선제 도입하지 않는다.
 - 도입 시 이 문서에서 고정한다.
