@@ -58,10 +58,11 @@
 
 ## 애플리케이션 계층 변경
 
-### 생성 조율 — `OrderPaidListener`
+### 생성 조율 — `FulfillmentPreparationListener`
 
 - `Order.markPaid()`는 지금처럼 `Order`만 쓰고 `OrderPaid`를 발행한다(변경 없음).
-- 신규 package-private 이벤트 소비자 `OrderPaidListener`(위치: `domain-order/application`)가 `OrderPaid`를 받아 `Fulfillment.create(orderId)`를 자기 트랜잭션에서 실행한다. 기존 `{이벤트명}Listener` 네이밍(`OrderPaidListener`가 `domain-cart`·`domain-wishlist`에 이미 존재)을 그대로 따른다 — 이번 건은 발행 도메인(order)이 자기 이벤트를 스스로 소비하는 경우라 다른 모듈이므로 이름이 겹치지 않는다.
+- 신규 package-private 이벤트 소비자 `FulfillmentPreparationListener`(위치: `domain-order/application`)가 `OrderPaid`를 받아 `Fulfillment.create(orderId)`를 자기 트랜잭션에서 실행한다.
+- 구현 중 발견: 애초 기존 `{이벤트명}Listener` 네이밍 관례를 따라 `OrderPaidListener`로 지었으나, `domain-cart`가 같은 이벤트에 이미 이 이름을 쓰고 있어 실패했다 — Spring 컴포넌트 스캔의 기본 빈 이름은 패키지를 무시한 단순 클래스명이라, 두 도메인을 함께 임베드하는 앱(app-admin 등)에서 `ConflictingBeanDefinitionException`으로 컨텍스트 로딩이 깨졌다. "패키지가 다르면 이름이 안 겹친다"는 애초 판단은 틀렸다 — `FulfillmentPreparationListener`로 개명해 해결했다.
 - `order_id` 유니크 인덱스로 재전달 시 중복 생성을 막는다(멱등 가드).
 - 결제·이행 생성을 한 트랜잭션에 몰지 않음으로써 "트랜잭션당 애그리거트 1개 변경" 규칙을 지킨다.
 
@@ -84,12 +85,12 @@
 ## 엣지 케이스
 
 - **조회(정상 경로)**: `Fulfillment` 행이 없는 경우는 `PENDING`(결제 전) 주문의 정상 상태다 — 결제 전이라 이행이 시작될 이유가 없다. `getOrder`류는 행 없음을 `FulfillmentStatus.NOT_STARTED`·이행 관련 필드 전부 `null`로 합성해 반환한다.
-- **쓰기(진짜 레이스 창)**: `Order.markPaid()` 커밋과 `OrderPaidListener`의 `Fulfillment.create()` 커밋 사이 짧은 창에서 `ship`·`confirmDelivery`·`holdFulfillment`·`releaseFulfillment` 호출이 들어오면 `Order.status`는 이미 `PAID`인데 `Fulfillment` 행이 아직 없다. 신규 에러코드 `OrderErrorCode.FULFILLMENT_NOT_READY`(409)를 추가해 `FulfillmentStatusException`으로 던진다 — 클라이언트 재시도.
+- **쓰기(진짜 레이스 창)**: `Order.markPaid()` 커밋과 `FulfillmentPreparationListener`의 `Fulfillment.create()` 커밋 사이 짧은 창에서 `ship`·`confirmDelivery`·`holdFulfillment`·`releaseFulfillment` 호출이 들어오면 `Order.status`는 이미 `PAID`인데 `Fulfillment` 행이 아직 없다. 신규 에러코드 `OrderErrorCode.FULFILLMENT_NOT_READY`(409)를 추가해 `FulfillmentStatusException`으로 던진다 — 클라이언트 재시도.
 
 ## 테스트 방침
 
 - 이번 작업은 리팩터다(`testing.md`: "리팩터는 새 시나리오를 만들지 않는다. 전후 테스트 통과가 기준이다") — `Order`·`Fulfillment`로 갈라지는 기존 행동은 새 시나리오 합의 없이 전후 테스트 통과로 검증한다.
-- `OrderPaidListener`(신규 생성 조율)는 새 행동이므로 시나리오 문장을 별도 합의한다 — 최소 "결제완료 시 Fulfillment가 PREPARING으로 생성됨"·"이벤트 중복 소비 시 1회만 생성됨(멱등)".
+- `FulfillmentPreparationListener`(신규 생성 조율)는 새 행동이므로 시나리오 문장을 별도 합의한다 — 최소 "결제완료 시 Fulfillment가 PREPARING으로 생성됨"·"이벤트 중복 소비 시 1회만 생성됨(멱등)".
 - `OrderTest.java`(801줄)는 결제·취소·부분취소·반품 축만 남아 자연히 축소된다. 이행축 테스트는 신규 `FulfillmentTest`로 옮긴다 — 각 전이 메서드를 `Order` 없이 파라미터(불리언)로 직접 검증할 수 있어 픽스처가 단순해진다.
 - `OrderPersistenceTest`에 대응하는 `FulfillmentPersistenceTest` 신설, `DefaultOrderModifier`/`DefaultOrderReader` 테스트는 두 리포지토리 조율을 반영해 갱신한다.
 - `query-order`의 `DefaultOrderSearchReader` 테스트는 조인 추가를 반영해 갱신한다(행동·응답 형태는 불변).
@@ -108,7 +109,7 @@
 ## 완료 기준
 
 - 기존 `Order`·`OrderModifier`·`OrderReader`·`OrderInfo` 관련 시나리오가 전후 동일하게 통과한다(`./gradlew build` 그린).
-- `OrderPaidListener`의 합의된 신규 시나리오(생성·멱등)에 대응하는 `@DisplayName` 테스트가 있고 통과한다.
+- `FulfillmentPreparationListener`의 합의된 신규 시나리오(생성·멱등)에 대응하는 `@DisplayName` 테스트가 있고 통과한다.
 - `app-api`·`app-admin`의 `OrderModifier`·`OrderReader` 호출부 코드가 변경되지 않는다(계약 안정성 확인).
 - 아키텍처 테스트(리포지토리는 애그리거트 루트당 1개, 트랜잭션당 애그리거트 1개 등)가 새 `Fulfillment` 애그리거트에도 그대로 통과한다.
 - expand 마이그레이션 적용 후 코드 전환 완료 시점에만 contract 마이그레이션(`-- contract` 헤더)을 별도 커밋으로 추가한다.

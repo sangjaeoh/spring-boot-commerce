@@ -55,7 +55,7 @@ import org.testcontainers.utility.DockerImageName;
     DefaultOrderAppender.class,
     DefaultOrderReader.class,
     DefaultOrderModifier.class,
-    OrderPaidListener.class,
+    FulfillmentPreparationListener.class,
     FulfillmentPersistenceTest.NoOpMessagingConfig.class
 })
 @ImportAutoConfiguration(FlywayAutoConfiguration.class)
@@ -69,19 +69,19 @@ class FulfillmentPersistenceTest {
     private final OrderAppender orderAppender;
     private final OrderReader orderReader;
     private final OrderModifier orderModifier;
-    private final OrderPaidListener orderPaidListener;
+    private final FulfillmentPreparationListener fulfillmentPreparationListener;
     private final TestEntityManager em;
 
     FulfillmentPersistenceTest(
             OrderAppender orderAppender,
             OrderReader orderReader,
             OrderModifier orderModifier,
-            OrderPaidListener orderPaidListener,
+            FulfillmentPreparationListener fulfillmentPreparationListener,
             TestEntityManager em) {
         this.orderAppender = orderAppender;
         this.orderReader = orderReader;
         this.orderModifier = orderModifier;
-        this.orderPaidListener = orderPaidListener;
+        this.fulfillmentPreparationListener = fulfillmentPreparationListener;
         this.em = em;
     }
 
@@ -99,7 +99,7 @@ class FulfillmentPersistenceTest {
         orderModifier.markPaid(orderId);
         em.flush();
         OrderInfo order = orderReader.getOrder(orderId);
-        orderPaidListener.on(new OrderPaid(orderId, order.memberId(), Set.of()));
+        fulfillmentPreparationListener.on(new OrderPaid(orderId, order.memberId(), Set.of()));
         em.flush();
         return orderId;
     }
@@ -137,7 +137,7 @@ class FulfillmentPersistenceTest {
     @Test
     @DisplayName("결제는 완료됐으나 이행 생성이 아직 반영되지 않은 주문의 출고는 거부된다")
     void shipRejectsBeforeFulfillmentCreated() {
-        // OrderPaidListener를 의도적으로 호출하지 않아 markPaid 커밋과 이행 생성 사이 레이스 창을 재현한다.
+        // FulfillmentPreparationListener를 의도적으로 호출하지 않아 markPaid 커밋과 이행 생성 사이 레이스 창을 재현한다.
         UUID orderId = place();
         em.flush();
         orderModifier.markPaid(orderId);

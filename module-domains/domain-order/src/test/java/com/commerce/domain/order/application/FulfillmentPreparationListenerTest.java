@@ -32,19 +32,20 @@ import org.testcontainers.utility.DockerImageName;
         })
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Testcontainers
-@Import(OrderPaidListener.class)
+@Import(FulfillmentPreparationListener.class)
 @ImportAutoConfiguration(FlywayAutoConfiguration.class)
 @TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
-class OrderPaidListenerTest {
+class FulfillmentPreparationListenerTest {
 
     @Container
     @ServiceConnection
     static PostgreSQLContainer postgres = new PostgreSQLContainer(DockerImageName.parse("postgres:17-alpine"));
 
-    private final OrderPaidListener listener;
+    private final FulfillmentPreparationListener listener;
     private final FulfillmentRepository fulfillmentRepository;
 
-    OrderPaidListenerTest(OrderPaidListener listener, FulfillmentRepository fulfillmentRepository) {
+    FulfillmentPreparationListenerTest(
+            FulfillmentPreparationListener listener, FulfillmentRepository fulfillmentRepository) {
         this.listener = listener;
         this.fulfillmentRepository = fulfillmentRepository;
     }
