@@ -93,10 +93,15 @@ class ArchitectureTest {
     // 순회하므로 CLASSES 선언 뒤에 둔다.
     private static final Set<String> ENTITY_OWNING_BASE_PACKAGES = entityOwningBasePackages();
 
-    // 도메인 모듈 안에서 @Entity를 정당하게 참조하는 3개 구역(domain 상호참조·exception, application의
-    // 유스케이스 서비스·Info.from(Entity)·required 리포지토리, entity의 QueryDSL Q타입). 이벤트 record는
-    // 이벤트 모듈(com.commerce.event..) 소유라 도메인 면제 대상이 아니다.
-    private static final Set<String> ENTITY_ACCESS_EXEMPT_SUBPACKAGES = Set.of("domain", "application", "entity");
+    // 도메인 모듈 안에서 @Entity를 정당하게 참조하는 2개 구역(domain 상호참조·exception, application의
+    // 유스케이스 서비스·Info.from(Entity)·required 리포지토리). 이벤트 record는 이벤트 모듈(com.commerce.event..)
+    // 소유라 도메인 면제 대상이 아니다. entity 구역은 이 집합에 넣지 않는다 — com.commerce.common.jpa의 QueryDSL
+    // Q타입(QBaseTimeEntity)만을 위한 면제이며 isEntityOwningModuleInternal에서 그 베이스 패키지로 한정해 특별 취급한다.
+    private static final Set<String> ENTITY_ACCESS_EXEMPT_SUBPACKAGES = Set.of("domain", "application");
+
+    // QueryDSL이 생성하는 QBaseTimeEntity가 사는 common-jpa 베이스 패키지. entity 구역 면제를 이 베이스로만
+    // 한정하기 위한 특별 취급 대상이다 — 도메인 모듈의 Q타입(QMember 등)은 이미 domain 구역으로 면제된다.
+    private static final String COMMON_JPA_BASE_PACKAGE = "com.commerce.common.jpa";
 
     // 도메인 모듈 베이스 패키지 집합 — 매핑 클래스가 domain 구역({base}.domain)에 사는 모듈에서 파생한다.
     // 구역 의존 방향·adapter 비노출·provided 경유 규칙이 대상 범위로 쓴다. CLASSES 순회라 CLASSES 뒤에 둔다.
@@ -852,6 +857,7 @@ class ArchitectureTest {
     }
 
     // 클래스가 매핑 클래스 소유 모듈의 면제 구역({base}.{domain|application} 이하)에 있으면 참이다.
+    // common-jpa 베이스의 entity 구역(QBaseTimeEntity)만 별도로 특별 취급해 면제한다.
     private static boolean isEntityOwningModuleInternal(String packageName) {
         for (String basePackage : ENTITY_OWNING_BASE_PACKAGES) {
             if (!packageName.startsWith(basePackage + ".")) {
@@ -860,6 +866,9 @@ class ArchitectureTest {
             String firstSubpackage =
                     packageName.substring(basePackage.length() + 1).split("\\.", 2)[0];
             if (ENTITY_ACCESS_EXEMPT_SUBPACKAGES.contains(firstSubpackage)) {
+                return true;
+            }
+            if (basePackage.equals(COMMON_JPA_BASE_PACKAGE) && firstSubpackage.equals("entity")) {
                 return true;
             }
         }
