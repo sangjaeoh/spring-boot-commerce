@@ -6,11 +6,13 @@ import com.commerce.app.admin.web.v1.admin.order.request.FulfillmentHoldRequest;
 import com.commerce.app.admin.web.v1.admin.order.request.OrderRefundRequest;
 import com.commerce.app.admin.web.v1.admin.order.request.OrderShipRequest;
 import com.commerce.app.admin.web.v1.admin.order.response.OrderPageResponse;
+import com.commerce.app.admin.web.v1.admin.order.response.OrderSearchPageResponse;
 import com.commerce.common.web.paging.PaginationRequest;
 import com.commerce.domain.order.application.provided.OrderModifier;
 import com.commerce.domain.order.application.provided.OrderReader;
 import com.commerce.domain.order.domain.FulfillmentStatus;
 import com.commerce.domain.order.domain.OrderStatus;
+import com.commerce.query.order.OrderSearchReader;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -20,6 +22,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
@@ -33,8 +36,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 주문 이행 전이·반품 환불·상태별 목록 조회의 관리자 엔드포인트다. */
-@Tag(name = "주문 관리", description = "이행 전이·반품 환불·상태별 목록 조회")
+/** 주문 이행 전이·반품 환불·상태별 목록·회원 이메일 검색의 관리자 엔드포인트다. */
+@Tag(name = "주문 관리", description = "이행 전이·반품 환불·상태별 목록·회원 이메일 검색")
 @Admin
 @RestController
 @RequestMapping("/api/v1/admin/orders")
@@ -43,12 +46,17 @@ public class OrderAdminController {
     private final OrderRefundFacade orderRefundFacade;
     private final OrderModifier orderModifier;
     private final OrderReader orderReader;
+    private final OrderSearchReader orderSearchReader;
 
     public OrderAdminController(
-            OrderRefundFacade orderRefundFacade, OrderModifier orderModifier, OrderReader orderReader) {
+            OrderRefundFacade orderRefundFacade,
+            OrderModifier orderModifier,
+            OrderReader orderReader,
+            OrderSearchReader orderSearchReader) {
         this.orderRefundFacade = orderRefundFacade;
         this.orderModifier = orderModifier;
         this.orderReader = orderReader;
+        this.orderSearchReader = orderSearchReader;
     }
 
     @Operation(summary = "반품 환불", description = "배송 완료 주문을 전체 반품 환불하고 재고·쿠폰을 복원한다.")
@@ -274,5 +282,31 @@ public class OrderAdminController {
             @Valid @ParameterObject PaginationRequest pagination) {
         return OrderPageResponse.from(orderReader.getOrdersByStatus(
                 status, fulfillmentStatus, PageRequest.of(pagination.zeroBasedPage(), pagination.size())));
+    }
+
+    @Operation(summary = "회원 이메일 주문 검색", description = "회원 이메일(정확 일치)과 선택적 주문 상태로 주문을 최신순 페이지로 검색한다.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "검색 결과 페이지"),
+        @ApiResponse(
+                responseCode = "400",
+                description = "이메일 형식·상태·페이지 파라미터 무효",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+        @ApiResponse(
+                responseCode = "401",
+                description = "미인증",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+        @ApiResponse(
+                responseCode = "403",
+                description = "권한 없음",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+    })
+    @GetMapping("/search")
+    public OrderSearchPageResponse searchOrders(
+            @Parameter(description = "회원 이메일(정확 일치)") @RequestParam String email,
+            @Parameter(description = "결제 축 주문 상태 필터 — 없으면 전 상태") @RequestParam(required = false) @Nullable
+                    OrderStatus status,
+            @Valid @ParameterObject PaginationRequest pagination) {
+        return OrderSearchPageResponse.from(orderSearchReader.getMemberOrderPage(
+                email, status, PageRequest.of(pagination.zeroBasedPage(), pagination.size())));
     }
 }
