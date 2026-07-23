@@ -9,12 +9,13 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
 
-/** 로그인·가입 표면의 레이트리밋 필터를 배선하는 설정이다. */
+/** 로그인·가입·비밀번호 재설정 요청 표면의 레이트리밋 필터를 배선하는 설정이다. */
 @Configuration
 public class RateLimitConfig {
 
     private static final String LOGIN_PATH = "/api/v1/auth/login";
     private static final String SIGNUP_PATH = "/api/v1/members";
+    private static final String PASSWORD_RESET_REQUEST_PATH = "/api/v1/auth/password-reset-request";
     private static final int MAX_ATTEMPTS = 10;
     private static final Duration WINDOW = Duration.ofMinutes(5);
 
@@ -30,6 +31,12 @@ public class RateLimitConfig {
             "가입 시도가 너무 많다. 잠시 후 다시 시도해 주세요.",
             "일시적으로 가입을 처리할 수 없다. 잠시 후 다시 시도해 주세요.");
 
+    private static final RateLimitScope PASSWORD_RESET_SCOPE = new RateLimitScope(
+            "reset:",
+            "TOO_MANY_PASSWORD_RESET_REQUESTS",
+            "비밀번호 재설정 요청이 너무 많다. 잠시 후 다시 시도해 주세요.",
+            "일시적으로 비밀번호 재설정 요청을 처리할 수 없다. 잠시 후 다시 시도해 주세요.");
+
     /** 로그인 경로에만 걸리는 레이트리밋 필터 등록을 공급한다. */
     @Bean
     public FilterRegistrationBean<LoginRateLimitFilter> loginRateLimitFilter(LoginRateLimitStore store) {
@@ -40,6 +47,12 @@ public class RateLimitConfig {
     @Bean
     public FilterRegistrationBean<LoginRateLimitFilter> signupRateLimitFilter(LoginRateLimitStore store) {
         return register(store, SIGNUP_SCOPE, SIGNUP_PATH);
+    }
+
+    /** 비밀번호 재설정 요청 경로에만 걸리는 레이트리밋 필터 등록을 공급한다. 무인증 메일 발송 유발 표면을 보호하며 다른 표면과 카운터를 공유하지 않는다. */
+    @Bean
+    public FilterRegistrationBean<LoginRateLimitFilter> passwordResetRequestRateLimitFilter(LoginRateLimitStore store) {
+        return register(store, PASSWORD_RESET_SCOPE, PASSWORD_RESET_REQUEST_PATH);
     }
 
     /** 한 경로에 필터를 등록하고 실행 순서를 정한다. */

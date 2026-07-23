@@ -47,7 +47,7 @@ class AuthControllerTest extends WebIntegrationTest {
     @MockitoSpyBean
     private MailGateway mailGateway;
 
-    // RateLimitConfig의 로그인 창당 한도와 같은 값. 초과 시도가 429로 거부되는지 검증한다.
+    // RateLimitConfig의 모든 표면이 공유하는 창당 한도와 같은 값. 초과 시도가 429로 거부되는지 검증한다.
     private static final int LOGIN_MAX_ATTEMPTS = 10;
 
     private final MockMvc mvc;
@@ -180,6 +180,54 @@ class AuthControllerTest extends WebIntegrationTest {
 
     private static MockHttpServletRequestBuilder loginFrom(String clientIp, String body) {
         return post("/api/v1/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body)
+                .with(request -> {
+                    request.setRemoteAddr(clientIp);
+                    return request;
+                });
+    }
+
+    @Test
+    @DisplayName("한 창 안에서 재설정 요청이 한도를 넘으면 429 TOO_MANY_PASSWORD_RESET_REQUESTS로 거부된다")
+    void passwordResetRequestRejectsAfterTooManyAttempts() throws Exception {
+        // 다른 테스트가 공유하는 기본 클라이언트 IP를 오염시키지 않도록 전용 IP로 한도를 채운다.
+        String clientIp = "203.0.113.77";
+        // 미존재 이메일도 204라 메일 발송 없이 카운터만 소모한다.
+        String body = objectMapper.writeValueAsString(
+                new PasswordResetMailRequest("nobody-" + UUID.randomUUID() + "@example.com"));
+
+        for (int attempt = 0; attempt < LOGIN_MAX_ATTEMPTS; attempt++) {
+            mvc.perform(resetRequestFrom(clientIp, body)).andExpect(status().isNoContent());
+        }
+
+        mvc.perform(resetRequestFrom(clientIp, body))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.code").value("TOO_MANY_PASSWORD_RESET_REQUESTS"));
+    }
+
+    @Test
+    @DisplayName("로그인 시도로 한도를 소진해도 같은 IP의 재설정 요청은 통과한다")
+    void loginAttemptsDoNotConsumeResetCounter() throws Exception {
+        String clientIp = "203.0.113.78";
+        String loginBody = objectMapper.writeValueAsString(
+                new LoginRequest("nobody-" + UUID.randomUUID() + "@example.com", PASSWORD));
+
+        // 1. 로그인 한도 소진
+        for (int attempt = 0; attempt < LOGIN_MAX_ATTEMPTS; attempt++) {
+            mvc.perform(loginFrom(clientIp, loginBody)).andExpect(status().isUnauthorized());
+        }
+        mvc.perform(loginFrom(clientIp, loginBody)).andExpect(status().isTooManyRequests());
+
+        // 2. 같은 IP의 재설정 요청은 독립 카운터라 통과
+        String resetBody = objectMapper.writeValueAsString(
+                new PasswordResetMailRequest("nobody-" + UUID.randomUUID() + "@example.com"));
+        mvc.perform(resetRequestFrom(clientIp, resetBody)).andExpect(status().isNoContent());
+    }
+
+    private static MockHttpServletRequestBuilder resetRequestFrom(String clientIp, String body) {
+        return post("/api/v1/auth/password-reset-request")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body)
                 .with(request -> {
