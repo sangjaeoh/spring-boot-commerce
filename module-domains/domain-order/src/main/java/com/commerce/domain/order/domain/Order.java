@@ -292,9 +292,14 @@ public class Order extends BaseTimeEntity<UUID> {
         if (status == OrderStatus.REFUNDED) {
             throw new OrderStatusException(OrderErrorCode.INVALID_ORDER_STATE_TRANSITION);
         }
-        // 부분 환불 이력이 있으면 전액 PG 취소·전 라인 재고 복원이 이중 집행이 된다. 라인 단위 반품은 작업 7이 해소한다.
+        // 부분 환불 이력이 있으면 전액 PG 취소·전 라인 재고 복원이 이중 집행이 된다 — 잔여는 라인 단위로 처리한다.
         if (!refundedAmount.isZero()) {
             throw new OrderStatusException(OrderErrorCode.PARTIALLY_CANCELLED);
+        }
+        // 라인 이력(요청·진행·종결)이 하나라도 있으면 전액 집행이 이중 집행·요청 무시가 된다.
+        // 환불 미확정(RETURN_REQUESTED)과 0원 환불 라인은 refundedAmount 프록시가 침묵하므로 상태로 막는다.
+        if (lines.stream().anyMatch(line -> line.getStatus() != OrderLineStatus.ORDERED)) {
+            throw new OrderStatusException(OrderErrorCode.INVALID_ORDER_STATE_TRANSITION);
         }
         if (status != OrderStatus.PAID || fulfillmentStatus != FulfillmentStatus.DELIVERED) {
             throw new OrderStatusException(OrderErrorCode.REFUND_NOT_ALLOWED);
@@ -314,6 +319,15 @@ public class Order extends BaseTimeEntity<UUID> {
      */
     public void requestReturn(RefundReason reason, Instant now) {
         if (returnStatus == ReturnStatus.REQUESTED) {
+            throw new OrderStatusException(OrderErrorCode.RETURN_ALREADY_REQUESTED);
+        }
+        // 부분 환불 이력이 있으면 전체 반품 환불이 이중 집행이 된다 — 잔여 라인은 라인 단위로 반품한다.
+        if (!refundedAmount.isZero()) {
+            throw new OrderStatusException(OrderErrorCode.PARTIALLY_CANCELLED);
+        }
+        if (lines.stream()
+                .anyMatch(line -> line.getStatus() == OrderLineStatus.RETURN_REQUESTED
+                        || line.getStatus() == OrderLineStatus.RETURNING)) {
             throw new OrderStatusException(OrderErrorCode.RETURN_ALREADY_REQUESTED);
         }
         if (status != OrderStatus.PAID || fulfillmentStatus != FulfillmentStatus.DELIVERED) {
@@ -578,9 +592,7 @@ public class Order extends BaseTimeEntity<UUID> {
         if (line.getStatus() != OrderLineStatus.ORDERED) {
             throw new OrderStatusException(OrderErrorCode.INVALID_ORDER_STATE_TRANSITION);
         }
-        Money refund = isLastOrderedLine()
-                ? payAmount.minus(refundedAmount)
-                : line.lineAmount().minus(discountShare(line));
+        Money refund = computeLineRefund(line);
         line.markCancelling(refund);
         this.refundedAmount = this.refundedAmount.plus(refund);
         return refund;
@@ -607,6 +619,87 @@ public class Order extends BaseTimeEntity<UUID> {
         return allCancelled;
     }
 
+    /**
+     * 라인 반품을 요청한다.
+     *
+     * @throws OrderStatusException 배송 완료된 결제 주문이 아니거나, 전체 반품이 진행 중이거나, 라인이 주문됨 상태가 아니면
+     * @throws OrderLineNotFoundException 라인이 없으면
+     */
+    public void requestLineReturn(UUID lineId, RefundReason reason) {
+        if (status != OrderStatus.PAID || fulfillmentStatus != FulfillmentStatus.DELIVERED) {
+            throw new OrderStatusException(OrderErrorCode.RETURN_NOT_ALLOWED);
+        }
+        if (returnStatus == ReturnStatus.REQUESTED) {
+            throw new OrderStatusException(OrderErrorCode.RETURN_ALREADY_REQUESTED);
+        }
+        OrderLine line = findLine(lineId);
+        if (line.getStatus() != OrderLineStatus.ORDERED) {
+            throw new OrderStatusException(OrderErrorCode.INVALID_ORDER_STATE_TRANSITION);
+        }
+        line.requestReturn(reason);
+    }
+
+    /**
+     * 라인 반품 요청을 거절한다. 라인은 주문됨으로 돌아가 재요청할 수 있다.
+     *
+     * @throws OrderStatusException 라인이 반품 요청 상태가 아니면
+     * @throws OrderLineNotFoundException 라인이 없으면
+     */
+    public void rejectLineReturn(UUID lineId) {
+        OrderLine line = findLine(lineId);
+        if (line.getStatus() != OrderLineStatus.RETURN_REQUESTED) {
+            throw new OrderStatusException(OrderErrorCode.RETURN_NOT_REQUESTED);
+        }
+        line.rejectReturn();
+    }
+
+    /**
+     * 라인 반품 승인을 개시한다. 환불액을 확정해 라인에 기록하고 환불 누계에 더한 뒤 확정 환불액을 반환한다.
+     *
+     * @throws OrderStatusException 라인이 반품 요청 상태가 아니면
+     * @throws OrderLineNotFoundException 라인이 없으면
+     */
+    public Money beginLineReturn(UUID lineId) {
+        if (status != OrderStatus.PAID || fulfillmentStatus != FulfillmentStatus.DELIVERED) {
+            throw new OrderStatusException(OrderErrorCode.RETURN_NOT_ALLOWED);
+        }
+        if (returnStatus == ReturnStatus.REQUESTED) {
+            throw new OrderStatusException(OrderErrorCode.RETURN_ALREADY_REQUESTED);
+        }
+        OrderLine line = findLine(lineId);
+        if (line.getStatus() != OrderLineStatus.RETURN_REQUESTED) {
+            throw new OrderStatusException(OrderErrorCode.RETURN_NOT_REQUESTED);
+        }
+        Money refund = computeLineRefund(line);
+        line.markReturning(refund);
+        this.refundedAmount = this.refundedAmount.plus(refund);
+        return refund;
+    }
+
+    /**
+     * 반품 진행 중 라인을 반품으로 완결한다. 전 라인이 종결(취소·반품)되면 주문을 환불로 수렴시키고 참을 반환한다.
+     *
+     * @throws OrderStatusException 라인이 반품 진행 중이 아니면
+     * @throws OrderLineNotFoundException 라인이 없으면
+     */
+    public boolean completeLineReturn(UUID lineId, Instant now) {
+        OrderLine line = findLine(lineId);
+        if (line.getStatus() != OrderLineStatus.RETURNING) {
+            throw new OrderStatusException(OrderErrorCode.INVALID_ORDER_STATE_TRANSITION);
+        }
+        line.completeReturn();
+        // 전 라인 종결이면 환불로 수렴한다 — 혼합 종결의 마지막은 항상 반품 경로다(취소 수렴은 출고 전).
+        boolean allSettled = lines.stream()
+                .allMatch(candidate -> candidate.getStatus() == OrderLineStatus.CANCELLED
+                        || candidate.getStatus() == OrderLineStatus.RETURNED);
+        if (allSettled) {
+            this.status = OrderStatus.REFUNDED;
+            this.refundedAt = now;
+            this.refundReason = line.getReturnReason();
+        }
+        return allSettled;
+    }
+
     /** 대상 라인을 찾고 없으면 거부한다. */
     private OrderLine findLine(UUID lineId) {
         return lines.stream()
@@ -615,12 +708,16 @@ public class Order extends BaseTimeEntity<UUID> {
                 .orElseThrow(() -> new OrderLineNotFoundException(OrderErrorCode.ORDER_LINE_NOT_FOUND));
     }
 
-    /** 주문됨 상태의 라인이 하나만 남았는지 판정한다. */
-    private boolean isLastOrderedLine() {
-        return lines.stream()
-                        .filter(line -> line.getStatus() == OrderLineStatus.ORDERED)
+    /**
+     * 라인 환불액을 계산한다 — 환불 미확정 라인이 마지막이면 결제 잔액 전액(끝전·배송비 흡수), 아니면 라인
+     * 금액에서 안분 할인을 뺀 값이다. 취소·반품 경로가 공유한다.
+     */
+    private Money computeLineRefund(OrderLine line) {
+        boolean last = lines.stream()
+                        .filter(candidate -> candidate.getRefundAmount() == null)
                         .count()
                 == 1;
+        return last ? payAmount.minus(refundedAmount) : line.lineAmount().minus(discountShare(line));
     }
 
     /** 쿠폰 할인의 라인 금액 비례 안분(내림)을 계산한다. 끝전은 마지막 라인의 잔액 전액 환불이 흡수한다. */

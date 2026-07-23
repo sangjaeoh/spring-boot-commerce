@@ -8,13 +8,18 @@ import com.commerce.domain.order.application.info.OrderLineInfo;
 import com.commerce.domain.order.application.provided.OrderModifier;
 import com.commerce.domain.order.application.provided.OrderReader;
 import com.commerce.domain.order.domain.FulfillmentStatus;
+import com.commerce.domain.order.domain.OrderLineStatus;
 import com.commerce.domain.order.domain.OrderStatus;
 import com.commerce.domain.order.domain.RefundReason;
 import com.commerce.domain.order.domain.ReturnStatus;
+import com.commerce.domain.order.domain.exception.OrderErrorCode;
+import com.commerce.domain.order.domain.exception.OrderLineNotFoundException;
 import com.commerce.domain.payment.application.info.PaymentInfo;
 import com.commerce.domain.payment.application.provided.PaymentProcessor;
 import com.commerce.domain.payment.application.provided.PaymentReader;
+import com.commerce.domain.shared.entity.Money;
 import com.commerce.domain.stock.application.provided.StockModifier;
+import java.util.Objects;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 
@@ -93,6 +98,60 @@ public class OrderRefundFacade {
             throw new AdminException(AdminErrorCode.ORDER_RETURN_NOT_REQUESTED);
         }
         refund(orderId, reason);
+    }
+
+    /**
+     * 라인 반품 요청을 승인해 부분 환불을 완결하고 그 라인 재고를 복원한다. 전 라인 종결로 주문이 환불에
+     * 수렴하면 쿠폰을 복원한다. 이미 반품된 라인은 복원 없이 통과하고, 반품 진행 중 라인은 환불부터 재개한다.
+     *
+     * @throws AdminException 라인 반품을 승인할 수 없는 상태면
+     */
+    public void approveLineReturn(UUID orderId, UUID lineId) {
+        // 1. 주문·라인 조회
+        OrderInfo order = orderReader.getOrder(orderId);
+        OrderLineInfo line = order.lines().stream()
+                .filter(candidate -> candidate.id().equals(lineId))
+                .findFirst()
+                .orElseThrow(() -> new OrderLineNotFoundException(OrderErrorCode.ORDER_LINE_NOT_FOUND));
+        if (line.status() == OrderLineStatus.RETURNED) {
+            return;
+        }
+
+        // 2. 승인 개시 — 환불액 확정·경합 직렬화. 진행 중 라인은 기록된 환불액으로 재개한다
+        Money refund;
+        if (line.status() == OrderLineStatus.RETURN_REQUESTED) {
+            refund = orderModifier.beginLineReturn(orderId, lineId);
+        } else if (line.status() == OrderLineStatus.RETURNING) {
+            refund = Objects.requireNonNull(line.refundAmount());
+        } else {
+            throw new AdminException(AdminErrorCode.ORDER_RETURN_NOT_REQUESTED);
+        }
+
+        // 3. 결제 부분 환불(트랜잭션 밖, 라인 멱등 키 + 주문 측 확정 누계 동기화)
+        Money refundedTotal = orderReader.getOrder(orderId).refundedAmount();
+        PaymentInfo payment = paymentReader.getByOrderId(orderId);
+        paymentProcessor.cancelPartially(payment.id(), refund, refundedTotal, lineId);
+
+        // 4. 라인 반품 완결 — 전 라인 종결이면 환불 수렴
+        boolean converged = orderModifier.completeLineReturn(orderId, lineId);
+
+        // 5. 그 라인 재고만 복원
+        stockModifier.restore(line.variantId(), line.quantity());
+
+        // 6. 전량 종결 수렴 시에만 쿠폰 복원
+        UUID issuedCouponId = order.issuedCouponId();
+        if (converged && issuedCouponId != null) {
+            issuedCouponModifier.restoreUse(issuedCouponId, orderId);
+        }
+    }
+
+    /**
+     * 라인 반품 요청을 거절한다. 라인은 주문됨으로 돌아간다.
+     *
+     * @throws AdminException 라인이 반품 요청 상태가 아니면
+     */
+    public void rejectLineReturn(UUID orderId, UUID lineId) {
+        orderModifier.rejectLineReturn(orderId, lineId);
     }
 
     /** 결제 완료이면서 배송 완료된 주문만 통과시킨다. */

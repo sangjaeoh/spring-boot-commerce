@@ -27,6 +27,7 @@ import com.commerce.domain.order.domain.Address;
 import com.commerce.domain.order.domain.CancellationReason;
 import com.commerce.domain.order.domain.FulfillmentStatus;
 import com.commerce.domain.order.domain.OrderLineSnapshot;
+import com.commerce.domain.order.domain.OrderLineStatus;
 import com.commerce.domain.order.domain.OrderStatus;
 import com.commerce.domain.order.domain.RefundReason;
 import com.commerce.domain.order.domain.ReturnStatus;
@@ -413,6 +414,97 @@ class OrderRefundFacadeTest extends FacadeIntegrationTest {
      */
     private UUID paidOrder(UUID memberId, UUID variantId, int quantity) {
         return paidOrder(memberId, variantId, quantity, null);
+    }
+
+    @Test
+    @DisplayName("라인 반품 요청·승인이 부분 환불하고 그 라인 재고만 복원하며 주문은 PAID·DELIVERED로 남는다")
+    void approveLineReturnRefundsAndRestoresOnlyThatLine() {
+        UUID memberId = registerMember();
+        UUID variantA = seedProduct(Money.of(10000L), 50);
+        UUID variantB = seedProduct(Money.of(10000L), 50);
+        UUID couponId =
+                couponAppender.create("정액 1000", Discount.fixed(Money.of(1000L)), Money.ZERO, validity(), 30, null);
+        UUID issuedId = issuedCouponAppender.issue(couponId, memberId);
+        UUID orderId = deliveredTwoLineOrder(memberId, variantA, variantB, issuedId);
+        UUID lineA = lineIdOf(orderId, variantA);
+        orderModifier.requestLineReturn(orderId, memberId, lineA, RefundReason.PRODUCT_DEFECT);
+
+        orderRefundFacade.approveLineReturn(orderId, lineA);
+
+        OrderInfo order = orderReader.getOrder(orderId);
+        // 라인 환불 = 10000 − 안분 할인 500
+        assertThat(order.refundedAmount()).isEqualTo(Money.of(9500L));
+        assertThat(order.status()).isEqualTo(OrderStatus.PAID);
+        assertThat(order.fulfillmentStatus()).isEqualTo(FulfillmentStatus.DELIVERED);
+        assertThat(lineOf(order, variantA).status()).isEqualTo(OrderLineStatus.RETURNED);
+        assertThat(lineOf(order, variantB).status()).isEqualTo(OrderLineStatus.ORDERED);
+        assertThat(stockReader.getByVariantId(variantA).quantity()).isEqualTo(50);
+        assertThat(stockReader.getByVariantId(variantB).quantity()).isEqualTo(49);
+        assertThat(paymentReader.getByOrderId(orderId).refundedAmount()).isEqualTo(Money.of(9500L));
+        assertThat(paymentReader.getByOrderId(orderId).status()).isEqualTo(PaymentStatus.APPROVED);
+        assertThat(issuedCouponReader.getIssuedCoupon(issuedId, memberId).status())
+                .isEqualTo(IssuedCouponStatus.USED);
+    }
+
+    @Test
+    @DisplayName("전 라인 반품 승인 시 주문이 REFUNDED로 수렴하고 결제가 CANCELLED이며 쿠폰이 복원된다")
+    void approvingAllLineReturnsConvergesToRefunded() {
+        UUID memberId = registerMember();
+        UUID variantA = seedProduct(Money.of(10000L), 50);
+        UUID variantB = seedProduct(Money.of(10000L), 50);
+        UUID couponId =
+                couponAppender.create("정액 1000", Discount.fixed(Money.of(1000L)), Money.ZERO, validity(), 30, null);
+        UUID issuedId = issuedCouponAppender.issue(couponId, memberId);
+        UUID orderId = deliveredTwoLineOrder(memberId, variantA, variantB, issuedId);
+
+        for (UUID variantId : List.of(variantA, variantB)) {
+            UUID lineId = lineIdOf(orderId, variantId);
+            orderModifier.requestLineReturn(orderId, memberId, lineId, RefundReason.PRODUCT_DEFECT);
+            orderRefundFacade.approveLineReturn(orderId, lineId);
+        }
+
+        OrderInfo order = orderReader.getOrder(orderId);
+        assertThat(order.status()).isEqualTo(OrderStatus.REFUNDED);
+        assertThat(order.refundedAmount()).isEqualTo(order.payAmount());
+        assertThat(paymentReader.getByOrderId(orderId).status()).isEqualTo(PaymentStatus.CANCELLED);
+        assertThat(stockReader.getByVariantId(variantA).quantity()).isEqualTo(50);
+        assertThat(stockReader.getByVariantId(variantB).quantity()).isEqualTo(50);
+        assertThat(issuedCouponReader.getIssuedCoupon(issuedId, memberId).status())
+                .isEqualTo(IssuedCouponStatus.ISSUED);
+    }
+
+    private UUID lineIdOf(UUID orderId, UUID variantId) {
+        return lineOf(orderReader.getOrder(orderId), variantId).id();
+    }
+
+    private static com.commerce.domain.order.application.info.OrderLineInfo lineOf(OrderInfo order, UUID variantId) {
+        return order.lines().stream()
+                .filter(line -> line.variantId().equals(variantId))
+                .findFirst()
+                .orElseThrow();
+    }
+
+    /** 두 변형을 한 라인씩 담아 결제·배송 완료한 주문을 만든다. */
+    private UUID deliveredTwoLineOrder(UUID memberId, UUID variantA, UUID variantB, UUID issuedCouponId) {
+        ProductVariantInfo first = variantReader.getVariant(variantA);
+        ProductVariantInfo second = variantReader.getVariant(variantB);
+        List<OrderLineSnapshot> snapshots = List.of(
+                new OrderLineSnapshot(first.id(), first.productId(), "상품", first.optionLabel(), first.price(), 1),
+                new OrderLineSnapshot(second.id(), second.productId(), "상품", second.optionLabel(), second.price(), 1));
+        Money discount = Money.of(1000L);
+        UUID orderId = orderAppender.place(memberId, snapshots, address(), discount, Money.ZERO, issuedCouponId);
+        stockModifier.deduct(variantA, 1);
+        stockModifier.deduct(variantB, 1);
+        orderModifier.markStockDeducted(orderId);
+        issuedCouponModifier.use(issuedCouponId, memberId, orderId);
+        Money payAmount = first.price().plus(second.price()).minus(discount);
+        UUID paymentId = paymentAppender.request(orderId, payAmount, PaymentMethod.CARD);
+        PaymentApproval approval = paymentGateway.approve(paymentId, payAmount, PaymentMethod.CARD);
+        paymentProcessor.confirmApproval(paymentId, Objects.requireNonNull(approval.pgTransactionId()));
+        orderModifier.markPaid(orderId);
+        orderModifier.ship(orderId, "CJ대한통운", "688900123456");
+        orderModifier.confirmDelivery(orderId);
+        return orderId;
     }
 
     private UUID paidOrder(

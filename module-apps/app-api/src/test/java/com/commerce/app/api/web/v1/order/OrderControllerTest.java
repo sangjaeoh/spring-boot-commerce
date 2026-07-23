@@ -440,6 +440,25 @@ class OrderControllerTest extends WebIntegrationTest {
     }
 
     @Test
+    @DisplayName("주문 라인 반품 요청은 204로 성공하고 그 라인을 반품 요청 상태로 만든다")
+    void requestLineReturnSucceedsForDeliveredOrder() throws Exception {
+        UUID memberId = registerMember();
+        UUID orderId = checkoutForMember(memberId);
+        orderModifier.ship(orderId, "CJ대한통운", "688900123456");
+        orderModifier.confirmDelivery(orderId);
+        UUID lineId = orderReader.getOrder(orderId, memberId).lines().get(0).id();
+
+        mvc.perform(post("/api/v1/orders/{orderId}/lines/{lineId}/return-request", orderId, lineId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new OrderReturnRequest(RefundReason.PRODUCT_DEFECT))))
+                .andExpect(status().isNoContent());
+
+        assertThat(orderReader.getOrder(orderId, memberId).lines().get(0).status())
+                .isEqualTo(OrderLineStatus.RETURN_REQUESTED);
+    }
+
+    @Test
     @DisplayName("타인 주문 취소는 404 ORDER_NOT_FOUND로 거부되고 주문 상태를 바꾸지 않는다")
     void cancelRejectsOtherMembersOrderAsNotFound() throws Exception {
         UUID ownerId = registerMember();

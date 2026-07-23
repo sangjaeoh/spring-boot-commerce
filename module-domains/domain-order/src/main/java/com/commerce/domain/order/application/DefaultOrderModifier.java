@@ -85,6 +85,33 @@ class DefaultOrderModifier implements OrderModifier {
 
     @Transactional
     @Override
+    public void requestLineReturn(UUID orderId, UUID memberId, UUID lineId, RefundReason reason) {
+        Order order = orderRepository
+                .findByIdAndMemberId(orderId, memberId)
+                .orElseThrow(() -> new OrderNotFoundException(OrderErrorCode.ORDER_NOT_FOUND));
+        order.requestLineReturn(lineId, reason);
+    }
+
+    @Transactional
+    @Override
+    public void rejectLineReturn(UUID orderId, UUID lineId) {
+        find(orderId).rejectLineReturn(lineId);
+    }
+
+    @Transactional
+    @Override
+    public Money beginLineReturn(UUID orderId, UUID lineId) {
+        return find(orderId).beginLineReturn(lineId);
+    }
+
+    @Transactional
+    @Override
+    public boolean completeLineReturn(UUID orderId, UUID lineId) {
+        return find(orderId).completeLineReturn(lineId, clock.instant());
+    }
+
+    @Transactional
+    @Override
     public void rejectReturn(UUID orderId) {
         find(orderId).rejectReturn();
     }

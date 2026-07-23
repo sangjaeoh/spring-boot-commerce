@@ -230,6 +230,36 @@ public class OrderController {
         orderModifier.requestReturn(orderId, authUser.memberId(), request.reason());
     }
 
+    @Operation(summary = "주문 라인 반품 요청", description = "배송 완료된 본인 주문의 한 라인 반품을 요청한다. 관리자 승인 시 부분 환불·복원된다.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "204", description = "라인 반품 요청됨"),
+        @ApiResponse(
+                responseCode = "400",
+                description = "요청 값 무효",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+        @ApiResponse(
+                responseCode = "401",
+                description = "미인증",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+        @ApiResponse(
+                responseCode = "404",
+                description = "주문·라인 없음 또는 타인 주문",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+        @ApiResponse(
+                responseCode = "409",
+                description = "반품을 요청할 수 없는 주문·라인 상태",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+    })
+    @PostMapping("/{orderId}/lines/{lineId}/return-request")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void requestLineReturn(
+            AuthUser authUser,
+            @Parameter(description = "주문 ID") @PathVariable UUID orderId,
+            @Parameter(description = "주문 라인 ID") @PathVariable UUID lineId,
+            @Valid @RequestBody OrderReturnRequest request) {
+        orderModifier.requestLineReturn(orderId, authUser.memberId(), lineId, request.reason());
+    }
+
     @Operation(summary = "주문 상세 조회", description = "본인 주문 상세를 조회한다.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "주문 상세"),

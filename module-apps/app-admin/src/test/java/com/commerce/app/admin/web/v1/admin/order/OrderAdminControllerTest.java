@@ -21,6 +21,7 @@ import com.commerce.domain.order.domain.CancellationReason;
 import com.commerce.domain.order.domain.FulfillmentStatus;
 import com.commerce.domain.order.domain.HoldReason;
 import com.commerce.domain.order.domain.OrderLineSnapshot;
+import com.commerce.domain.order.domain.OrderLineStatus;
 import com.commerce.domain.order.domain.OrderStatus;
 import com.commerce.domain.order.domain.RefundReason;
 import com.commerce.domain.order.domain.ReturnStatus;
@@ -468,6 +469,24 @@ class OrderAdminControllerTest extends WebIntegrationTest {
                         .param("email", "someone@example.com")
                         .header(HttpHeaders.AUTHORIZATION, bearer(registerMember())))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("관리자 라인 반품 승인은 204이고 그 라인을 RETURNED로 완결한다")
+    void approveLineReturnCompletesLine() throws Exception {
+        UUID memberId = registerMember();
+        UUID orderId = checkoutForMember(memberId);
+        orderModifier.ship(orderId, "CJ대한통운", "688900123456");
+        orderModifier.confirmDelivery(orderId);
+        UUID lineId = orderReader.getOrder(orderId, memberId).lines().get(0).id();
+        orderModifier.requestLineReturn(orderId, memberId, lineId, RefundReason.PRODUCT_DEFECT);
+
+        mvc.perform(post("/api/v1/admin/orders/{orderId}/lines/{lineId}/return-approval", orderId, lineId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
+                .andExpect(status().isNoContent());
+
+        assertThat(orderReader.getOrder(orderId, memberId).lines().get(0).status())
+                .isEqualTo(OrderLineStatus.RETURNED);
     }
 
     private UUID checkoutForMember(UUID memberId) {

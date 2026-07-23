@@ -67,11 +67,17 @@ public class OrderLine extends BaseTimeEntity<UUID> {
     @Column(name = "status")
     private OrderLineStatus status;
 
-    /** 확정된 라인 환불액. 취소 진행·완료 라인만 있다. */
+    /** 확정된 라인 환불액. 취소·반품 진행 이후 라인만 있다. */
     @Convert(converter = MoneyConverter.class)
     @Column(name = "refund_amount")
     @Nullable
     private Money refundAmount;
+
+    /** 라인 반품 사유. 반품 요청 이후 라인만 있다. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "return_reason")
+    @Nullable
+    private RefundReason returnReason;
 
     protected OrderLine() {}
 
@@ -146,5 +152,32 @@ public class OrderLine extends BaseTimeEntity<UUID> {
     /** 취소 진행 중 라인을 취소로 완결한다. */
     void completeCancellation() {
         this.status = OrderLineStatus.CANCELLED;
+    }
+
+    public @Nullable RefundReason getReturnReason() {
+        return returnReason;
+    }
+
+    /** 반품을 요청 상태로 두고 사유를 기록한다. */
+    void requestReturn(RefundReason reason) {
+        this.status = OrderLineStatus.RETURN_REQUESTED;
+        this.returnReason = reason;
+    }
+
+    /** 반품 요청을 거절해 주문됨으로 되돌리고 사유를 지운다. */
+    void rejectReturn() {
+        this.status = OrderLineStatus.ORDERED;
+        this.returnReason = null;
+    }
+
+    /** 환불액을 확정하고 반품 진행 중으로 둔다. */
+    void markReturning(Money refundAmount) {
+        this.status = OrderLineStatus.RETURNING;
+        this.refundAmount = refundAmount;
+    }
+
+    /** 반품 진행 중 라인을 반품으로 완결한다. */
+    void completeReturn() {
+        this.status = OrderLineStatus.RETURNED;
     }
 }
