@@ -23,7 +23,7 @@ class DefaultReviewReader implements ReviewReader {
     @Override
     public Page<ReviewInfo> getProductPage(UUID productId, Pageable pageable) {
         return reviewRepository
-                .findByProductIdOrderByIdDesc(productId, pageable)
+                .findByProductIdAndDeletedAtIsNullOrderByIdDesc(productId, pageable)
                 .map(ReviewInfo::from);
     }
 }

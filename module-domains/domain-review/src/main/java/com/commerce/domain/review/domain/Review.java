@@ -8,7 +8,9 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import java.time.Instant;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 
 /** 회원이 구매확정한 상품에 쓴 리뷰다. (회원, 상품) 유니크로 상품당 한 건이다. */
 @Entity
@@ -38,6 +40,16 @@ public class Review extends BaseTimeEntity<UUID> {
     /** 리뷰 본문(1~1000자). */
     @Column
     private String content;
+
+    /** 관리자 제거 시각. 제거된 리뷰만 있다. */
+    @Column(name = "deleted_at")
+    @Nullable
+    private Instant deletedAt;
+
+    /** 관리자 제거 사유. 제거된 리뷰만 있다. */
+    @Column(name = "removed_reason")
+    @Nullable
+    private String removedReason;
 
     protected Review() {}
 
@@ -99,5 +111,19 @@ public class Review extends BaseTimeEntity<UUID> {
 
     public String getContent() {
         return content;
+    }
+
+    public @Nullable Instant getDeletedAt() {
+        return deletedAt;
+    }
+
+    public @Nullable String getRemovedReason() {
+        return removedReason;
+    }
+
+    /** 관리자 제거로 소프트삭제하고 사유를 보존한다. */
+    public void delete(String reason) {
+        this.deletedAt = Instant.now();
+        this.removedReason = reason;
     }
 }

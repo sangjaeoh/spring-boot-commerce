@@ -22,7 +22,7 @@ class DefaultReviewModifier implements ReviewModifier {
     @Override
     public void revise(UUID reviewId, UUID memberId, int rating, String content) {
         reviewRepository
-                .findByIdAndMemberId(reviewId, memberId)
+                .findByIdAndMemberIdAndDeletedAtIsNull(reviewId, memberId)
                 .orElseThrow(() -> new ReviewNotFoundException(ReviewErrorCode.REVIEW_NOT_FOUND))
                 .revise(rating, content);
     }

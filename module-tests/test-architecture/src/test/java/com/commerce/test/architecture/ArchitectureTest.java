@@ -238,7 +238,8 @@ class ArchitectureTest {
                 Set.of(
                         "com.commerce.domain.member.domain.Member",
                         "com.commerce.domain.product.domain.Product",
-                        "com.commerce.domain.product.domain.Category"),
+                        "com.commerce.domain.product.domain.Category",
+                        "com.commerce.domain.review.domain.Review"),
                 SOFT_DELETE_ENTITY_NAMES);
     }
 
