@@ -18,4 +18,6 @@ dependencies {
         ),
     )
     "implementation"(libsCatalog.findLibrary("spring-boot-starter-data-jpa").get())
+    // 조회 기본 구현 기술 — JPAQueryFactory·Q타입 사용(architecture.md query 모듈 구조)
+    "implementation"(libsCatalog.findLibrary("querydsl-jpa").get())
 }

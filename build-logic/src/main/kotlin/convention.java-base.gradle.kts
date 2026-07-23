@@ -32,6 +32,8 @@ dependencies {
 
 tasks.withType<JavaCompile>().configureEach {
     options.errorprone {
+        // apt 생성 소스(QueryDSL Q타입)는 우리 코드가 아니므로 게이트 대상에서 제외한다
+        excludedPaths.set(".*/build/generated/sources/annotationProcessor/.*")
         error("NullAway")
         option("NullAway:AnnotatedPackages", "com.commerce")
         option(

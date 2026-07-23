@@ -14,6 +14,8 @@ springdoc = "3.0.3"
 # common-web 공용 request DTO의 @Schema용. springdoc 3.0.3이 끌어오는 swagger-core 라인과 버전을 맞춘다
 swagger-annotations = "2.2.47"
 shedlock = "7.7.0"
+# 조회 기본 구현 기술(OpenFeign fork — 원본 com.querydsl은 릴리스 정체). Spring Boot BOM 비관리라 버전을 명시한다
+querydsl = "7.5"
 # build-logic 자체 테스트용 — 모듈 테스트는 Spring Boot BOM이 관리하지만 build-logic은 BOM 밖이라 버전을 명시한다
 junit = "6.0.3"
 
@@ -32,6 +34,10 @@ errorprone-annotations = { module = "com.google.errorprone:error_prone_annotatio
 
 # convention.domain-module — version aligned by the Spring Boot BOM platform
 spring-boot-starter-data-jpa = { module = "org.springframework.boot:spring-boot-starter-data-jpa" }
+# convention.domain-module·convention.query-module — QueryDSL(OpenFeign fork). querydsl-apt는 classifier(jakarta)가
+# 필요한데 TOML이 classifier를 지원하지 않아 소비 빌드 스크립트에서 문자열 좌표로 선언한다
+querydsl-core = { module = "io.github.openfeign.querydsl:querydsl-core", version.ref = "querydsl" }
+querydsl-jpa = { module = "io.github.openfeign.querydsl:querydsl-jpa", version.ref = "querydsl" }
 
 # external-module — @Component 등 스테레오타입만 필요(JPA 불필요). 버전은 Spring Boot BOM
 spring-context = { module = "org.springframework:spring-context" }

@@ -51,4 +51,12 @@ dependencies {
         ),
     )
     "implementation"(libsCatalog.findLibrary("spring-boot-starter-data-jpa").get())
+    // Q타입 생성(QueryDSL apt). 생성 코드가 참조하는 querydsl-core를 컴파일 클래스패스에 둔다.
+    // apt classifier(jakarta)는 TOML 미지원이라 문자열 좌표로 선언한다. 프로세서 경로 의존은 pom 전이로 해석된다.
+    "implementation"(libsCatalog.findLibrary("querydsl-core").get())
+    "annotationProcessor"(
+        "io.github.openfeign.querydsl:querydsl-apt:${
+            libsCatalog.findVersion("querydsl").get().requiredVersion
+        }:jakarta",
+    )
 }
