@@ -1,9 +1,11 @@
 package com.commerce.query.order;
 
 import static com.commerce.domain.member.domain.QMember.member;
+import static com.commerce.domain.order.domain.QFulfillment.fulfillment;
 import static com.commerce.domain.order.domain.QOrder.order;
 
 import com.commerce.domain.member.domain.Email;
+import com.commerce.domain.order.domain.FulfillmentStatus;
 import com.commerce.domain.order.domain.OrderStatus;
 import com.querydsl.core.types.Projections;
 import com.querydsl.core.types.dsl.BooleanExpression;
@@ -35,6 +37,8 @@ class DefaultOrderSearchReader implements OrderSearchReader {
 
         // UUIDv7 ID가 생성 시각 순서라 ID 내림차순이 최신 주문 우선 정렬을 겸한다. 활성 회원 필터는
         // 소프트삭제 조회 기본(삭제 미포함)이자 부분 유니크 인덱스(ux_member_email_active)의 사용 조건이다.
+        // 이행은 Order와 별도 애그리거트라 LEFT JOIN한다 — 이행 미개시(행 없음) 주문도 검색 결과에 남아야
+        // 하고, 그 경우 NOT_STARTED로 합성한다(코드상 fulfillmentStatus 컬럼의 기존 기본값과 동일 의미).
         List<OrderSearchInfo> content = queryFactory
                 .select(Projections.constructor(
                         OrderSearchInfo.class,
@@ -44,12 +48,14 @@ class DefaultOrderSearchReader implements OrderSearchReader {
                         // 이메일 등치 필터로 모든 행의 이메일이 입력값과 같다 — 컨버터 타입(Email) 경로 대신 상수로 채운다.
                         Expressions.constant(email),
                         order.status,
-                        order.fulfillmentStatus,
+                        fulfillment.status.coalesce(FulfillmentStatus.NOT_STARTED),
                         order.payAmount,
                         order.createdAt))
                 .from(order)
                 .join(member)
                 .on(member.id.eq(order.memberId))
+                .leftJoin(fulfillment)
+                .on(fulfillment.orderId.eq(order.id))
                 .where(member.email.eq(emailValue), member.deletedAt.isNull(), statusEq(status))
                 .orderBy(order.id.desc())
                 .offset(pageable.getOffset())
