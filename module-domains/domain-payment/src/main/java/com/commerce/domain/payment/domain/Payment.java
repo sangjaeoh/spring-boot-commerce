@@ -37,6 +37,11 @@ public class Payment extends BaseTimeEntity<UUID> {
     @Column(name = "amount")
     private Money amount;
 
+    /** 부분 취소로 환불된 누계. 결제액에 도달하면 취소로 전이한다. */
+    @Convert(converter = MoneyConverter.class)
+    @Column(name = "refunded_amount")
+    private Money refundedAmount;
+
     /** 결제 상태. */
     @Enumerated(EnumType.STRING)
     @Column(name = "status")
@@ -87,6 +92,7 @@ public class Payment extends BaseTimeEntity<UUID> {
         this.amount = amount;
         this.method = method;
         this.status = PaymentStatus.REQUESTED;
+        this.refundedAmount = Money.ZERO;
     }
 
     /** 결제를 요청 상태로 생성한다. */
@@ -142,9 +148,38 @@ public class Payment extends BaseTimeEntity<UUID> {
         if (status != PaymentStatus.APPROVED) {
             throw new PaymentStatusException(PaymentErrorCode.INVALID_PAYMENT_STATE_TRANSITION);
         }
+        // 부분 환불 이력이 있으면 전액 PG 취소가 이중 환불이 된다 — 라인 단위로 마저 취소한다.
+        if (!refundedAmount.isZero()) {
+            throw new PaymentStatusException(PaymentErrorCode.INVALID_PAYMENT_STATE_TRANSITION);
+        }
         this.status = PaymentStatus.CANCELLED;
         this.pgCancelTransactionId = pgCancelTransactionId;
         this.cancelledAt = now;
+    }
+
+    /**
+     * 부분 환불 누계를 주문 측 확정 누계로 단조 동기화한다. 같은·낮은 누계의 재동기화는 이중 반영 없이
+     * 통과하고(재개·중복 전달 멱등), 누계가 결제액에 도달하면 취소로 전이하며, 종결 후 재동기화는 멱등 통과한다.
+     *
+     * @throws PaymentStatusException 승인·취소 상태가 아니거나 누계가 결제액을 초과하면
+     */
+    public void syncPartialRefund(Money cumulativeTotal, Instant now) {
+        if (amount.isLessThan(cumulativeTotal)) {
+            throw new PaymentStatusException(PaymentErrorCode.INVALID_PAYMENT_STATE_TRANSITION);
+        }
+        if (status == PaymentStatus.CANCELLED) {
+            return;
+        }
+        if (status != PaymentStatus.APPROVED) {
+            throw new PaymentStatusException(PaymentErrorCode.INVALID_PAYMENT_STATE_TRANSITION);
+        }
+        if (refundedAmount.isLessThan(cumulativeTotal)) {
+            this.refundedAmount = cumulativeTotal;
+        }
+        if (refundedAmount.isGreaterThanOrEqualTo(amount)) {
+            this.status = PaymentStatus.CANCELLED;
+            this.cancelledAt = now;
+        }
     }
 
     /** PG 승인이 필요한지(결제 금액이 0보다 큰지) 본다. */
@@ -199,6 +234,10 @@ public class Payment extends BaseTimeEntity<UUID> {
 
     public @Nullable Instant getApprovedAt() {
         return approvedAt;
+    }
+
+    public Money getRefundedAmount() {
+        return refundedAmount;
     }
 
     public @Nullable Instant getCancelledAt() {

@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.commerce.domain.order.domain.exception.FulfillmentStatusException;
 import com.commerce.domain.order.domain.exception.InvalidOrderException;
 import com.commerce.domain.order.domain.exception.OrderErrorCode;
+import com.commerce.domain.order.domain.exception.OrderLineNotFoundException;
 import com.commerce.domain.order.domain.exception.OrderStatusException;
 import com.commerce.domain.shared.entity.Money;
 import java.time.Instant;
@@ -388,5 +389,212 @@ class OrderTest {
         order.refund(RefundReason.PRODUCT_DEFECT, NOW);
         assertThat(order.getReturnStatus()).isEqualTo(ReturnStatus.COMPLETED);
         assertThat(order.getStatus()).isEqualTo(OrderStatus.REFUNDED);
+    }
+    // 동일 금액 3라인(각 10,000)·할인 1,000·배송비 0 — 안분에 끝전(1000/3)이 생기는 결제 완료 주문.
+    private Order paidThreeLineDiscountedOrder() {
+        Order order = Order.place(
+                UUID.randomUUID(),
+                List.of(line(10000L, 1), line(10000L, 1), line(10000L, 1)),
+                address(),
+                Money.of(1000L),
+                Money.ZERO,
+                UUID.randomUUID());
+        order.markPaid(NOW);
+        return order;
+    }
+
+    private static List<UUID> lineIds(Order order) {
+        return order.getLines().stream().map(OrderLine::getId).sorted().toList();
+    }
+
+    @Test
+    @DisplayName("순차 전 라인 취소의 안분 할인 합계가 총할인과 일치하고 마지막 라인 환불이 결제 잔액 전액이다")
+    void lineRefundsProrateDiscountExactly() {
+        Order order = paidThreeLineDiscountedOrder();
+        List<UUID> ids = lineIds(order);
+
+        Money first = order.beginLineCancellation(ids.get(0));
+        order.completeLineCancellation(ids.get(0), NOW);
+        Money second = order.beginLineCancellation(ids.get(1));
+        order.completeLineCancellation(ids.get(1), NOW);
+        Money third = order.beginLineCancellation(ids.get(2));
+        order.completeLineCancellation(ids.get(2), NOW);
+
+        // 각 라인 할인 = 라인 금액 − 환불액. 내림 안분 333·333에 끝전 334가 마지막 잔액 환불로 흡수된다.
+        assertThat(first).isEqualTo(Money.of(9667L));
+        assertThat(second).isEqualTo(Money.of(9667L));
+        assertThat(third).isEqualTo(Money.of(9666L));
+        long discountSum = 30000L - first.amount() - second.amount() - third.amount();
+        assertThat(discountSum).isEqualTo(1000L);
+        assertThat(order.getRefundedAmount()).isEqualTo(order.getPayAmount());
+    }
+
+    @Test
+    @DisplayName("부분 취소 후 잔여 환불 누계·라인 상태가 정확하고 주문은 결제 완료로 남는다")
+    void beginAndCompleteCancelSingleLine() {
+        Order order = paidThreeLineDiscountedOrder();
+        UUID lineId = lineIds(order).get(0);
+
+        Money refund = order.beginLineCancellation(lineId);
+        assertThat(refund).isEqualTo(Money.of(9667L));
+        assertThat(order.getRefundedAmount()).isEqualTo(Money.of(9667L));
+        assertThat(lineOf(order, lineId).getStatus()).isEqualTo(OrderLineStatus.CANCELLING);
+        assertThat(lineOf(order, lineId).getRefundAmount()).isEqualTo(Money.of(9667L));
+
+        boolean converged = order.completeLineCancellation(lineId, NOW);
+
+        assertThat(converged).isFalse();
+        assertThat(lineOf(order, lineId).getStatus()).isEqualTo(OrderLineStatus.CANCELLED);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
+    }
+
+    @Test
+    @DisplayName("마지막 잔여 라인 취소 완결 시 주문이 전체 취소로 수렴한다")
+    void lastLineCancellationConvergesToFullCancellation() {
+        Order order =
+                Order.place(UUID.randomUUID(), List.of(line(10000L, 1)), address(), Money.ZERO, Money.of(3000L), null);
+        order.markPaid(NOW);
+        UUID lineId = lineIds(order).get(0);
+
+        Money refund = order.beginLineCancellation(lineId);
+        boolean converged = order.completeLineCancellation(lineId, NOW);
+
+        assertThat(refund).isEqualTo(Money.of(13000L));
+        assertThat(converged).isTrue();
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        assertThat(order.getCancelledAt()).isEqualTo(NOW);
+        assertThat(order.getCancellationReason()).isEqualTo(CancellationReason.CUSTOMER_REQUEST);
+    }
+
+    @Test
+    @DisplayName("라인 취소 개시는 결제 완료·출고 전 주문의 주문됨 라인에서만 허용된다")
+    void beginLineCancellationGuards() {
+        // 미결제(PENDING) 주문 거부
+        Order pending = place(Money.ZERO, Money.ZERO, null);
+        assertThatThrownBy(() -> pending.beginLineCancellation(lineIds(pending).get(0)))
+                .isInstanceOf(OrderStatusException.class)
+                .extracting("errorCode")
+                .isEqualTo(OrderErrorCode.CANCEL_NOT_ALLOWED);
+
+        // 출고 이후 거부
+        Order shipped = paidOrder();
+        shipped.ship(CARRIER, TRACKING_NUMBER, NOW);
+        assertThatThrownBy(() -> shipped.beginLineCancellation(lineIds(shipped).get(0)))
+                .isInstanceOf(OrderStatusException.class)
+                .extracting("errorCode")
+                .isEqualTo(OrderErrorCode.CANCEL_NOT_ALLOWED);
+
+        // 전체 취소 진행 중 거부
+        Order cancelRequested = paidOrder();
+        cancelRequested.requestCancellation(NOW);
+        assertThatThrownBy(() -> cancelRequested.beginLineCancellation(
+                        lineIds(cancelRequested).get(0)))
+                .isInstanceOf(OrderStatusException.class)
+                .extracting("errorCode")
+                .isEqualTo(OrderErrorCode.CANCEL_IN_PROGRESS);
+
+        // 미존재 라인 거부
+        Order order = paidThreeLineDiscountedOrder();
+        assertThatThrownBy(() -> order.beginLineCancellation(UUID.randomUUID()))
+                .isInstanceOf(OrderLineNotFoundException.class)
+                .extracting("errorCode")
+                .isEqualTo(OrderErrorCode.ORDER_LINE_NOT_FOUND);
+
+        // 취소 진행 중·취소된 라인 재개시 거부
+        UUID lineId = lineIds(order).get(0);
+        order.beginLineCancellation(lineId);
+        assertThatThrownBy(() -> order.beginLineCancellation(lineId))
+                .isInstanceOf(OrderStatusException.class)
+                .extracting("errorCode")
+                .isEqualTo(OrderErrorCode.INVALID_ORDER_STATE_TRANSITION);
+        order.completeLineCancellation(lineId, NOW);
+        assertThatThrownBy(() -> order.beginLineCancellation(lineId))
+                .isInstanceOf(OrderStatusException.class)
+                .extracting("errorCode")
+                .isEqualTo(OrderErrorCode.INVALID_ORDER_STATE_TRANSITION);
+    }
+
+    @Test
+    @DisplayName("취소 진행 중이 아닌 라인의 완결은 거부된다")
+    void completeLineCancellationRequiresCancellingLine() {
+        Order order = paidThreeLineDiscountedOrder();
+        UUID lineId = lineIds(order).get(0);
+
+        assertThatThrownBy(() -> order.completeLineCancellation(lineId, NOW))
+                .isInstanceOf(OrderStatusException.class)
+                .extracting("errorCode")
+                .isEqualTo(OrderErrorCode.INVALID_ORDER_STATE_TRANSITION);
+    }
+
+    @Test
+    @DisplayName("부분 취소 이력이 있는 주문의 전체 취소 개시는 거부된다")
+    void requestCancellationRejectsPartiallyCancelledOrder() {
+        Order order = paidThreeLineDiscountedOrder();
+        order.beginLineCancellation(lineIds(order).get(0));
+
+        assertThatThrownBy(() -> order.requestCancellation(NOW))
+                .isInstanceOf(OrderStatusException.class)
+                .extracting("errorCode")
+                .isEqualTo(OrderErrorCode.PARTIALLY_CANCELLED);
+    }
+
+    @Test
+    @DisplayName("불균등 금액·복수 수량 라인의 안분 합계도 총할인과 일치한다")
+    void unevenLineRefundsProrateDiscountExactly() {
+        // 7000×1 + 6000×2 + 3100×1 = 22100, 할인 1000 — 안분 316·542에 끝전이 남는 조합.
+        Order order = Order.place(
+                UUID.randomUUID(),
+                List.of(line(7000L, 1), line(6000L, 2), line(3100L, 1)),
+                address(),
+                Money.of(1000L),
+                Money.ZERO,
+                UUID.randomUUID());
+        order.markPaid(NOW);
+        List<UUID> ids = lineIds(order);
+
+        long refundSum = 0;
+        for (UUID lineId : ids) {
+            refundSum += order.beginLineCancellation(lineId).amount();
+            order.completeLineCancellation(lineId, NOW);
+        }
+
+        assertThat(refundSum).isEqualTo(order.getPayAmount().amount());
+        assertThat(22100L - refundSum).isEqualTo(1000L);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+    }
+
+    @Test
+    @DisplayName("부분 취소 이력이 있는 주문의 전체 반품 환불은 거부된다")
+    void refundRejectsPartiallyCancelledOrder() {
+        Order order = paidThreeLineDiscountedOrder();
+        UUID lineId = lineIds(order).get(0);
+        order.beginLineCancellation(lineId);
+        order.completeLineCancellation(lineId, NOW);
+        order.ship(CARRIER, TRACKING_NUMBER, NOW);
+        order.confirmDelivery(NOW);
+
+        assertThatThrownBy(() -> order.refund(RefundReason.PRODUCT_DEFECT, NOW))
+                .isInstanceOf(OrderStatusException.class)
+                .extracting("errorCode")
+                .isEqualTo(OrderErrorCode.PARTIALLY_CANCELLED);
+    }
+
+    @Test
+    @DisplayName("취소 진행 중 라인이 있는 주문의 출고는 거부된다")
+    void shipRejectsWhileLineCancellationInProgress() {
+        Order order = paidThreeLineDiscountedOrder();
+        order.beginLineCancellation(lineIds(order).get(0));
+
+        assertThatThrownBy(() -> order.ship(CARRIER, TRACKING_NUMBER, NOW))
+                .isInstanceOf(FulfillmentStatusException.class)
+                .extracting("errorCode")
+                .isEqualTo(OrderErrorCode.CANCEL_IN_PROGRESS);
+    }
+
+    private static OrderLine lineOf(Order order, UUID lineId) {
+        return order.getLines().stream()
+                .filter(l -> l.getId().equals(lineId))
+                .findFirst()
+                .orElseThrow();
     }
 }

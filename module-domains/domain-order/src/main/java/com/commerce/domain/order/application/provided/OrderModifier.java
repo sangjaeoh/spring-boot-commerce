@@ -6,6 +6,7 @@ import com.commerce.domain.order.domain.RefundReason;
 import com.commerce.domain.order.domain.exception.FulfillmentStatusException;
 import com.commerce.domain.order.domain.exception.OrderNotFoundException;
 import com.commerce.domain.order.domain.exception.OrderStatusException;
+import com.commerce.domain.shared.entity.Money;
 import com.commerce.event.order.OrderPaid;
 import java.util.UUID;
 
@@ -35,6 +36,22 @@ public interface OrderModifier {
      * @throws OrderStatusException 이미 취소됐거나 출고 이후면
      */
     void cancel(UUID orderId, CancellationReason reason);
+
+    /**
+     * 라인 취소를 개시한다. 환불액을 확정해 라인에 기록하고 확정 환불액을 반환한다.
+     *
+     * @throws OrderNotFoundException 주문이 없으면
+     * @throws OrderStatusException 취소를 개시할 수 없는 주문·라인 상태면
+     */
+    Money beginLineCancellation(UUID orderId, UUID lineId);
+
+    /**
+     * 취소 진행 중 라인을 취소로 완결한다. 전 라인 취소로 주문이 전체 취소에 수렴했으면 참을 반환한다.
+     *
+     * @throws OrderNotFoundException 주문이 없으면
+     * @throws OrderStatusException 라인이 취소 진행 중이 아니면
+     */
+    boolean completeLineCancellation(UUID orderId, UUID lineId);
 
     /**
      * 결제 완료 주문의 취소 개시를 기록한다. 마커가 있는 동안 출고가 거부된다. 이미 개시된 주문에는
