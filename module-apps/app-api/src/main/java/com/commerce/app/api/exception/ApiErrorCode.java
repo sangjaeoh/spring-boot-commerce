@@ -14,7 +14,8 @@ public enum ApiErrorCode implements ErrorCode {
     PAYMENT_DECLINED("API_PAYMENT_DECLINED", "결제가 거절됐다.", 402),
     ORDER_NOT_CANCELLABLE("API_ORDER_NOT_CANCELLABLE", "취소할 수 없는 주문 상태다.", 409),
     WITHDRAWAL_BLOCKED("API_WITHDRAWAL_BLOCKED", "미배송 결제 주문이 있어 탈퇴할 수 없다.", 409),
-    REVIEW_NOT_ELIGIBLE("API_REVIEW_NOT_ELIGIBLE", "구매확정(배송 완료)한 상품만 리뷰를 쓸 수 있다.", 409);
+    REVIEW_NOT_ELIGIBLE("API_REVIEW_NOT_ELIGIBLE", "구매확정(배송 완료)한 상품만 리뷰를 쓸 수 있다.", 409),
+    INQUIRY_NOT_ELIGIBLE("API_INQUIRY_NOT_ELIGIBLE", "문의를 작성할 자격이 없는 회원이다.", 409);
 
     private final String code;
     private final String message;

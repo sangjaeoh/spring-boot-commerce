@@ -9,6 +9,9 @@ import com.commerce.app.api.web.v1.WebIntegrationTest;
 import com.commerce.app.api.web.v1.inquiry.request.InquiryRequest;
 import com.commerce.common.auth.token.JwtTokenCodec;
 import com.commerce.domain.member.application.provided.MemberAppender;
+import com.commerce.domain.member.application.provided.MemberModifier;
+import com.commerce.domain.member.domain.SuspensionReason;
+import com.commerce.domain.shared.entity.Money;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -26,13 +29,19 @@ class InquiryControllerTest extends WebIntegrationTest {
     private final MockMvc mvc;
     private final ObjectMapper objectMapper;
     private final MemberAppender memberAppender;
+    private final MemberModifier memberModifier;
     private final JwtTokenCodec jwtTokenCodec;
 
     InquiryControllerTest(
-            MockMvc mvc, ObjectMapper objectMapper, MemberAppender memberAppender, JwtTokenCodec jwtTokenCodec) {
+            MockMvc mvc,
+            ObjectMapper objectMapper,
+            MemberAppender memberAppender,
+            MemberModifier memberModifier,
+            JwtTokenCodec jwtTokenCodec) {
         this.mvc = mvc;
         this.objectMapper = objectMapper;
         this.memberAppender = memberAppender;
+        this.memberModifier = memberModifier;
         this.jwtTokenCodec = jwtTokenCodec;
     }
 
@@ -40,7 +49,7 @@ class InquiryControllerTest extends WebIntegrationTest {
     @DisplayName("문의 작성은 201이고 공개 목록에 본문·미답변 상태로 노출된다")
     void writeShowsInquiryInPublicList() throws Exception {
         UUID memberId = registerMember();
-        UUID productId = UUID.randomUUID();
+        UUID productId = seedOnSaleProduct("문의 상품", null, Money.of(10_000L), 5);
 
         writeInquiry(memberId, productId, new InquiryRequest("배송은 얼마나 걸리나요?", false))
                 .andExpect(status().isCreated())
@@ -60,7 +69,7 @@ class InquiryControllerTest extends WebIntegrationTest {
     @DisplayName("타인·미인증의 비밀글 조회는 존재만 보이고 본문이 노출되지 않으며, 작성자 조회는 본문이 보인다")
     void secretContentIsHiddenFromOthers() throws Exception {
         UUID authorId = registerMember();
-        UUID productId = UUID.randomUUID();
+        UUID productId = seedOnSaleProduct("문의 상품", null, Money.of(10_000L), 5);
         writeInquiry(authorId, productId, new InquiryRequest("비밀 문의 본문", true)).andExpect(status().isCreated());
 
         // 미인증 조회 — 본문 미노출
@@ -86,7 +95,7 @@ class InquiryControllerTest extends WebIntegrationTest {
     @DisplayName("관리자 조회는 타인 비밀글 본문도 보인다")
     void adminSeesSecretContent() throws Exception {
         UUID authorId = registerMember();
-        UUID productId = UUID.randomUUID();
+        UUID productId = seedOnSaleProduct("문의 상품", null, Money.of(10_000L), 5);
         writeInquiry(authorId, productId, new InquiryRequest("비밀 문의 본문", true)).andExpect(status().isCreated());
 
         mvc.perform(get("/api/v1/products/{productId}/inquiries", productId)
@@ -106,6 +115,27 @@ class InquiryControllerTest extends WebIntegrationTest {
         mvc.perform(get("/api/v1/products/{productId}/inquiries", UUID.randomUUID()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.inquiries.length()").value(0));
+    }
+
+    @Test
+    @DisplayName("정지 회원의 문의 작성은 자격 미달로 거부된다")
+    void writeRejectsSuspendedMember() throws Exception {
+        UUID memberId = registerMember();
+        UUID productId = seedOnSaleProduct("문의 상품", null, Money.of(10_000L), 5);
+        memberModifier.suspend(memberId, SuspensionReason.POLICY_VIOLATION);
+
+        writeInquiry(memberId, productId, new InquiryRequest("문의 본문", false))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("API_INQUIRY_NOT_ELIGIBLE"));
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 상품에 대한 문의 작성은 부재로 거부된다")
+    void writeRejectsUnknownProduct() throws Exception {
+        UUID memberId = registerMember();
+
+        writeInquiry(memberId, UUID.randomUUID(), new InquiryRequest("문의 본문", false))
+                .andExpect(status().isNotFound());
     }
 
     /** 회원의 문의 작성 요청을 보낸다. */
