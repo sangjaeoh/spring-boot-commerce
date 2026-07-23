@@ -2,17 +2,17 @@
 
 ## 언제
 
-- `domain` 구역에 `@Entity`를 만들거나 필드·상태 enum을 추가·수정할 때
-- 엔티티의 `@Id`, 버전 컬럼, 논리 참조를 설계할 때
-- 애그리거트 내부 연관과 자식 엔티티의 캐스케이드 생명주기를 설계할 때
-
+- `domain` 구역에 `@Entity`를 만들거나 필드·상태 enum을 추가·수정할 때.
+- 엔티티의 `@Id`, 버전 컬럼, 논리 참조를 설계할 때.
+- 애그리거트 내부 연관과 자식 엔티티의 캐스케이드 생명주기를 설계할 때.
 
 ## 규칙
 
 ### 엔티티 골격
 
-- `BaseTimeEntity`를 상속한다.
-- `createdAt`, `updatedAt`은 JPA Auditing이 채운다. 시각 필드를 직접 선언하지 않는다.
+- common-jpa의 `BaseTimeEntity`를 상속한다.
+- `createdAt`, `updatedAt`은 JPA Auditing이 채운다.
+- 시각 필드를 직접 선언하지 않는다.
 - `@CreatedBy`, `@LastModifiedBy`는 필요한 도메인만 opt-in한다.
 - 영속 필드의 매핑 애노테이션·`@Nullable` 표기와 초기화 검사 기준은 → [code-quality](code-quality.md)의 NullAway.
 - `BaseTimeEntity`는 `Persistable`을 구현해 merge penalty를 방어한다.
@@ -29,7 +29,7 @@
 public abstract class BaseTimeEntity<ID extends Serializable> implements Persistable<ID> {
 
     @CreatedDate
-    @Column(updatable = false) // @Column 제외 대상
+    @Column(updatable = false)
     private Instant createdAt;
 
     @LastModifiedDate
@@ -64,14 +64,12 @@ public abstract class BaseTimeEntity<ID extends Serializable> implements Persist
 }
 ```
 
-
 ### 엔티티 ID
 
-- `@Id`는 `create()` 팩토리에서 `UuidV7Generator.generate()`로 생성한다.
+- `@Id`는 `create()` 팩토리에서 common-core의 `UuidV7Generator.generate()`로 생성한다.
 - `@GeneratedValue`를 사용하지 않는다.
 - ID는 DB 왕복 없이 애플리케이션에서 확정한다.
 - 응답에는 UUIDv7을 문자열로 반환한다.
-
 
 ### 값 객체 매핑
 
@@ -88,7 +86,6 @@ public abstract class BaseTimeEntity<ID extends Serializable> implements Persist
 - sealed 계층은 임베더블 다형성 미지원 때문에 직접 매핑하지 않는다.
 - `@Inheritance`로 값을 엔티티로 승격하지 않는다.
 
-
 ### 상태 전이
 
 - 상태 enum은 `@Enumerated(EnumType.STRING)`으로 매핑한다.
@@ -102,7 +99,6 @@ public abstract class BaseTimeEntity<ID extends Serializable> implements Persist
 - 상태 변경 자체는 엔티티 메서드가 강제한다.
 - 트랜잭션당 애그리거트 규칙은 → [architecture](architecture.md)의 트랜잭션 경계.
 
-
 ### 물리 FK 금지
 
 - 물리 FK를 만들지 않는다.
@@ -111,9 +107,11 @@ public abstract class BaseTimeEntity<ID extends Serializable> implements Persist
 - 마이그레이션 DDL에도 물리 FK를 만들지 않는다.
 - 경계를 넘는 참조는 `UUID xxxId`로 저장한다.
 - 객체 연관은 같은 애그리거트 내부에서만 사용한다.
+- 엔티티는 `@Table(indexes = ...)`로 인덱스 의도를 선언한다.
+- 인덱스 선언은 마이그레이션 SQL 작성의 파생 원천이다.
 - 모든 `xxx_id` 컬럼 인덱스는 Flyway가 생성한다.
 - `ddl-auto=validate`는 인덱스를 검증하지 않는다.
-
+- 인덱스 선언·마이그레이션·스키마의 정합은 리뷰로 검증한다.
 
 ### 연관
 
@@ -138,7 +136,6 @@ public abstract class BaseTimeEntity<ID extends Serializable> implements Persist
 - 신규 자식은 부모 컬렉션을 통해 생성·정리한다.
 - `CascadeType.REMOVE`만으로는 삭제만 전파되고 생성은 전파되지 않는다.
 
-
 ### 버저닝 (`@Version`)
 
 - 기본 전략은 last-write-wins다.
@@ -150,7 +147,6 @@ public abstract class BaseTimeEntity<ID extends Serializable> implements Persist
 - 클라이언트가 재시도한다.
 - 재시도 폭주가 확인되면 비관락으로 승격한다.
 
-
 ### 소프트삭제
 
 - 삭제는 논리삭제를 기본으로 한다.
@@ -159,7 +155,6 @@ public abstract class BaseTimeEntity<ID extends Serializable> implements Persist
 - `Remover`가 `delete()`를 호출한다.
 - 부모 소프트삭제 시 자식도 같은 트랜잭션에서 소프트삭제한다.
 
-
 ### 생성 진입점
 
 - 생성 진입점·생성자 규칙은 → [coding-conventions](coding-conventions.md)의 객체 생성.
@@ -167,11 +162,11 @@ public abstract class BaseTimeEntity<ID extends Serializable> implements Persist
 ```java
 @Entity
 @Table(
-    schema = "users",
-    name = "users",
-    indexes = @Index(name = "idx_user_team_id", columnList = "team_id")
+    schema = "account",
+    name = "account",
+    indexes = @Index(name = "idx_account_team_id", columnList = "team_id")
 )
-public class User extends BaseTimeEntity<UUID> {
+public class Account extends BaseTimeEntity<UUID> {
 
     @Id
     private UUID id;
@@ -192,22 +187,22 @@ public class User extends BaseTimeEntity<UUID> {
     @Nullable
     private Instant deletedAt;
 
-    protected User() {}
+    protected Account() {}
 
-    private User(UUID id, Email email, String name) {
+    private Account(UUID id, Email email, String name) {
         this.id = id;
         this.email = email;
         this.name = name;
         this.status = Status.PENDING;
     }
 
-    public static User create(String email, String name) {
-        return new User(UuidV7Generator.generate(), Email.of(email), name);
+    public static Account create(String email, String name) {
+        return new Account(UuidV7Generator.generate(), Email.of(email), name);
     }
 
     public void activate() {
         if (status != Status.PENDING) {
-            throw new UserStatusException(UserErrorCode.NOT_ACTIVATABLE);
+            throw new AccountStatusException(AccountErrorCode.NOT_ACTIVATABLE);
         }
         this.status = Status.ACTIVE;
     }
