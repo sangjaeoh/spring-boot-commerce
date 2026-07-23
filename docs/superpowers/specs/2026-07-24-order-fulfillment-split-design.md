@@ -66,7 +66,7 @@
 
 ### 조회 — 크로스 애그리거트 쿼리
 
-- `OrderRepository.findIdPageByStatusAndFulfillmentStatus`(파생 쿼리)·`existsByMemberIdAndStatusAndFulfillmentStatusNot`(파생 쿼리)는 더 이상 단일 테이블로 표현할 수 없다. QueryDSL 프래그먼트로 전환해 `orders` ⋈ `fulfillment`를 조인한다. 구현 위치는 `domain-order/adapter/persistence`(같은 도메인 모듈 내부 조인이라 query 모듈로 옮기지 않는다).
+- `OrderRepository.findIdPageByStatusAndFulfillmentStatus`·`existsByMemberIdAndStatusAndFulfillmentStatusNot`(현재 파생 쿼리)는 더 이상 단일 테이블로 표현할 수 없다. `existsDeliveredLineByMemberIdAndProductId`가 이미 `join o.lines`로 자식 엔티티를 JPQL `@Query`로 조인하는 기존 패턴을 따라, `Fulfillment`를 별도 FROM 루트로 둔 JPQL 멀티 루트 쿼리(`from Order o, Fulfillment f where o.id = f.orderId and ...`)로 전환한다. `Order`·`Fulfillment` 사이 객체 연관(`@ManyToOne`/`@OneToMany`)은 두지 않으므로(애그리거트 간 참조는 ID만) 이 방식이 필요하다. `domain-order`에는 QueryDSL 프래그먼트·`adapter` 구역 선례가 아직 없어 새 인프라를 들이지 않고 기존 `@Query` 패턴을 그대로 확장한다.
 - `DefaultOrderReader.getOrder(...)`·`getOrdersByMember(...)`·`findPendingBefore(...)`는 `Order`+`Fulfillment`를 함께 읽어 `OrderInfo`를 조립해야 한다. 단건은 `fulfillmentRepository.findByOrderId`, 목록/페이지는 ID 목록으로 벌크 조회(`findByOrderIdIn`)해 반복 단건 조회를 피한다.
 - `OrderInfo.from(Order)`는 단일 원본 변환 규칙(coding-conventions.md)에 어긋나므로 `OrderInfo.of(Order, Fulfillment)`로 이름을 바꾼다.
 
@@ -101,8 +101,8 @@
 
 ## 문서 동반 갱신
 
-- `DOMAIN_MODEL.md` "6. 주문 (order)" 절: `Order` 필드 목록에서 이행축 6개 제거, 신규 "Fulfillment" 하위 절 추가, 상태 서술(축별 소유 엔티티) 갱신.
-- `REQUIREMENTS.md`: 이행 관련 서술이 있으면 애그리거트 변경을 반영(문서·코드 무모순).
+- `DOMAIN_MODEL.md` "6. 주문 (order)" 절: `Order` 필드 목록에서 이행축 6개 제거, 신규 "Fulfillment" 애그리거트 하위 절 추가, "정본 애그리거트 예시" 서술을 분해 사례로 갱신.
+- `REQUIREMENTS.md`는 갱신 대상이 아니다 — 이행 관련 서술(186~188행)은 행동 기술이라 애그리거트 구조 변경과 무관하게 그대로 성립한다(확인 완료).
 
 ## 완료 기준
 
