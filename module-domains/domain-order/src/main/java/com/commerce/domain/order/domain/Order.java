@@ -5,6 +5,7 @@ import com.commerce.common.jpa.entity.BaseTimeEntity;
 import com.commerce.domain.order.domain.exception.FulfillmentStatusException;
 import com.commerce.domain.order.domain.exception.InvalidOrderException;
 import com.commerce.domain.order.domain.exception.OrderErrorCode;
+import com.commerce.domain.order.domain.exception.OrderLineNotFoundException;
 import com.commerce.domain.order.domain.exception.OrderStatusException;
 import com.commerce.domain.shared.entity.Money;
 import com.commerce.domain.shared.entity.MoneyConverter;
@@ -75,6 +76,11 @@ public class Order extends BaseTimeEntity<UUID> {
     @Convert(converter = MoneyConverter.class)
     @Column(name = "pay_amount")
     private Money payAmount;
+
+    /** 부분 취소로 환불된 누계. 라인 취소마다 누적되어 루트 버전을 증가시킨다(동시 취소 직렬화). */
+    @Convert(converter = MoneyConverter.class)
+    @Column(name = "refunded_amount")
+    private Money refundedAmount;
 
     /** 적용한 쿠폰 발급분 식별자. 할인액이 0이면 없다. */
     @Column(name = "issued_coupon_id")
@@ -184,6 +190,7 @@ public class Order extends BaseTimeEntity<UUID> {
         this.shippingFee = shippingFee;
         this.status = OrderStatus.PENDING;
         this.fulfillmentStatus = FulfillmentStatus.NOT_STARTED;
+        this.refundedAmount = Money.ZERO;
     }
 
     /**
@@ -263,6 +270,10 @@ public class Order extends BaseTimeEntity<UUID> {
         if (cancelRequestedAt != null) {
             return;
         }
+        // 부분 환불 이력이 있으면 전액 PG 취소가 이중 환불이 된다 — 남은 라인은 라인 단위로 취소한다.
+        if (!refundedAmount.isZero()) {
+            throw new OrderStatusException(OrderErrorCode.PARTIALLY_CANCELLED);
+        }
         if (status != OrderStatus.PAID) {
             throw new OrderStatusException(OrderErrorCode.INVALID_ORDER_STATE_TRANSITION);
         }
@@ -280,6 +291,10 @@ public class Order extends BaseTimeEntity<UUID> {
     public void refund(RefundReason reason, Instant now) {
         if (status == OrderStatus.REFUNDED) {
             throw new OrderStatusException(OrderErrorCode.INVALID_ORDER_STATE_TRANSITION);
+        }
+        // 부분 환불 이력이 있으면 전액 PG 취소·전 라인 재고 복원이 이중 집행이 된다. 라인 단위 반품은 작업 7이 해소한다.
+        if (!refundedAmount.isZero()) {
+            throw new OrderStatusException(OrderErrorCode.PARTIALLY_CANCELLED);
         }
         if (status != OrderStatus.PAID || fulfillmentStatus != FulfillmentStatus.DELIVERED) {
             throw new OrderStatusException(OrderErrorCode.REFUND_NOT_ALLOWED);
@@ -330,6 +345,10 @@ public class Order extends BaseTimeEntity<UUID> {
         requirePaid();
         requireFulfillment(FulfillmentStatus.PREPARING);
         if (cancelRequestedAt != null) {
+            throw new FulfillmentStatusException(OrderErrorCode.CANCEL_IN_PROGRESS);
+        }
+        // 라인 취소 진행 중 출고를 허용하면 출고된 주문이 취소로 수렴·전액 환불되는 창이 생긴다.
+        if (lines.stream().anyMatch(line -> line.getStatus() == OrderLineStatus.CANCELLING)) {
             throw new FulfillmentStatusException(OrderErrorCode.CANCEL_IN_PROGRESS);
         }
         this.fulfillmentStatus = FulfillmentStatus.SHIPPED;
@@ -533,6 +552,80 @@ public class Order extends BaseTimeEntity<UUID> {
     /** 주문 라인 집합을 변경 불가 뷰로 반환한다. */
     public Set<OrderLine> getLines() {
         return Collections.unmodifiableSet(lines);
+    }
+
+    public Money getRefundedAmount() {
+        return refundedAmount;
+    }
+
+    /**
+     * 라인 취소를 개시한다. 환불액을 확정해 라인에 기록하고 환불 누계에 더한 뒤 확정 환불액을 반환한다.
+     *
+     * <p>환불액은 쿠폰 할인의 라인 금액 비례 안분(내림)을 뺀 라인 금액이고, 마지막 활성 라인이면 결제
+     * 잔액 전액이다(끝전·배송비 흡수).
+     *
+     * @throws OrderStatusException 결제 완료·출고 전 주문이 아니거나, 전체 취소가 진행 중이거나, 라인이 주문됨 상태가 아니면
+     * @throws OrderLineNotFoundException 라인이 없으면
+     */
+    public Money beginLineCancellation(UUID lineId) {
+        if (status != OrderStatus.PAID || isShippedOrDelivered()) {
+            throw new OrderStatusException(OrderErrorCode.CANCEL_NOT_ALLOWED);
+        }
+        if (cancelRequestedAt != null) {
+            throw new OrderStatusException(OrderErrorCode.CANCEL_IN_PROGRESS);
+        }
+        OrderLine line = findLine(lineId);
+        if (line.getStatus() != OrderLineStatus.ORDERED) {
+            throw new OrderStatusException(OrderErrorCode.INVALID_ORDER_STATE_TRANSITION);
+        }
+        Money refund = isLastOrderedLine()
+                ? payAmount.minus(refundedAmount)
+                : line.lineAmount().minus(discountShare(line));
+        line.markCancelling(refund);
+        this.refundedAmount = this.refundedAmount.plus(refund);
+        return refund;
+    }
+
+    /**
+     * 취소 진행 중 라인을 취소로 완결한다. 전 라인이 취소되면 주문을 취소로 수렴시키고 참을 반환한다.
+     *
+     * @throws OrderStatusException 라인이 취소 진행 중이 아니면
+     * @throws OrderLineNotFoundException 라인이 없으면
+     */
+    public boolean completeLineCancellation(UUID lineId, Instant now) {
+        OrderLine line = findLine(lineId);
+        if (line.getStatus() != OrderLineStatus.CANCELLING) {
+            throw new OrderStatusException(OrderErrorCode.INVALID_ORDER_STATE_TRANSITION);
+        }
+        line.completeCancellation();
+        boolean allCancelled = lines.stream().allMatch(l -> l.getStatus() == OrderLineStatus.CANCELLED);
+        if (allCancelled) {
+            this.status = OrderStatus.CANCELLED;
+            this.cancelledAt = now;
+            this.cancellationReason = CancellationReason.CUSTOMER_REQUEST;
+        }
+        return allCancelled;
+    }
+
+    /** 대상 라인을 찾고 없으면 거부한다. */
+    private OrderLine findLine(UUID lineId) {
+        return lines.stream()
+                .filter(line -> line.getId().equals(lineId))
+                .findFirst()
+                .orElseThrow(() -> new OrderLineNotFoundException(OrderErrorCode.ORDER_LINE_NOT_FOUND));
+    }
+
+    /** 주문됨 상태의 라인이 하나만 남았는지 판정한다. */
+    private boolean isLastOrderedLine() {
+        return lines.stream()
+                        .filter(line -> line.getStatus() == OrderLineStatus.ORDERED)
+                        .count()
+                == 1;
+    }
+
+    /** 쿠폰 할인의 라인 금액 비례 안분(내림)을 계산한다. 끝전은 마지막 라인의 잔액 전액 환불이 흡수한다. */
+    private Money discountShare(OrderLine line) {
+        return Money.of(discountAmount.amount() * line.lineAmount().amount() / totalAmount.amount());
     }
 
     public long getVersion() {

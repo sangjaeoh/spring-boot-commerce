@@ -1,27 +1,34 @@
 package com.commerce.domain.order.application.info;
 
 import com.commerce.domain.order.domain.OrderLine;
+import com.commerce.domain.order.domain.OrderLineStatus;
 import com.commerce.domain.shared.entity.Money;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
 /** 주문 라인 조회 경계 모델이다. */
 public record OrderLineInfo(
+        UUID id,
         UUID variantId,
         UUID productId,
         String productName,
         @Nullable String optionLabel,
         Money unitPrice,
-        int quantity) {
+        int quantity,
+        OrderLineStatus status,
+        @Nullable Money refundAmount) {
 
     /** 주문 라인 엔티티에서 조회 모델을 만든다. */
     public static OrderLineInfo from(OrderLine line) {
         return new OrderLineInfo(
+                line.getId(),
                 line.getVariantId(),
                 line.getProductId(),
                 line.getProductName(),
                 line.getOptionLabel(),
                 line.getUnitPrice(),
-                line.getQuantity());
+                line.getQuantity(),
+                line.getStatus(),
+                line.getRefundAmount());
     }
 }

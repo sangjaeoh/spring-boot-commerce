@@ -5,6 +5,7 @@ import com.commerce.domain.payment.application.info.PaymentInfo;
 import com.commerce.domain.payment.domain.FailureReason;
 import com.commerce.domain.payment.domain.exception.PaymentNotFoundException;
 import com.commerce.domain.payment.domain.exception.PaymentStatusException;
+import com.commerce.domain.shared.entity.Money;
 import java.util.UUID;
 
 /** 결제 승인·취소와 리컨실 확정 기록을 조율하는 서비스다. PG 호출은 포트에 위임한다. */
@@ -26,6 +27,16 @@ public interface PaymentProcessor {
      * @throws PaymentStatusException 승인·취소 상태가 아니면
      */
     void cancel(UUID paymentId);
+
+    /**
+     * 결제를 부분 금액으로 취소·환불하고 환불 누계를 주문 측 확정 누계로 단조 동기화한다. PG 미호출 승인(전액
+     * 할인)과 0원 환불은 PG 호출을 생략한다. {@code refundKey}가 PG 멱등 키를 파생하고 기록은 누계 동기화라
+     * 같은 라인의 재시도·재개가 환불·기록을 이중 반영하지 않는다. 이미 취소된 결제는 조용히 통과한다. 호출자는
+     * 이 메서드를 트랜잭션 밖에서 부른다.
+     *
+     * @throws PaymentStatusException 승인·취소 상태가 아니거나 누계가 결제액을 초과하면
+     */
+    void cancelPartially(UUID paymentId, Money amount, Money cumulativeTotal, UUID refundKey);
 
     /**
      * 결제의 PG 거래 상태를 조회한다. 결제 상태는 바꾸지 않으며, PG 호출이므로 호출자는 트랜잭션 밖에서 부른다.

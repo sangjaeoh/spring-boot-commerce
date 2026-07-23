@@ -9,6 +9,8 @@ import jakarta.persistence.Column;
 import jakarta.persistence.ConstraintMode;
 import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.ForeignKey;
 import jakarta.persistence.Id;
@@ -60,6 +62,17 @@ public class OrderLine extends BaseTimeEntity<UUID> {
     @Column(name = "quantity")
     private int quantity;
 
+    /** 취소 축 상태. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status")
+    private OrderLineStatus status;
+
+    /** 확정된 라인 환불액. 취소 진행·완료 라인만 있다. */
+    @Convert(converter = MoneyConverter.class)
+    @Column(name = "refund_amount")
+    @Nullable
+    private Money refundAmount;
+
     protected OrderLine() {}
 
     private OrderLine(UUID id, Order order, OrderLineSnapshot snapshot) {
@@ -71,6 +84,7 @@ public class OrderLine extends BaseTimeEntity<UUID> {
         this.optionLabel = snapshot.optionLabel();
         this.unitPrice = snapshot.unitPrice();
         this.quantity = snapshot.quantity();
+        this.status = OrderLineStatus.ORDERED;
     }
 
     /** 부모 주문에 속한 라인을 스냅샷으로 만든다. */
@@ -113,5 +127,24 @@ public class OrderLine extends BaseTimeEntity<UUID> {
 
     public int getQuantity() {
         return quantity;
+    }
+
+    public OrderLineStatus getStatus() {
+        return status;
+    }
+
+    public @Nullable Money getRefundAmount() {
+        return refundAmount;
+    }
+
+    /** 환불액을 확정하고 취소 진행 중으로 둔다. */
+    void markCancelling(Money refundAmount) {
+        this.status = OrderLineStatus.CANCELLING;
+        this.refundAmount = refundAmount;
+    }
+
+    /** 취소 진행 중 라인을 취소로 완결한다. */
+    void completeCancellation() {
+        this.status = OrderLineStatus.CANCELLED;
     }
 }

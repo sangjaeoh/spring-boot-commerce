@@ -176,6 +176,31 @@ public class OrderController {
         orderCancellationFacade.cancel(orderId, authUser.memberId());
     }
 
+    @Operation(summary = "주문 라인 부분 취소", description = "결제 완료된 본인 주문의 한 라인을 취소하고 부분 환불·재고를 복원한다. 마지막 라인이면 주문 전체가 취소된다.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "204", description = "라인 취소·부분 환불·복원 완료"),
+        @ApiResponse(
+                responseCode = "401",
+                description = "미인증",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+        @ApiResponse(
+                responseCode = "404",
+                description = "주문·라인 없음 또는 타인 주문",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+        @ApiResponse(
+                responseCode = "409",
+                description = "취소할 수 없는 주문·라인 상태·동시성 충돌",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+    })
+    @PostMapping("/{orderId}/lines/{lineId}/cancel")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void cancelLine(
+            AuthUser authUser,
+            @Parameter(description = "주문 ID") @PathVariable UUID orderId,
+            @Parameter(description = "주문 라인 ID") @PathVariable UUID lineId) {
+        orderCancellationFacade.cancelLine(orderId, lineId, authUser.memberId());
+    }
+
     @Operation(summary = "반품 요청", description = "배송 완료된 본인 주문의 반품을 요청한다. 관리자 승인 시 환불·복원된다.")
     @ApiResponses({
         @ApiResponse(responseCode = "204", description = "반품 요청 완료"),

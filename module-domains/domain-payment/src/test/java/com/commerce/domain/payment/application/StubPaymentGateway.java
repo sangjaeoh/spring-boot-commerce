@@ -61,4 +61,17 @@ class StubPaymentGateway implements PaymentGateway {
         resultByKey.put(idempotencyKey, result);
         return result;
     }
+
+    @Override
+    public String cancelPartially(String pgTransactionId, Money amount, String idempotencyKey) {
+        cancelCalled = true;
+        @Nullable String cached = resultByKey.get(idempotencyKey);
+        if (cached != null) {
+            return cached;
+        }
+        refundCount++;
+        String result = "PARTIAL-CANCEL-" + pgTransactionId;
+        resultByKey.put(idempotencyKey, result);
+        return result;
+    }
 }

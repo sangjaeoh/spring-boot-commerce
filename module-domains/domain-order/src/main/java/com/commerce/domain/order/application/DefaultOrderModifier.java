@@ -9,6 +9,7 @@ import com.commerce.domain.order.domain.Order;
 import com.commerce.domain.order.domain.RefundReason;
 import com.commerce.domain.order.domain.exception.OrderErrorCode;
 import com.commerce.domain.order.domain.exception.OrderNotFoundException;
+import com.commerce.domain.shared.entity.Money;
 import com.commerce.event.order.OrderPaid;
 import java.time.Clock;
 import java.util.UUID;
@@ -47,6 +48,18 @@ class DefaultOrderModifier implements OrderModifier {
     @Override
     public void cancel(UUID orderId, CancellationReason reason) {
         find(orderId).cancel(reason, clock.instant());
+    }
+
+    @Transactional
+    @Override
+    public Money beginLineCancellation(UUID orderId, UUID lineId) {
+        return find(orderId).beginLineCancellation(lineId);
+    }
+
+    @Transactional
+    @Override
+    public boolean completeLineCancellation(UUID orderId, UUID lineId) {
+        return find(orderId).completeLineCancellation(lineId, clock.instant());
     }
 
     @Transactional

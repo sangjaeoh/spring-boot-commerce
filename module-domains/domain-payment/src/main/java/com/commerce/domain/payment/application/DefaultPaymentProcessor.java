@@ -12,6 +12,7 @@ import com.commerce.domain.payment.domain.PaymentStatus;
 import com.commerce.domain.payment.domain.exception.PaymentErrorCode;
 import com.commerce.domain.payment.domain.exception.PaymentNotFoundException;
 import com.commerce.domain.payment.domain.exception.PaymentStatusException;
+import com.commerce.domain.shared.entity.Money;
 import java.time.Clock;
 import java.util.Objects;
 import java.util.UUID;
@@ -77,6 +78,33 @@ class DefaultPaymentProcessor implements PaymentProcessor {
         // 환불은 비가역이라 승인의 고아 청구처럼 역보상할 수 없다.
         String pgCancelTransactionId = paymentGateway.cancel(pgTransactionId, refundIdempotencyKey(pgTransactionId));
         inTransaction(() -> recordCancellation(paymentId, pgCancelTransactionId));
+    }
+
+    @Override
+    public void cancelPartially(UUID paymentId, Money amount, Money cumulativeTotal, UUID refundKey) {
+        Payment payment = find(paymentId);
+        if (payment.getStatus() == PaymentStatus.CANCELLED) {
+            return;
+        }
+        if (payment.getStatus() != PaymentStatus.APPROVED) {
+            throw new PaymentStatusException(PaymentErrorCode.INVALID_PAYMENT_STATE_TRANSITION);
+        }
+        String pgTransactionId = payment.getPgTransactionId();
+        if (pgTransactionId == null || amount.isZero()) {
+            // 무 PG 승인(전액 할인)과 0원 환불은 PG 호출 없이 기록만 동기화한다.
+            inTransaction(() -> recordPartialRefundSync(paymentId, cumulativeTotal));
+            return;
+        }
+        // 환불은 비가역이라 역보상할 수 없다 — 라인 단위 멱등 키로 재시도 이중 환불을, 누계 동기화로 이중 기록을 막는다.
+        paymentGateway.cancelPartially(pgTransactionId, amount, "partial-refund:" + refundKey);
+        inTransaction(() -> recordPartialRefundSync(paymentId, cumulativeTotal));
+    }
+
+    /** 부분 환불 누계를 단조 동기화한다. 누계가 결제액에 도달하면 취소로 전이한다. */
+    private PaymentInfo recordPartialRefundSync(UUID paymentId, Money cumulativeTotal) {
+        Payment payment = find(paymentId);
+        payment.syncPartialRefund(cumulativeTotal, clock.instant());
+        return PaymentInfo.from(payment);
     }
 
     @Override

@@ -95,4 +95,56 @@ class PaymentTest {
     void cannotCancelWhenNotApproved() {
         assertThatThrownBy(() -> requested().cancel("CANCEL-123", NOW)).isInstanceOf(PaymentStatusException.class);
     }
+
+    @Test
+    @DisplayName("부분 환불 동기화는 누계를 단조 반영하고 결제액 도달 시 CANCELLED로 전이한다")
+    void syncPartialRefundIsMonotoneAndConverges() {
+        Payment payment = requested();
+        payment.approve("TX-1", NOW);
+
+        payment.syncPartialRefund(Money.of(4000L), NOW);
+        assertThat(payment.getRefundedAmount()).isEqualTo(Money.of(4000L));
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.APPROVED);
+
+        // 재개·중복 전달의 같은 누계 재동기화는 이중 반영 없이 통과한다
+        payment.syncPartialRefund(Money.of(4000L), NOW);
+        assertThat(payment.getRefundedAmount()).isEqualTo(Money.of(4000L));
+
+        payment.syncPartialRefund(Money.of(10000L), NOW);
+        assertThat(payment.getRefundedAmount()).isEqualTo(Money.of(10000L));
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.CANCELLED);
+        assertThat(payment.getCancelledAt()).isEqualTo(NOW);
+
+        // 종결 후 재동기화는 멱등 통과한다
+        payment.syncPartialRefund(Money.of(10000L), NOW);
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.CANCELLED);
+    }
+
+    @Test
+    @DisplayName("초과 누계·승인 전 동기화·부분 환불 후 전액 취소는 거부된다")
+    void syncPartialRefundGuards() {
+        Payment payment = requested();
+        payment.approve("TX-1", NOW);
+        assertThatThrownBy(() -> payment.syncPartialRefund(Money.of(10001L), NOW))
+                .isInstanceOf(PaymentStatusException.class);
+
+        assertThatThrownBy(() -> requested().syncPartialRefund(Money.of(1000L), NOW))
+                .isInstanceOf(PaymentStatusException.class);
+
+        payment.syncPartialRefund(Money.of(4000L), NOW);
+        assertThatThrownBy(() -> payment.cancel("CANCEL-1", NOW)).isInstanceOf(PaymentStatusException.class);
+    }
+
+    @Test
+    @DisplayName("결제액 0 결제의 0원 동기화는 즉시 CANCELLED로 종결되고 재동기화는 통과한다")
+    void syncPartialRefundConvergesZeroAmountPayment() {
+        Payment payment = Payment.request(UUID.randomUUID(), Money.ZERO, null);
+        payment.approveWithoutGateway(NOW);
+
+        payment.syncPartialRefund(Money.ZERO, NOW);
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.CANCELLED);
+
+        payment.syncPartialRefund(Money.ZERO, NOW);
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.CANCELLED);
+    }
 }

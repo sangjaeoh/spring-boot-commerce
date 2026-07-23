@@ -31,6 +31,7 @@ import com.commerce.domain.order.application.provided.OrderReader;
 import com.commerce.domain.order.domain.Address;
 import com.commerce.domain.order.domain.FulfillmentStatus;
 import com.commerce.domain.order.domain.OrderLineSnapshot;
+import com.commerce.domain.order.domain.OrderLineStatus;
 import com.commerce.domain.order.domain.OrderStatus;
 import com.commerce.domain.order.domain.RefundReason;
 import com.commerce.domain.payment.domain.PaymentMethod;
@@ -421,6 +422,21 @@ class OrderControllerTest extends WebIntegrationTest {
                 .andExpect(status().isNoContent());
 
         assertThat(orderReader.getOrder(orderId, memberId).status()).isEqualTo(OrderStatus.CANCELLED);
+    }
+
+    @Test
+    @DisplayName("주문 라인 부분 취소는 204로 성공하고 그 라인만 CANCELLED로 만든다")
+    void cancelLineSucceedsForPaidOrder() throws Exception {
+        UUID memberId = registerMember();
+        UUID orderId = checkoutForMember(memberId);
+        UUID lineId = orderReader.getOrder(orderId, memberId).lines().get(0).id();
+
+        mvc.perform(post("/api/v1/orders/{orderId}/lines/{lineId}/cancel", orderId, lineId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(memberId)))
+                .andExpect(status().isNoContent());
+
+        assertThat(orderReader.getOrder(orderId, memberId).lines().get(0).status())
+                .isEqualTo(OrderLineStatus.CANCELLED);
     }
 
     @Test

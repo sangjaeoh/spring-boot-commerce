@@ -31,6 +31,7 @@ import com.commerce.domain.order.application.provided.OrderModifier;
 import com.commerce.domain.order.application.provided.OrderReader;
 import com.commerce.domain.order.domain.Address;
 import com.commerce.domain.order.domain.FulfillmentStatus;
+import com.commerce.domain.order.domain.OrderLineStatus;
 import com.commerce.domain.order.domain.OrderStatus;
 import com.commerce.domain.order.domain.exception.FulfillmentStatusException;
 import com.commerce.domain.order.domain.exception.OrderErrorCode;
@@ -574,6 +575,185 @@ class OrderCancellationFacadeTest extends FacadeIntegrationTest {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
+    }
+
+    @Test
+    @DisplayName("부분 취소 후 라인 상태·잔여 결제 금액이 정확하고 그 라인 재고만 복원된다")
+    void cancelLineRefundsAndRestoresOnlyThatLine() {
+        UUID memberId = registerMember();
+        UUID variantA = seedProduct(Money.of(10000L), 50);
+        UUID variantB = seedProduct(Money.of(10000L), 50);
+        cartAppender.addItem(memberId, variantA, 1);
+        cartAppender.addItem(memberId, variantB, 1);
+        UUID couponId =
+                couponAppender.create("정액 1000", Discount.fixed(Money.of(1000L)), Money.ZERO, validity(), 30, null);
+        UUID issuedId = issuedCouponAppender.issue(couponId, memberId);
+        UUID orderId = checkoutFacade.checkout(memberId, address(), Money.ZERO, issuedId, PaymentMethod.CARD);
+        UUID lineA = lineIdOf(orderId, variantA);
+
+        orderCancellationFacade.cancelLine(orderId, lineA, memberId);
+
+        OrderInfo order = orderReader.getOrder(orderId);
+        // 라인 환불 = 10000 − 안분 할인 500. 잔여 결제 금액 = 19000 − 9500.
+        assertThat(order.refundedAmount()).isEqualTo(Money.of(9500L));
+        assertThat(order.status()).isEqualTo(OrderStatus.PAID);
+        assertThat(lineOf(order, variantA).status()).isEqualTo(OrderLineStatus.CANCELLED);
+        assertThat(lineOf(order, variantB).status()).isEqualTo(OrderLineStatus.ORDERED);
+        assertThat(stockReader.getByVariantId(variantA).quantity()).isEqualTo(50);
+        assertThat(stockReader.getByVariantId(variantB).quantity()).isEqualTo(49);
+        assertThat(paymentReader.getByOrderId(orderId).refundedAmount()).isEqualTo(Money.of(9500L));
+        assertThat(paymentReader.getByOrderId(orderId).status()).isEqualTo(PaymentStatus.APPROVED);
+        assertThat(issuedCouponReader.getIssuedCoupon(issuedId, memberId).status())
+                .isEqualTo(IssuedCouponStatus.USED);
+    }
+
+    @Test
+    @DisplayName("마지막 라인 취소가 주문을 전체 취소로 수렴시키고 환불 총합이 결제액과 일치하며 쿠폰이 복원된다")
+    void lastLineCancellationConvergesAndRestoresCoupon() {
+        UUID memberId = registerMember();
+        UUID variantA = seedProduct(Money.of(10000L), 50);
+        UUID variantB = seedProduct(Money.of(10000L), 50);
+        cartAppender.addItem(memberId, variantA, 1);
+        cartAppender.addItem(memberId, variantB, 1);
+        UUID couponId =
+                couponAppender.create("정액 1000", Discount.fixed(Money.of(1000L)), Money.ZERO, validity(), 30, null);
+        UUID issuedId = issuedCouponAppender.issue(couponId, memberId);
+        UUID orderId = checkoutFacade.checkout(memberId, address(), Money.ZERO, issuedId, PaymentMethod.CARD);
+
+        orderCancellationFacade.cancelLine(orderId, lineIdOf(orderId, variantA), memberId);
+        orderCancellationFacade.cancelLine(orderId, lineIdOf(orderId, variantB), memberId);
+
+        OrderInfo order = orderReader.getOrder(orderId);
+        assertThat(order.status()).isEqualTo(OrderStatus.CANCELLED);
+        assertThat(order.refundedAmount()).isEqualTo(order.payAmount());
+        assertThat(paymentReader.getByOrderId(orderId).status()).isEqualTo(PaymentStatus.CANCELLED);
+        assertThat(stockReader.getByVariantId(variantA).quantity()).isEqualTo(50);
+        assertThat(stockReader.getByVariantId(variantB).quantity()).isEqualTo(50);
+        assertThat(issuedCouponReader.getIssuedCoupon(issuedId, memberId).status())
+                .isEqualTo(IssuedCouponStatus.ISSUED);
+    }
+
+    @Test
+    @DisplayName("같은 라인의 동시 부분 취소가 겹쳐도 환불·재고 복원은 정확히 한 번이다")
+    void concurrentLineCancellationCommitsExactlyOnce() throws InterruptedException {
+        UUID memberId = registerMember();
+        UUID variantA = seedProduct(Money.of(10000L), 50);
+        UUID variantB = seedProduct(Money.of(10000L), 50);
+        cartAppender.addItem(memberId, variantA, 1);
+        cartAppender.addItem(memberId, variantB, 1);
+        UUID orderId = checkoutFacade.checkout(memberId, address(), Money.ZERO, null, PaymentMethod.CARD);
+        UUID lineA = lineIdOf(orderId, variantA);
+
+        // 두 스레드를 취소 개시 직전에 정렬해 둘 다 ORDERED 라인을 읽은 최악 인터리빙을 강제한다.
+        CyclicBarrier beginGate = new CyclicBarrier(2);
+        doAnswer(invocation -> {
+                    try {
+                        beginGate.await(2, TimeUnit.SECONDS);
+                    } catch (TimeoutException | BrokenBarrierException raceAlreadyDecided) {
+                        // 상대 스레드가 개시에 도달하지 못했다 — 단독 진행.
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                    return invocation.callRealMethod();
+                })
+                .when(orderModifier)
+                .beginLineCancellation(eq(orderId), eq(lineA));
+
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        CountDownLatch start = new CountDownLatch(1);
+        AtomicInteger succeeded = new AtomicInteger();
+        AtomicInteger failed = new AtomicInteger();
+        for (int i = 0; i < 2; i++) {
+            executor.execute(() -> {
+                try {
+                    start.await();
+                    orderCancellationFacade.cancelLine(orderId, lineA, memberId);
+                    succeeded.incrementAndGet();
+                } catch (RuntimeException e) {
+                    failed.incrementAndGet();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            });
+        }
+        start.countDown();
+        executor.shutdown();
+        assertThat(executor.awaitTermination(60, TimeUnit.SECONDS)).isTrue();
+
+        // 어느 인터리빙이든 개시는 한쪽만 커밋된다(낙관락·라인 상태 가드). 이중 커밋이면 환불 누계가 20000으로
+        // 부풀고 재고가 51로 증식한다.
+        assertThat(succeeded.get()).isBetween(1, 2);
+        assertThat(succeeded.get() + failed.get()).isEqualTo(2);
+        OrderInfo order = orderReader.getOrder(orderId);
+        assertThat(order.refundedAmount()).isEqualTo(Money.of(10000L));
+        assertThat(stockReader.getByVariantId(variantA).quantity()).isEqualTo(50);
+        assertThat(paymentReader.getByOrderId(orderId).refundedAmount()).isEqualTo(Money.of(10000L));
+    }
+
+    @Test
+    @DisplayName("PG 부분 환불 실패 후 재호출이 기록된 환불액으로 재개해 취소를 완결하고 환불은 한 번만 일어난다")
+    void cancelLineResumesAfterGatewayFailure() {
+        UUID memberId = registerMember();
+        UUID variantA = seedProduct(Money.of(10000L), 50);
+        UUID variantB = seedProduct(Money.of(10000L), 50);
+        cartAppender.addItem(memberId, variantA, 1);
+        cartAppender.addItem(memberId, variantB, 1);
+        UUID orderId = checkoutFacade.checkout(memberId, address(), Money.ZERO, null, PaymentMethod.CARD);
+        UUID lineA = lineIdOf(orderId, variantA);
+
+        doThrow(new RuntimeException("PG 장애")).when(paymentGateway).cancelPartially(any(), any(), any());
+        assertThatThrownBy(() -> orderCancellationFacade.cancelLine(orderId, lineA, memberId))
+                .isInstanceOf(RuntimeException.class);
+        OrderInfo interrupted = orderReader.getOrder(orderId);
+        assertThat(lineOf(interrupted, variantA).status()).isEqualTo(OrderLineStatus.CANCELLING);
+        assertThat(stockReader.getByVariantId(variantA).quantity()).isEqualTo(49);
+
+        Mockito.reset(paymentGateway);
+        orderCancellationFacade.cancelLine(orderId, lineA, memberId);
+
+        OrderInfo order = orderReader.getOrder(orderId);
+        assertThat(lineOf(order, variantA).status()).isEqualTo(OrderLineStatus.CANCELLED);
+        assertThat(order.refundedAmount()).isEqualTo(Money.of(10000L));
+        assertThat(paymentReader.getByOrderId(orderId).refundedAmount()).isEqualTo(Money.of(10000L));
+        assertThat(stockReader.getByVariantId(variantA).quantity()).isEqualTo(50);
+    }
+
+    @Test
+    @DisplayName("환불 기록 후 완결 실패 재시도가 결제 환불 누계를 이중 반영하지 않는다")
+    void cancelLineRetryAfterCompleteFailureDoesNotDoubleRecord() {
+        UUID memberId = registerMember();
+        UUID variantA = seedProduct(Money.of(10000L), 50);
+        UUID variantB = seedProduct(Money.of(10000L), 50);
+        cartAppender.addItem(memberId, variantA, 1);
+        cartAppender.addItem(memberId, variantB, 1);
+        UUID orderId = checkoutFacade.checkout(memberId, address(), Money.ZERO, null, PaymentMethod.CARD);
+        UUID lineA = lineIdOf(orderId, variantA);
+
+        doThrow(new RuntimeException("전이 커밋 실패")).when(orderModifier).completeLineCancellation(eq(orderId), eq(lineA));
+        assertThatThrownBy(() -> orderCancellationFacade.cancelLine(orderId, lineA, memberId))
+                .isInstanceOf(RuntimeException.class);
+        assertThat(paymentReader.getByOrderId(orderId).refundedAmount()).isEqualTo(Money.of(10000L));
+
+        Mockito.reset(orderModifier);
+        orderCancellationFacade.cancelLine(orderId, lineA, memberId);
+
+        // 재개가 PG 멱등 키·누계 동기화로 환불·기록을 반복하지 않는다 — 이중이면 20000으로 부푼다.
+        assertThat(paymentReader.getByOrderId(orderId).refundedAmount()).isEqualTo(Money.of(10000L));
+        assertThat(orderReader.getOrder(orderId).refundedAmount()).isEqualTo(Money.of(10000L));
+        OrderInfo order = orderReader.getOrder(orderId);
+        assertThat(lineOf(order, variantA).status()).isEqualTo(OrderLineStatus.CANCELLED);
+        assertThat(paymentReader.getByOrderId(orderId).status()).isEqualTo(PaymentStatus.APPROVED);
+    }
+
+    private UUID lineIdOf(UUID orderId, UUID variantId) {
+        return lineOf(orderReader.getOrder(orderId), variantId).id();
+    }
+
+    private static com.commerce.domain.order.application.info.OrderLineInfo lineOf(OrderInfo order, UUID variantId) {
+        return order.lines().stream()
+                .filter(line -> line.variantId().equals(variantId))
+                .findFirst()
+                .orElseThrow();
     }
 
     private UUID registerMember() {

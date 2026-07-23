@@ -50,6 +50,12 @@ public final class FakePaymentGateway implements PaymentGateway {
     }
 
     @Override
+    public String cancelPartially(String pgTransactionId, Money amount, String idempotencyKey) {
+        return cancelTransactionIdsByIdempotencyKey.computeIfAbsent(
+                idempotencyKey, key -> "FAKE-PARTIAL-CANCEL-" + UUID.randomUUID());
+    }
+
+    @Override
     public GatewayTransactionStatus inquire(UUID paymentId) {
         return transactionsByPaymentId.getOrDefault(paymentId, GatewayTransactionStatus.notFound());
     }
