@@ -1,6 +1,9 @@
 package com.commerce.domain.wishlist.application;
 
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -120,6 +123,32 @@ class StockRestockedListenerTest {
         listener.on(event);
 
         verify(mailGateway, times(1)).sendRestockMail("wisher@example.com", "잘 팔리는 티셔츠");
+    }
+
+    @Test
+    @DisplayName("일부 회원 발송 실패 후 재전달 시 성공분은 건너뛰고 실패분에게만 발송한다")
+    void partialFailureResendsOnlyUnsent() {
+        UUID productId = UUID.randomUUID();
+        UUID variantId = UUID.randomUUID();
+        UUID first = UUID.randomUUID();
+        UUID second = UUID.randomUUID();
+        wishlistAppender.add(first, productId);
+        wishlistAppender.add(second, productId);
+        stubProduct(variantId, productId, "잘 팔리는 티셔츠");
+        when(memberReader.getMembers(any()))
+                .thenReturn(List.of(memberInfo(first, "first@example.com"), memberInfo(second, "second@example.com")));
+        // 첫 시도에서 두 번째 회원 발송만 실패시킨다
+        doThrow(new RuntimeException("smtp down"))
+                .doNothing()
+                .when(mailGateway)
+                .sendRestockMail(eq("second@example.com"), any());
+        StockRestocked event = new StockRestocked(UUID.randomUUID(), variantId, Instant.now());
+
+        assertThatThrownBy(() -> listener.on(event)).isInstanceOf(RuntimeException.class);
+        listener.on(event); // 재전달(아웃박스 재시도에 해당)
+
+        verify(mailGateway, times(1)).sendRestockMail("first@example.com", "잘 팔리는 티셔츠");
+        verify(mailGateway, times(2)).sendRestockMail("second@example.com", "잘 팔리는 티셔츠");
     }
 
     /** 변형→상품 해석과 상품명 조회를 스텁한다. */
