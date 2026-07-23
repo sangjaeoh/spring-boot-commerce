@@ -1,8 +1,8 @@
 package com.commerce.stock.application.provided;
 
-import com.commerce.stock.domain.StockNotFoundException;
-import com.commerce.stock.domain.StockShortageException;
-import com.commerce.stock.domain.StockStatusException;
+import com.commerce.stock.domain.exception.StockNotFoundException;
+import com.commerce.stock.domain.exception.StockShortageException;
+import com.commerce.stock.domain.exception.StockStatusException;
 import java.util.UUID;
 
 /** 재고 수량 차감·복원·입고와 상태 전이를 담당하는 서비스다. */

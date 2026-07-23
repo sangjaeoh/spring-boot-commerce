@@ -1,8 +1,8 @@
 package com.commerce.member.application.provided;
 
-import com.commerce.member.domain.DuplicateEmailException;
-import com.commerce.member.domain.InvalidEmailException;
-import com.commerce.member.domain.InvalidPasswordException;
+import com.commerce.member.domain.exception.DuplicateEmailException;
+import com.commerce.member.domain.exception.InvalidEmailException;
+import com.commerce.member.domain.exception.InvalidPasswordException;
 import java.util.UUID;
 
 /** 회원 가입을 담당하는 서비스다. */

@@ -1,6 +1,6 @@
 package com.commerce.member.application.provided;
 
-import com.commerce.member.domain.MemberAddressNotFoundException;
+import com.commerce.member.domain.exception.MemberAddressNotFoundException;
 import java.util.UUID;
 
 /** 회원 배송지 삭제를 담당하는 서비스다. */

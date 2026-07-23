@@ -1,6 +1,6 @@
 package com.commerce.product.application.provided;
 
-import com.commerce.product.domain.CategoryNotFoundException;
+import com.commerce.product.domain.exception.CategoryNotFoundException;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 

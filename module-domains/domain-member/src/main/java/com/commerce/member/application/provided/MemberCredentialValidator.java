@@ -1,7 +1,7 @@
 package com.commerce.member.application.provided;
 
 import com.commerce.member.application.info.MemberInfo;
-import com.commerce.member.domain.InvalidCredentialsException;
+import com.commerce.member.domain.exception.InvalidCredentialsException;
 
 /** 회원 자격증명 검증을 담당하는 서비스다. */
 public interface MemberCredentialValidator {

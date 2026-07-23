@@ -1,6 +1,6 @@
 package com.commerce.member.application.provided;
 
-import com.commerce.member.domain.MemberAddressLimitException;
+import com.commerce.member.domain.exception.MemberAddressLimitException;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 

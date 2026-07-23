@@ -1,5 +1,7 @@
 package com.commerce.product.domain;
 
+import com.commerce.product.domain.exception.InvalidVariantException;
+import com.commerce.product.domain.exception.ProductErrorCode;
 import java.text.Normalizer;
 import java.util.List;
 import java.util.Locale;

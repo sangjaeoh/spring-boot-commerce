@@ -2,8 +2,8 @@ package com.commerce.order.application.provided;
 
 import com.commerce.order.application.info.OrderInfo;
 import com.commerce.order.domain.FulfillmentStatus;
-import com.commerce.order.domain.OrderNotFoundException;
 import com.commerce.order.domain.OrderStatus;
+import com.commerce.order.domain.exception.OrderNotFoundException;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;

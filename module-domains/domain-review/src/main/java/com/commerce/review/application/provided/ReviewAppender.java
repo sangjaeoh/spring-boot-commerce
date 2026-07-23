@@ -1,7 +1,7 @@
 package com.commerce.review.application.provided;
 
-import com.commerce.review.domain.DuplicateReviewException;
-import com.commerce.review.domain.InvalidReviewException;
+import com.commerce.review.domain.exception.DuplicateReviewException;
+import com.commerce.review.domain.exception.InvalidReviewException;
 import java.util.UUID;
 
 /** 리뷰 작성을 담당하는 서비스다. */

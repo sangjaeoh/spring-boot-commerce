@@ -1,9 +1,9 @@
 package com.commerce.product.application.provided;
 
-import com.commerce.product.domain.DuplicateVariantOptionException;
-import com.commerce.product.domain.InvalidVariantException;
-import com.commerce.product.domain.ProductNotFoundException;
 import com.commerce.product.domain.ProductOption;
+import com.commerce.product.domain.exception.DuplicateVariantOptionException;
+import com.commerce.product.domain.exception.InvalidVariantException;
+import com.commerce.product.domain.exception.ProductNotFoundException;
 import com.commerce.shared.entity.Money;
 import java.util.List;
 import java.util.UUID;

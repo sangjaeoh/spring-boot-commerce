@@ -3,6 +3,8 @@ package com.commerce.review.domain;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.commerce.review.domain.exception.InvalidReviewException;
+import com.commerce.review.domain.exception.ReviewErrorCode;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

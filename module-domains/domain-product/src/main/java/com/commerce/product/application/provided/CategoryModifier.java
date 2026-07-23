@@ -1,6 +1,6 @@
 package com.commerce.product.application.provided;
 
-import com.commerce.product.domain.CategoryNotFoundException;
+import com.commerce.product.domain.exception.CategoryNotFoundException;
 import java.util.UUID;
 
 /** 카테고리 이름 변경을 담당하는 서비스다. */

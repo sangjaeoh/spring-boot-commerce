@@ -2,8 +2,8 @@ package com.commerce.coupon.application.provided;
 
 import com.commerce.coupon.application.info.DiscountPreviewInfo;
 import com.commerce.coupon.application.info.IssuedCouponInfo;
-import com.commerce.coupon.domain.CouponNotFoundException;
-import com.commerce.coupon.domain.IssuedCouponNotFoundException;
+import com.commerce.coupon.domain.exception.CouponNotFoundException;
+import com.commerce.coupon.domain.exception.IssuedCouponNotFoundException;
 import com.commerce.shared.entity.Money;
 import java.util.List;
 import java.util.UUID;

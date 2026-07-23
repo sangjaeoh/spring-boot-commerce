@@ -1,6 +1,9 @@
 package com.commerce.coupon.domain;
 
 import com.commerce.core.id.UuidV7Generator;
+import com.commerce.coupon.domain.exception.CouponErrorCode;
+import com.commerce.coupon.domain.exception.CouponStatusException;
+import com.commerce.coupon.domain.exception.InvalidCouponException;
 import com.commerce.jpa.entity.BaseTimeEntity;
 import com.commerce.shared.entity.Money;
 import com.commerce.shared.entity.MoneyConverter;

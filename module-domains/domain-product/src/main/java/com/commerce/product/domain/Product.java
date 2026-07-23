@@ -2,6 +2,8 @@ package com.commerce.product.domain;
 
 import com.commerce.core.id.UuidV7Generator;
 import com.commerce.jpa.entity.BaseTimeEntity;
+import com.commerce.product.domain.exception.ProductErrorCode;
+import com.commerce.product.domain.exception.ProductStatusException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;

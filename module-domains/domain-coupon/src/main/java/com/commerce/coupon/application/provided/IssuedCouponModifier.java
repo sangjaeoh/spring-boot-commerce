@@ -1,8 +1,8 @@
 package com.commerce.coupon.application.provided;
 
-import com.commerce.coupon.domain.CouponExpiredException;
-import com.commerce.coupon.domain.CouponStatusException;
-import com.commerce.coupon.domain.IssuedCouponNotFoundException;
+import com.commerce.coupon.domain.exception.CouponExpiredException;
+import com.commerce.coupon.domain.exception.CouponStatusException;
+import com.commerce.coupon.domain.exception.IssuedCouponNotFoundException;
 import java.util.UUID;
 
 /** 발급분 사용·복원·무효화를 담당하는 서비스다. */

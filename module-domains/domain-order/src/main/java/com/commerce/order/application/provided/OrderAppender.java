@@ -1,8 +1,8 @@
 package com.commerce.order.application.provided;
 
 import com.commerce.order.domain.Address;
-import com.commerce.order.domain.InvalidOrderException;
 import com.commerce.order.domain.OrderLineSnapshot;
+import com.commerce.order.domain.exception.InvalidOrderException;
 import com.commerce.shared.entity.Money;
 import java.util.List;
 import java.util.UUID;

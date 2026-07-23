@@ -7,7 +7,7 @@ import com.commerce.inquiry.application.info.InquiryInfo;
 import com.commerce.inquiry.application.provided.InquiryAppender;
 import com.commerce.inquiry.application.provided.InquiryModifier;
 import com.commerce.inquiry.application.provided.InquiryReader;
-import com.commerce.inquiry.domain.InquiryNotFoundException;
+import com.commerce.inquiry.domain.exception.InquiryNotFoundException;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

@@ -1,5 +1,7 @@
 package com.commerce.coupon.domain;
 
+import com.commerce.coupon.domain.exception.CouponErrorCode;
+import com.commerce.coupon.domain.exception.InvalidCouponException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
 import java.time.Instant;

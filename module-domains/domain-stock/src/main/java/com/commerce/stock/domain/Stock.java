@@ -2,6 +2,9 @@ package com.commerce.stock.domain;
 
 import com.commerce.core.id.UuidV7Generator;
 import com.commerce.jpa.entity.BaseTimeEntity;
+import com.commerce.stock.domain.exception.StockErrorCode;
+import com.commerce.stock.domain.exception.StockShortageException;
+import com.commerce.stock.domain.exception.StockStatusException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;

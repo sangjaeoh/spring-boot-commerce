@@ -1,6 +1,6 @@
 package com.commerce.product.application.provided;
 
-import com.commerce.product.domain.ProductImageNotFoundException;
+import com.commerce.product.domain.exception.ProductImageNotFoundException;
 import java.util.UUID;
 
 /** 상품 이미지 삭제(물리)를 담당하는 서비스다. */

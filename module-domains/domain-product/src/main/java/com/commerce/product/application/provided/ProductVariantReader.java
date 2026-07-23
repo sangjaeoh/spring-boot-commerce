@@ -2,7 +2,7 @@ package com.commerce.product.application.provided;
 
 import com.commerce.product.application.info.ProductVariantInfo;
 import com.commerce.product.domain.ProductOption;
-import com.commerce.product.domain.ProductVariantNotFoundException;
+import com.commerce.product.domain.exception.ProductVariantNotFoundException;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;

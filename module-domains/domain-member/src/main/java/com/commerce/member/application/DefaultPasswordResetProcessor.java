@@ -6,7 +6,7 @@ import com.commerce.member.application.provided.MemberReader;
 import com.commerce.member.application.provided.PasswordResetProcessor;
 import com.commerce.member.application.required.MailGateway;
 import com.commerce.member.application.required.OneTimeTokenStore;
-import com.commerce.member.domain.MemberNotFoundException;
+import com.commerce.member.domain.exception.MemberNotFoundException;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.UUID;

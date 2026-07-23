@@ -1,7 +1,7 @@
 package com.commerce.product.application.provided;
 
-import com.commerce.product.domain.InvalidProductImageException;
-import com.commerce.product.domain.ProductNotFoundException;
+import com.commerce.product.domain.exception.InvalidProductImageException;
+import com.commerce.product.domain.exception.ProductNotFoundException;
 import java.util.UUID;
 
 /** 상품 이미지 업로드를 담당하는 서비스다. */

@@ -1,6 +1,6 @@
 package com.commerce.stock.application.provided;
 
-import com.commerce.stock.domain.DuplicateStockException;
+import com.commerce.stock.domain.exception.DuplicateStockException;
 import java.util.UUID;
 
 /** 재고 생성을 담당하는 서비스다. */

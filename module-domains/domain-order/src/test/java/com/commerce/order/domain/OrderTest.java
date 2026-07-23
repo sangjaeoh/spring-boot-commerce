@@ -3,6 +3,10 @@ package com.commerce.order.domain;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.commerce.order.domain.exception.FulfillmentStatusException;
+import com.commerce.order.domain.exception.InvalidOrderException;
+import com.commerce.order.domain.exception.OrderErrorCode;
+import com.commerce.order.domain.exception.OrderStatusException;
 import com.commerce.shared.entity.Money;
 import java.time.Instant;
 import java.util.List;

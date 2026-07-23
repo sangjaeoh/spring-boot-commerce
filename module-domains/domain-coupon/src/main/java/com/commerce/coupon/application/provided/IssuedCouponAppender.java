@@ -1,9 +1,9 @@
 package com.commerce.coupon.application.provided;
 
-import com.commerce.coupon.domain.CouponExhaustedException;
-import com.commerce.coupon.domain.CouponNotFoundException;
-import com.commerce.coupon.domain.CouponStatusException;
-import com.commerce.coupon.domain.DuplicateIssuanceException;
+import com.commerce.coupon.domain.exception.CouponExhaustedException;
+import com.commerce.coupon.domain.exception.CouponNotFoundException;
+import com.commerce.coupon.domain.exception.CouponStatusException;
+import com.commerce.coupon.domain.exception.DuplicateIssuanceException;
 import java.util.UUID;
 
 /** 쿠폰 발급을 담당하는 서비스다. */

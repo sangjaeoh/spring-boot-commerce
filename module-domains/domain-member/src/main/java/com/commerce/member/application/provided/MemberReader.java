@@ -1,8 +1,8 @@
 package com.commerce.member.application.provided;
 
 import com.commerce.member.application.info.MemberInfo;
-import com.commerce.member.domain.InvalidEmailException;
-import com.commerce.member.domain.MemberNotFoundException;
+import com.commerce.member.domain.exception.InvalidEmailException;
+import com.commerce.member.domain.exception.MemberNotFoundException;
 import java.util.UUID;
 
 /** 회원 조회를 담당하는 서비스다. */

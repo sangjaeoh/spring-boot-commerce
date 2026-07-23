@@ -2,6 +2,9 @@ package com.commerce.member.domain;
 
 import com.commerce.core.id.UuidV7Generator;
 import com.commerce.jpa.entity.BaseTimeEntity;
+import com.commerce.member.domain.converter.EmailConverter;
+import com.commerce.member.domain.exception.MemberErrorCode;
+import com.commerce.member.domain.exception.MemberStatusException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;

@@ -1,7 +1,7 @@
 package com.commerce.cart.application.provided;
 
-import com.commerce.cart.domain.CartItemNotFoundException;
-import com.commerce.cart.domain.InvalidCartItemException;
+import com.commerce.cart.domain.exception.CartItemNotFoundException;
+import com.commerce.cart.domain.exception.InvalidCartItemException;
 import java.util.Set;
 import java.util.UUID;
 

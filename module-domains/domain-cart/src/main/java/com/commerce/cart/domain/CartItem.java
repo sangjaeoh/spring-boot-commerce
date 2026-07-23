@@ -1,5 +1,7 @@
 package com.commerce.cart.domain;
 
+import com.commerce.cart.domain.exception.CartErrorCode;
+import com.commerce.cart.domain.exception.InvalidCartItemException;
 import com.commerce.core.id.UuidV7Generator;
 import com.commerce.jpa.entity.BaseTimeEntity;
 import com.google.errorprone.annotations.Keep;

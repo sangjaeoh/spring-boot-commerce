@@ -1,8 +1,8 @@
 package com.commerce.coupon.application.provided;
 
 import com.commerce.coupon.domain.Discount;
-import com.commerce.coupon.domain.InvalidCouponException;
 import com.commerce.coupon.domain.ValidityPeriod;
+import com.commerce.coupon.domain.exception.InvalidCouponException;
 import com.commerce.shared.entity.Money;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
