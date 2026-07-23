@@ -8,14 +8,11 @@
 
 ## 규칙
 
-- 이 문서는 포맷·null·정적분석 도구만 다룬다.
+- 이 문서는 포맷·null·정적분석 게이트와 금지 의존성 기준을 다룬다.
 - 계층 의존·엔티티 비노출 등 경계 강제는 컨벤션 플러그인·아키텍처 테스트가 담당한다.
-- 강제 대상 불변식은 [architecture](architecture.md)의 빌드가 강제하는 불변식이 소유한다.
+- 강제 대상 불변식은 → [architecture](architecture.md)의 빌드가 강제하는 불변식을 따른다.
 - Spotless·NullAway·Error Prone은 `convention.java-base`가 전 JVM 모듈에 일괄 적용한다.
-- `convention.java-common`이 Lombok·H2 의존성을 차단한다.
-- Lombok은 사용하지 않는다.
-- H2는 사용하지 않는다.
-- 영속 테스트는 실 PostgreSQL(Testcontainers) 기준으로 수행한다.
+- `convention.java-common`이 Lombok·H2·spring-webflux 의존성을 차단한다.
 
 ### Spotless (Palantir Java Format)
 
@@ -35,7 +32,6 @@
 - 각 모듈의 `@NullMarked`는 JSpecify 의미 선언으로 유지한다.
 - 베이스 패키지 밖 모듈은 검사하지 않는다.
 - JPA가 채우는 엔티티 필드는 초기화 검사에서 제외한다.
-- 클래스 단위 `@SuppressWarnings("NullAway.Init")`는 사용하지 않는다.
 - 모든 영속 non-null 필드에 매핑 애노테이션을 명시한다.
 - 무애노테이션 non-null basic 필드도 `@Column`을 붙인다.
 - nullable 필드만 `@Nullable`로 유지한다.
@@ -50,12 +46,14 @@
 ### Error Prone
 
 - Error Prone은 버그 패턴과 Javadoc 구조를 컴파일 시점에 검사한다.
-- Javadoc 산문 규약은 [coding-conventions](coding-conventions.md)를 따른다.
+- Javadoc 산문 규약은 → [coding-conventions](coding-conventions.md)를 따른다.
 
 ### 버전
 
 - 버전 정본은 `gradle/libs.versions.toml`이다.
-- 아래 표는 참고용이며 불일치 시 toml을 따른다.
+- 스프링 계열 의존성 버전은 Spring Boot BOM이 소유한다.
+- 아래 표는 참고용이다.
+- 표와 toml이 불일치하면 toml을 따른다.
 - 의존성은 `libs.*` 카탈로그 별칭으로만 선언한다.
 - 빌드스크립트에 버전 리터럴을 두지 않는다.
 
