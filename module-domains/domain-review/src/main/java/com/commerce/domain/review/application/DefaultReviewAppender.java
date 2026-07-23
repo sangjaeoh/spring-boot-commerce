@@ -40,7 +40,7 @@ class DefaultReviewAppender implements ReviewAppender {
     /** 중복이 없으면 저장을 한 번 시도한다. */
     private UUID writeOnce(UUID memberId, UUID productId, int rating, String content) {
         UUID reviewId = transactionTemplate.execute(status -> {
-            if (reviewRepository.existsByMemberIdAndProductIdIncludingDeleted(memberId, productId)) {
+            if (reviewRepository.existsActiveOrAdminRemoved(memberId, productId)) {
                 throw new DuplicateReviewException(ReviewErrorCode.ALREADY_WRITTEN);
             }
             Review review = reviewRepository.save(Review.create(memberId, productId, rating, content));

@@ -9,6 +9,7 @@ import com.commerce.domain.review.application.provided.ReviewModifier;
 import com.commerce.domain.review.application.provided.ReviewReader;
 import com.commerce.domain.review.application.provided.ReviewRemover;
 import com.commerce.domain.review.application.required.ReviewRepository;
+import com.commerce.domain.review.domain.DeletedBy;
 import com.commerce.domain.review.domain.Review;
 import com.commerce.domain.review.domain.exception.DuplicateReviewException;
 import com.commerce.domain.review.domain.exception.ReviewErrorCode;
@@ -28,6 +29,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.TestConstructor;
+import org.springframework.test.context.transaction.TestTransaction;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
@@ -152,6 +154,46 @@ class ReviewPersistenceTest {
         reviewRemover.remove(reviewId, memberId);
         assertThat(reviewReader.getProductPage(productId, PageRequest.of(0, 10)))
                 .isEmpty();
+    }
+
+    @Test
+    @DisplayName("본인 삭제는 소프트삭제로 행을 남기고, 삭제 후 같은 상품에 재작성할 수 있다")
+    void ownRemoveSoftDeletesAndAllowsRewrite() {
+        UUID memberId = UUID.randomUUID();
+        UUID productId = UUID.randomUUID();
+        UUID reviewId = reviewAppender.write(memberId, productId, 4, "첫 리뷰");
+
+        reviewRemover.remove(reviewId, memberId);
+        // remove()는 앰비언트(테스트) 트랜잭션에 합류해 아직 커밋되지 않는다 — write()의 사전 검사가 REQUIRES_NEW로
+        // 별도 물리 트랜잭션을 열므로, 이 상태를 보게 하려면 여기서 실제로 커밋하고 새 트랜잭션을 시작해야 한다.
+        TestTransaction.flagForCommit();
+        TestTransaction.end();
+        TestTransaction.start();
+
+        Review removed = reviewRepository.findById(reviewId).orElseThrow();
+        assertThat(removed.getDeletedAt()).isNotNull();
+        assertThat(removed.getDeletedBy()).isEqualTo(DeletedBy.MEMBER);
+
+        UUID rewritten = reviewAppender.write(memberId, productId, 5, "다시 쓴 리뷰");
+        assertThat(rewritten).isNotEqualTo(reviewId);
+    }
+
+    @Test
+    @DisplayName("관리자 삭제 후 재작성은 계속 거부된다")
+    void adminRemoveStillBlocksRewrite() {
+        UUID memberId = UUID.randomUUID();
+        UUID productId = UUID.randomUUID();
+        UUID reviewId = reviewAppender.write(memberId, productId, 4, "첫 리뷰");
+
+        reviewRemover.removeByAdmin(reviewId, "부적절한 내용");
+        // removeByAdmin()도 앰비언트(테스트) 트랜잭션에 합류해 아직 커밋되지 않는다 — write()의 REQUIRES_NEW
+        // 사전 검사가 별도 물리 트랜잭션에서 deletedBy=ADMIN 상태를 보게 하려면 여기서 실제로 커밋해야 한다.
+        TestTransaction.flagForCommit();
+        TestTransaction.end();
+        TestTransaction.start();
+
+        assertThatThrownBy(() -> reviewAppender.write(memberId, productId, 5, "다시 쓴 리뷰"))
+                .isInstanceOf(DuplicateReviewException.class);
     }
 
     @Test
