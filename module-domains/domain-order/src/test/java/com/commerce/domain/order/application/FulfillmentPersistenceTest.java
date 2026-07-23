@@ -15,9 +15,7 @@ import com.commerce.domain.order.domain.OrderStatus;
 import com.commerce.domain.order.domain.exception.FulfillmentStatusException;
 import com.commerce.domain.order.domain.exception.OrderErrorCode;
 import com.commerce.domain.shared.entity.Money;
-import com.commerce.event.order.OrderPaid;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -39,7 +37,9 @@ import org.testcontainers.utility.DockerImageName;
 /**
  * 이행 애그리거트의 생성 조율·전이·조회 합성을 실 PostgreSQL로 검증하는 테스트다.
  *
- * <p>{@code OrderPaid} 소비는 아웃박스 릴레이 경유가 아니라 리스너를 직접 호출해 시뮬레이션한다.
+ * <p>{@code markPaid}가 결제 완료와 같은 호출 안에서 이행을 동기 생성하므로(각각 별도 트랜잭션), 별도
+ * 리스너 호출 없이 바로 이행 전이를 검증할 수 있다. 리스너 자체의 소비 행동은
+ * {@link FulfillmentPreparationListenerTest}가 소유한다.
  */
 @DataJpaTest(
         properties = {
@@ -55,7 +55,6 @@ import org.testcontainers.utility.DockerImageName;
     DefaultOrderAppender.class,
     DefaultOrderReader.class,
     DefaultOrderModifier.class,
-    FulfillmentPreparationListener.class,
     FulfillmentPersistenceTest.NoOpMessagingConfig.class
 })
 @ImportAutoConfiguration(FlywayAutoConfiguration.class)
@@ -69,19 +68,13 @@ class FulfillmentPersistenceTest {
     private final OrderAppender orderAppender;
     private final OrderReader orderReader;
     private final OrderModifier orderModifier;
-    private final FulfillmentPreparationListener fulfillmentPreparationListener;
     private final TestEntityManager em;
 
     FulfillmentPersistenceTest(
-            OrderAppender orderAppender,
-            OrderReader orderReader,
-            OrderModifier orderModifier,
-            FulfillmentPreparationListener fulfillmentPreparationListener,
-            TestEntityManager em) {
+            OrderAppender orderAppender, OrderReader orderReader, OrderModifier orderModifier, TestEntityManager em) {
         this.orderAppender = orderAppender;
         this.orderReader = orderReader;
         this.orderModifier = orderModifier;
-        this.fulfillmentPreparationListener = fulfillmentPreparationListener;
         this.em = em;
     }
 
@@ -92,14 +85,11 @@ class FulfillmentPersistenceTest {
         return orderAppender.place(UUID.randomUUID(), lines, address, Money.ZERO, Money.of(3000L), null);
     }
 
-    /** 결제 완료하고 이행 생성 리스너를 직접 호출해 PREPARING 이행을 만든다. */
+    /** 결제를 완료한다 — markPaid 자체가 이행을 PREPARING으로 동기 생성한다. */
     private UUID paidOrderWithFulfillment() {
         UUID orderId = place();
         em.flush();
         orderModifier.markPaid(orderId);
-        em.flush();
-        OrderInfo order = orderReader.getOrder(orderId);
-        fulfillmentPreparationListener.on(new OrderPaid(orderId, order.memberId(), Set.of()));
         em.flush();
         return orderId;
     }
@@ -132,21 +122,6 @@ class FulfillmentPersistenceTest {
                 .isInstanceOfSatisfying(
                         FulfillmentStatusException.class,
                         ex -> assertThat(ex.getErrorCode()).isEqualTo(OrderErrorCode.NOT_PAID));
-    }
-
-    @Test
-    @DisplayName("결제는 완료됐으나 이행 생성이 아직 반영되지 않은 주문의 출고는 거부된다")
-    void shipRejectsBeforeFulfillmentCreated() {
-        // FulfillmentPreparationListener를 의도적으로 호출하지 않아 markPaid 커밋과 이행 생성 사이 레이스 창을 재현한다.
-        UUID orderId = place();
-        em.flush();
-        orderModifier.markPaid(orderId);
-        em.flush();
-
-        assertThatThrownBy(() -> orderModifier.ship(orderId, "CJ대한통운", "688900123456"))
-                .isInstanceOfSatisfying(
-                        FulfillmentStatusException.class,
-                        ex -> assertThat(ex.getErrorCode()).isEqualTo(OrderErrorCode.FULFILLMENT_NOT_READY));
     }
 
     @Test

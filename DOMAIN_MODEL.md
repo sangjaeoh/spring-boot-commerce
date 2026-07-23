@@ -620,7 +620,7 @@
 | DELIVERED | 배송 완료. SHIPPED에서만 진입 |
 
 - 전이: `PREPARING → SHIPPED`(`ship`, 주문 취소 진행 중이면 거부), `PREPARING → ON_HOLD`(`hold`) `→ PREPARING`(`release`), `SHIPPED → DELIVERED`(`confirmDelivery`).
-- 생성: `Order.markPaid`가 발행한 `OrderPaid`를 `FulfillmentPreparationListener`가 소비해 `Fulfillment.create(orderId)`로 만든다(별도 트랜잭션 — 결제 완료와 이행 생성은 서로 다른 애그리거트라 하나의 트랜잭션에 담지 않는다). `order_id` 유니크 인덱스로 재전달을 멱등 처리한다.
+- 생성: 결제 완료(`OrderModifier.markPaid`)가 같은 호출 안에서 `Fulfillment.create(orderId)`까지 동기로 끝낸다 — 결제 완료 커밋과 이행 생성 커밋은 서로 다른 애그리거트라 각자 별도 트랜잭션이다("트랜잭션당 애그리거트 1개" 준수, `TransactionTemplate` 두 블록). `OrderPaid`를 소비하는 `FulfillmentPreparationListener`도 같은 생성을 수행해, 두 번째 트랜잭션이 실패하는 드문 경우의 자기치유 안전망을 겸한다(`order_id` 유니크 인덱스로 멱등). 아웃박스 릴레이는 `app-batch`에서만 켜져 있어(§아웃박스), 이 리스너 경로 하나만으로는 이행 생성을 실시간으로 보장할 수 없었다.
 
 ### OrderLine 필드
 

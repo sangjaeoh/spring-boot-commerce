@@ -62,7 +62,11 @@
 
 - `Order.markPaid()`는 지금처럼 `Order`만 쓰고 `OrderPaid`를 발행한다(변경 없음).
 - 신규 package-private 이벤트 소비자 `FulfillmentPreparationListener`(위치: `domain-order/application`)가 `OrderPaid`를 받아 `Fulfillment.create(orderId)`를 자기 트랜잭션에서 실행한다.
-- 구현 중 발견: 애초 기존 `{이벤트명}Listener` 네이밍 관례를 따라 `OrderPaidListener`로 지었으나, `domain-cart`가 같은 이벤트에 이미 이 이름을 쓰고 있어 실패했다 — Spring 컴포넌트 스캔의 기본 빈 이름은 패키지를 무시한 단순 클래스명이라, 두 도메인을 함께 임베드하는 앱(app-admin 등)에서 `ConflictingBeanDefinitionException`으로 컨텍스트 로딩이 깨졌다. "패키지가 다르면 이름이 안 겹친다"는 애초 판단은 틀렸다 — `FulfillmentPreparationListener`로 개명해 해결했다.
+- 구현 중 발견(이름 충돌): 애초 기존 `{이벤트명}Listener` 네이밍 관례를 따라 `OrderPaidListener`로 지었으나, `domain-cart`가 같은 이벤트에 이미 이 이름을 쓰고 있어 실패했다 — Spring 컴포넌트 스캔의 기본 빈 이름은 패키지를 무시한 단순 클래스명이라, 두 도메인을 함께 임베드하는 앱(app-admin 등)에서 `ConflictingBeanDefinitionException`으로 컨텍스트 로딩이 깨졌다. "패키지가 다르면 이름이 안 겹친다"는 애초 판단은 틀렸다 — `FulfillmentPreparationListener`로 개명해 해결했다.
+- 구현 중 발견(생성 시점, 더 중대함): "리스너가 생성을 전담한다"는 원 설계는 틀렸다. 아웃박스 릴레이는 `app-batch`에서만 켜져 있다(다른 실행 앱은 꺼둔다 — 중복 재발행 방지, DOMAIN_MODEL.md 기존 서술). 즉 `app-api`·`app-admin` 프로세스에서는 `OrderPaid`가 아웃박스에 기록만 될 뿐 그 프로세스 안에서 `FulfillmentPreparationListener`가 호출되는 시점이 정해져 있지 않다 — 다음 배치 릴레이 폴링까지 임의 지연된다. "엣지 케이스"로 적었던 "결제 커밋과 생성 사이 짧은 창"은 사실 밀리초가 아니라 배치 주기 단위였다.
+  - 수정: `DefaultOrderModifier.markPaid()`가 `Fulfillment` 생성을 동기로 겸한다 — `@Transactional` 단일 메서드 대신 `TransactionTemplate` 두 블록(결제 완료 커밋 1개, 이행 생성 커밋 1개)으로 나눠 "트랜잭션당 애그리거트 1개"를 지키면서도 같은 호출 안에서 둘 다 끝낸다(payment 도메인의 `DefaultPaymentProcessor`가 쓰는 기존 패턴 재사용).
+  - `FulfillmentPreparationListener`는 폐기하지 않는다 — 두 번째 트랜잭션 블록이 실패하는 드문 경우의 자기치유 안전망으로 남긴다(같은 존재확인-후-생성 멱등 로직, `OrderPaid`는 이미 cart 소비를 위해 발행되므로 추가 비용 없음).
+  - 파급: 이행 생성이 더 이상 진짜 "레이스 창"이 아니게 되면서, 설계상 있었던 "쓰기(진짜 레이스 창)" 시나리오(`shipRejectsBeforeFulfillmentCreated`)는 공개 API로 재현할 수 없어졌다 — 테스트에서 제거했다(가드 코드 자체는 방어적으로 남긴다. 두 번째 트랜잭션이 실패하는 극단적 경우에는 여전히 유효한 방어다).
 - `order_id` 유니크 인덱스로 재전달 시 중복 생성을 막는다(멱등 가드).
 - 결제·이행 생성을 한 트랜잭션에 몰지 않음으로써 "트랜잭션당 애그리거트 1개 변경" 규칙을 지킨다.
 
@@ -85,7 +89,7 @@
 ## 엣지 케이스
 
 - **조회(정상 경로)**: `Fulfillment` 행이 없는 경우는 `PENDING`(결제 전) 주문의 정상 상태다 — 결제 전이라 이행이 시작될 이유가 없다. `getOrder`류는 행 없음을 `FulfillmentStatus.NOT_STARTED`·이행 관련 필드 전부 `null`로 합성해 반환한다.
-- **쓰기(진짜 레이스 창)**: `Order.markPaid()` 커밋과 `FulfillmentPreparationListener`의 `Fulfillment.create()` 커밋 사이 짧은 창에서 `ship`·`confirmDelivery`·`holdFulfillment`·`releaseFulfillment` 호출이 들어오면 `Order.status`는 이미 `PAID`인데 `Fulfillment` 행이 아직 없다. 신규 에러코드 `OrderErrorCode.FULFILLMENT_NOT_READY`(409)를 추가해 `FulfillmentStatusException`으로 던진다 — 클라이언트 재시도.
+- **쓰기(방어적 가드, 정상 경로로는 도달 불가)**: `markPaid()`가 결제 완료 커밋과 이행 생성 커밋을 같은 호출 안에서 순서대로 끝내므로, 정상 호출 경로로는 "PAID인데 Fulfillment 없음" 상태가 만들어지지 않는다. 다만 두 번째(이행 생성) 트랜잭션만 실패하는 드문 경우 이 상태가 실제로 남을 수 있어, `ship`·`confirmDelivery`·`holdFulfillment`·`releaseFulfillment`는 여전히 이를 `OrderErrorCode.FULFILLMENT_NOT_READY`(409, `FulfillmentStatusException`)로 방어한다 — 클라이언트 재시도, `FulfillmentPreparationListener`의 아웃박스 재전달이 뒤늦게 자기치유한다. 통합 테스트로 이 경로를 직접 재현하지는 않는다(공개 API로 그 상태를 만들 수 없어서다).
 
 ## 테스트 방침
 
