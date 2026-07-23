@@ -93,10 +93,10 @@ class ArchitectureTest {
     // 순회하므로 CLASSES 선언 뒤에 둔다.
     private static final Set<String> ENTITY_OWNING_BASE_PACKAGES = entityOwningBasePackages();
 
-    // 도메인 모듈 안에서 @Entity를 정당하게 참조하는 2개 구역(domain 상호참조·exception, application의
-    // 유스케이스 서비스·Info.from(Entity)·required 리포지토리). 이벤트 record는 이벤트 모듈
-    // (com.commerce.event..) 소유라 도메인 면제 대상이 아니다.
-    private static final Set<String> ENTITY_ACCESS_EXEMPT_SUBPACKAGES = Set.of("domain", "application");
+    // 도메인 모듈 안에서 @Entity를 정당하게 참조하는 3개 구역(domain 상호참조·exception, application의
+    // 유스케이스 서비스·Info.from(Entity)·required 리포지토리, entity의 QueryDSL Q타입). 이벤트 record는
+    // 이벤트 모듈(com.commerce.event..) 소유라 도메인 면제 대상이 아니다.
+    private static final Set<String> ENTITY_ACCESS_EXEMPT_SUBPACKAGES = Set.of("domain", "application", "entity");
 
     // 도메인 모듈 베이스 패키지 집합 — 매핑 클래스가 domain 구역({base}.domain)에 사는 모듈에서 파생한다.
     // 구역 의존 방향·adapter 비노출·provided 경유 규칙이 대상 범위로 쓴다. CLASSES 순회라 CLASSES 뒤에 둔다.
