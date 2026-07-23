@@ -5,9 +5,11 @@ import com.commerce.domain.payment.application.info.PaymentInfo;
 import com.commerce.domain.payment.application.provided.PaymentProcessor;
 import com.commerce.domain.payment.application.required.PaymentApproval;
 import com.commerce.domain.payment.application.required.PaymentGateway;
+import com.commerce.domain.payment.application.required.PaymentRefundRepository;
 import com.commerce.domain.payment.application.required.PaymentRepository;
 import com.commerce.domain.payment.domain.FailureReason;
 import com.commerce.domain.payment.domain.Payment;
+import com.commerce.domain.payment.domain.PaymentRefund;
 import com.commerce.domain.payment.domain.PaymentStatus;
 import com.commerce.domain.payment.domain.exception.PaymentErrorCode;
 import com.commerce.domain.payment.domain.exception.PaymentNotFoundException;
@@ -27,16 +29,19 @@ import org.springframework.transaction.support.TransactionTemplate;
 class DefaultPaymentProcessor implements PaymentProcessor {
 
     private final PaymentRepository paymentRepository;
+    private final PaymentRefundRepository paymentRefundRepository;
     private final PaymentGateway paymentGateway;
     private final TransactionTemplate transactionTemplate;
     private final Clock clock;
 
     DefaultPaymentProcessor(
             PaymentRepository paymentRepository,
+            PaymentRefundRepository paymentRefundRepository,
             PaymentGateway paymentGateway,
             PlatformTransactionManager transactionManager,
             Clock clock) {
         this.paymentRepository = paymentRepository;
+        this.paymentRefundRepository = paymentRefundRepository;
         this.paymentGateway = paymentGateway;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
         this.clock = clock;
@@ -92,18 +97,28 @@ class DefaultPaymentProcessor implements PaymentProcessor {
         String pgTransactionId = payment.getPgTransactionId();
         if (pgTransactionId == null || amount.isZero()) {
             // 무 PG 승인(전액 할인)과 0원 환불은 PG 호출 없이 기록만 동기화한다.
-            inTransaction(() -> recordPartialRefundSync(paymentId, cumulativeTotal));
+            inTransaction(() -> recordPartialRefundSync(paymentId, amount, cumulativeTotal, refundKey, null));
             return;
         }
         // 환불은 비가역이라 역보상할 수 없다 — 라인 단위 멱등 키로 재시도 이중 환불을, 누계 동기화로 이중 기록을 막는다.
-        paymentGateway.cancelPartially(pgTransactionId, amount, "partial-refund:" + refundKey);
-        inTransaction(() -> recordPartialRefundSync(paymentId, cumulativeTotal));
+        String pgCancelTransactionId =
+                paymentGateway.cancelPartially(pgTransactionId, amount, "partial-refund:" + refundKey);
+        inTransaction(
+                () -> recordPartialRefundSync(paymentId, amount, cumulativeTotal, refundKey, pgCancelTransactionId));
     }
 
-    /** 부분 환불 누계를 단조 동기화한다. 누계가 결제액에 도달하면 취소로 전이한다. */
-    private PaymentInfo recordPartialRefundSync(UUID paymentId, Money cumulativeTotal) {
+    /** 부분 환불 누계를 단조 동기화하고 환불 행을 남긴다(refund_key 재시도는 행을 중복 생성하지 않는다). */
+    private PaymentInfo recordPartialRefundSync(
+            UUID paymentId,
+            Money amount,
+            Money cumulativeTotal,
+            UUID refundKey,
+            @Nullable String pgCancelTransactionId) {
         Payment payment = find(paymentId);
         payment.syncPartialRefund(cumulativeTotal, clock.instant());
+        if (!paymentRefundRepository.existsByRefundKey(refundKey)) {
+            paymentRefundRepository.save(PaymentRefund.record(paymentId, amount, pgCancelTransactionId, refundKey));
+        }
         return PaymentInfo.from(payment);
     }
 

@@ -8,13 +8,16 @@ import static org.mockito.Mockito.doThrow;
 import com.commerce.domain.payment.application.info.PaymentInfo;
 import com.commerce.domain.payment.application.provided.PaymentAppender;
 import com.commerce.domain.payment.application.provided.PaymentProcessor;
+import com.commerce.domain.payment.application.required.PaymentRefundRepository;
 import com.commerce.domain.payment.application.required.PaymentRepository;
 import com.commerce.domain.payment.domain.Payment;
 import com.commerce.domain.payment.domain.PaymentMethod;
+import com.commerce.domain.payment.domain.PaymentRefund;
 import com.commerce.domain.payment.domain.PaymentStatus;
 import com.commerce.domain.payment.domain.exception.DuplicatePaymentException;
 import com.commerce.domain.payment.domain.exception.PaymentStatusException;
 import com.commerce.domain.shared.entity.Money;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -66,6 +69,7 @@ class PaymentPersistenceTest {
     private final PaymentProcessor paymentProcessor;
     private final StubPaymentGateway gateway;
     private final TestEntityManager em;
+    private final PaymentRefundRepository paymentRefundRepository;
 
     @MockitoSpyBean
     private PaymentRepository paymentRepository;
@@ -74,11 +78,13 @@ class PaymentPersistenceTest {
             PaymentAppender paymentAppender,
             PaymentProcessor paymentProcessor,
             StubPaymentGateway gateway,
-            TestEntityManager em) {
+            TestEntityManager em,
+            PaymentRefundRepository paymentRefundRepository) {
         this.paymentAppender = paymentAppender;
         this.paymentProcessor = paymentProcessor;
         this.gateway = gateway;
         this.em = em;
+        this.paymentRefundRepository = paymentRefundRepository;
     }
 
     @BeforeEach
@@ -270,6 +276,45 @@ class PaymentPersistenceTest {
         assertThat(settled.getStatus()).isEqualTo(PaymentStatus.CANCELLED);
         assertThat(settled.getPgTransactionId()).isEqualTo("PG-ORPHAN");
         assertThat(settled.getPgCancelTransactionId()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("부분 환불은 PG 취소 거래 ID를 실은 환불 행을 남기고, 같은 라인 재시도는 행을 중복 생성하지 않는다")
+    void cancelPartiallyPersistsRefundRowIdempotently() {
+        UUID paymentId = paymentAppender.request(UUID.randomUUID(), Money.of(30_000L), PaymentMethod.CARD);
+        em.flush();
+        paymentProcessor.approve(paymentId);
+        em.flush();
+        UUID lineId = UUID.randomUUID();
+
+        paymentProcessor.cancelPartially(paymentId, Money.of(10_000L), Money.of(10_000L), lineId);
+        paymentProcessor.cancelPartially(paymentId, Money.of(10_000L), Money.of(10_000L), lineId); // 재시도
+
+        List<PaymentRefund> refunds = paymentRefundRepository.findAllByPaymentId(paymentId);
+        assertThat(refunds).hasSize(1);
+        assertThat(refunds.get(0).getRefundKey()).isEqualTo(lineId);
+        assertThat(refunds.get(0).getAmount()).isEqualTo(Money.of(10_000L));
+        assertThat(refunds.get(0).getPgCancelTransactionId()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("0원 부분 환불은 PG 호출 없이 환불 행을 남기고 PG 취소 거래 ID가 비어 있다")
+    void cancelPartiallyWithZeroAmountSkipsGatewayAndPersistsRefundRowWithoutPgCancelTransactionId() {
+        UUID paymentId = paymentAppender.request(UUID.randomUUID(), Money.of(10_000L), PaymentMethod.CARD);
+        em.flush();
+        paymentProcessor.approve(paymentId);
+        em.flush();
+        gateway.reset();
+        UUID lineId = UUID.randomUUID();
+
+        paymentProcessor.cancelPartially(paymentId, Money.ZERO, Money.ZERO, lineId);
+
+        assertThat(gateway.cancelCalled).isFalse();
+        List<PaymentRefund> refunds = paymentRefundRepository.findAllByPaymentId(paymentId);
+        assertThat(refunds).hasSize(1);
+        assertThat(refunds.get(0).getRefundKey()).isEqualTo(lineId);
+        assertThat(refunds.get(0).getPgCancelTransactionId()).isNull();
+        assertThat(reload(paymentId).getRefundedAmount()).isEqualTo(Money.ZERO);
     }
 
     @Test
