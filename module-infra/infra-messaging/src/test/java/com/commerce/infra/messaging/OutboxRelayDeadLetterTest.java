@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
-import com.commerce.event.registry.MapEventTypeRegistry;
+import com.commerce.common.event.registry.MapEventTypeRegistry;
 import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Instant;

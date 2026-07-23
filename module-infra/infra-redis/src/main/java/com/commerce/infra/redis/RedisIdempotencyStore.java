@@ -1,6 +1,6 @@
 package com.commerce.infra.redis;
 
-import com.commerce.web.idempotency.IdempotencyStore;
+import com.commerce.common.web.idempotency.IdempotencyStore;
 import java.time.Duration;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;

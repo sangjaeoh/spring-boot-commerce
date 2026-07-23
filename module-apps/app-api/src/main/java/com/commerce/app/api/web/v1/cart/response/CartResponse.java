@@ -1,0 +1,25 @@
+package com.commerce.app.api.web.v1.cart.response;
+
+import com.commerce.app.api.facade.view.CartView;
+import io.swagger.v3.oas.annotations.media.Schema;
+import java.util.List;
+import java.util.UUID;
+
+@Schema(description = "장바구니 응답")
+public record CartResponse(
+        @Schema(description = "회원 ID") UUID memberId,
+        @Schema(description = "장바구니 라인 목록") List<CartLineResponse> lines,
+        @Schema(description = "총액(주문 가능 라인 소계 합)") long totalAmount) {
+
+    public CartResponse {
+        lines = List.copyOf(lines);
+    }
+
+    /** 장바구니 뷰에서 응답을 만든다. */
+    public static CartResponse from(CartView cart) {
+        return new CartResponse(
+                cart.memberId(),
+                cart.lines().stream().map(CartLineResponse::from).toList(),
+                cart.totalAmount().amount());
+    }
+}

@@ -1,0 +1,11 @@
+package com.commerce.common.web.support;
+
+import com.commerce.common.core.exception.BaseException;
+
+/** 경계에 도달하는 {@link BaseException} 검증용 테스트 예외다. */
+public class TestBoundaryException extends BaseException {
+
+    public TestBoundaryException() {
+        super(TestErrorCode.SAMPLE);
+    }
+}

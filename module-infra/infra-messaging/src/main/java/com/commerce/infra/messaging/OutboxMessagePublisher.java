@@ -1,8 +1,8 @@
 package com.commerce.infra.messaging;
 
-import com.commerce.core.id.UuidV7Generator;
-import com.commerce.event.event.DomainEvent;
-import com.commerce.event.publish.MessagePublisher;
+import com.commerce.common.core.id.UuidV7Generator;
+import com.commerce.common.event.event.DomainEvent;
+import com.commerce.common.event.publish.MessagePublisher;
 import java.sql.Timestamp;
 import java.time.Clock;
 import org.springframework.jdbc.core.JdbcTemplate;

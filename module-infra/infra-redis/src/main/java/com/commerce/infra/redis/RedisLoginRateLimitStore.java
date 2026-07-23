@@ -1,6 +1,6 @@
 package com.commerce.infra.redis;
 
-import com.commerce.web.ratelimit.LoginRateLimitStore;
+import com.commerce.common.web.ratelimit.LoginRateLimitStore;
 import java.time.Duration;
 import java.util.List;
 import org.springframework.data.redis.core.StringRedisTemplate;

@@ -1,6 +1,6 @@
 package com.commerce.event.order;
 
-import com.commerce.event.event.DomainEvent;
+import com.commerce.common.event.event.DomainEvent;
 import java.util.Set;
 import java.util.UUID;
 
