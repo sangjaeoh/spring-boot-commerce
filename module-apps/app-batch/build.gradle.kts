@@ -8,11 +8,14 @@ dependencies {
     implementation(project(":module-common:common-event"))
     // 릴레이 레지스트리 배선·소비 리스너가 이벤트 record(OrderPaid)를 참조한다.
     implementation(project(":module-events:event-order"))
+    implementation(project(":module-events:event-stock"))
     implementation(project(":module-domains:domain-order"))
     implementation(project(":module-domains:domain-payment"))
     implementation(project(":module-domains:domain-stock"))
     implementation(project(":module-domains:domain-coupon"))
     implementation(project(":module-domains:domain-cart"))
+    // 소비 커버리지 불변식: 임베드한 발행 도메인(domain-stock)이 발행하는 StockRestocked의 소비 도메인.
+    runtimeOnly(project(":module-domains:domain-wishlist"))
     // 웹훅 수신 엔드포인트(PG 결제 확정 통지)가 유일한 HTTP 표면이다.
     implementation(libs.spring.boot.starter.web)
     // 무상태 거부 기본 체인(SecurityConfig). common-web ProblemDetail 핸들러도 security 클래스를 참조한다.
