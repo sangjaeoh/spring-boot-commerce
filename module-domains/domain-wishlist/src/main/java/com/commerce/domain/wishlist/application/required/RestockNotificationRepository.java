@@ -6,5 +6,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface RestockNotificationRepository extends JpaRepository<RestockNotification, UUID> {
 
-    boolean existsByEventId(UUID eventId);
+    boolean existsByEventIdAndMemberId(UUID eventId, UUID memberId);
 }

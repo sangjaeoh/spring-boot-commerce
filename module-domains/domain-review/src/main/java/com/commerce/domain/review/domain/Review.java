@@ -6,6 +6,8 @@ import com.commerce.domain.review.domain.exception.InvalidReviewException;
 import com.commerce.domain.review.domain.exception.ReviewErrorCode;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
@@ -50,6 +52,12 @@ public class Review extends BaseTimeEntity<UUID> {
     @Column(name = "removed_reason")
     @Nullable
     private String removedReason;
+
+    /** 삭제 주체. 삭제된 리뷰만 있다. */
+    @Nullable
+    @Enumerated(EnumType.STRING)
+    @Column(name = "deleted_by")
+    private DeletedBy deletedBy;
 
     protected Review() {}
 
@@ -121,9 +129,20 @@ public class Review extends BaseTimeEntity<UUID> {
         return removedReason;
     }
 
+    public @Nullable DeletedBy getDeletedBy() {
+        return deletedBy;
+    }
+
     /** 관리자 제거로 소프트삭제하고 사유를 보존한다. */
     public void delete(String reason) {
         this.deletedAt = Instant.now();
         this.removedReason = reason;
+        this.deletedBy = DeletedBy.ADMIN;
+    }
+
+    /** 본인 삭제로 소프트삭제한다. 사유 없이 주체만 남긴다. */
+    public void deleteByOwner() {
+        this.deletedAt = Instant.now();
+        this.deletedBy = DeletedBy.MEMBER;
     }
 }

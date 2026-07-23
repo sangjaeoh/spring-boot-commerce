@@ -1,12 +1,12 @@
 package com.commerce.app.api.web.v1.inquiry;
 
+import com.commerce.app.api.facade.InquiryWriteFacade;
 import com.commerce.app.api.web.auth.Authenticated;
 import com.commerce.app.api.web.v1.inquiry.request.InquiryRequest;
 import com.commerce.app.api.web.v1.inquiry.response.InquiryCreationResponse;
 import com.commerce.app.api.web.v1.inquiry.response.InquiryPageResponse;
 import com.commerce.common.web.auth.AuthUser;
 import com.commerce.common.web.paging.PaginationRequest;
-import com.commerce.domain.inquiry.application.provided.InquiryAppender;
 import com.commerce.domain.inquiry.application.provided.InquiryReader;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -38,11 +38,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/products/{productId}/inquiries")
 public class InquiryController {
 
-    private final InquiryAppender inquiryAppender;
+    private final InquiryWriteFacade inquiryWriteFacade;
     private final InquiryReader inquiryReader;
 
-    public InquiryController(InquiryAppender inquiryAppender, InquiryReader inquiryReader) {
-        this.inquiryAppender = inquiryAppender;
+    public InquiryController(InquiryWriteFacade inquiryWriteFacade, InquiryReader inquiryReader) {
+        this.inquiryWriteFacade = inquiryWriteFacade;
         this.inquiryReader = inquiryReader;
     }
 
@@ -57,6 +57,14 @@ public class InquiryController {
                 responseCode = "401",
                 description = "미인증",
                 content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+        @ApiResponse(
+                responseCode = "404",
+                description = "상품 없음",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+        @ApiResponse(
+                responseCode = "409",
+                description = "자격 미달 회원(정지·탈퇴)",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
     })
     @Authenticated
     @PostMapping
@@ -66,7 +74,7 @@ public class InquiryController {
             @Parameter(description = "문의 대상 상품 ID") @PathVariable UUID productId,
             @Valid @RequestBody InquiryRequest request) {
         return InquiryCreationResponse.from(
-                inquiryAppender.write(authUser.memberId(), productId, request.content(), request.secret()));
+                inquiryWriteFacade.write(authUser.memberId(), productId, request.content(), request.secret()));
     }
 
     @Operation(

@@ -11,10 +11,11 @@ import org.springframework.data.repository.query.Param;
 
 public interface ReviewRepository extends JpaRepository<Review, UUID> {
 
-    // 재작성 불가 정책 — 관리자 제거(소프트삭제)된 리뷰도 중복 검사에 포함한다. 전행 유니크 인덱스와 정합.
-    @Query("select count(r) > 0 from Review r where r.memberId = :memberId and r.productId = :productId")
-    boolean existsByMemberIdAndProductIdIncludingDeleted(
-            @Param("memberId") UUID memberId, @Param("productId") UUID productId);
+    /** 활성 리뷰 또는 관리자 삭제 리뷰가 있는지 본다 — 본인 삭제(MEMBER)는 재작성을 막지 않는다. */
+    @Query("select count(r) > 0 from Review r"
+            + " where r.memberId = :memberId and r.productId = :productId"
+            + " and (r.deletedAt is null or r.deletedBy = com.commerce.domain.review.domain.DeletedBy.ADMIN)")
+    boolean existsActiveOrAdminRemoved(@Param("memberId") UUID memberId, @Param("productId") UUID productId);
 
     Optional<Review> findByIdAndMemberIdAndDeletedAtIsNull(UUID id, UUID memberId);
 

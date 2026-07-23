@@ -21,9 +21,10 @@ class DefaultReviewRemover implements ReviewRemover {
     @Transactional
     @Override
     public void remove(UUID reviewId, UUID memberId) {
-        reviewRepository.delete(reviewRepository
+        reviewRepository
                 .findByIdAndMemberIdAndDeletedAtIsNull(reviewId, memberId)
-                .orElseThrow(() -> new ReviewNotFoundException(ReviewErrorCode.REVIEW_NOT_FOUND)));
+                .orElseThrow(() -> new ReviewNotFoundException(ReviewErrorCode.REVIEW_NOT_FOUND))
+                .deleteByOwner();
     }
 
     @Transactional
