@@ -1,6 +1,6 @@
 package com.commerce.infra.redis;
 
-import com.commerce.auth.token.RefreshTokenStore;
+import com.commerce.common.auth.token.RefreshTokenStore;
 import java.time.Duration;
 import java.util.Optional;
 import org.springframework.data.redis.core.StringRedisTemplate;

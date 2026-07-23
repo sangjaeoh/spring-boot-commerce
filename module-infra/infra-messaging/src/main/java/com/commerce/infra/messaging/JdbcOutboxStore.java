@@ -1,7 +1,7 @@
 package com.commerce.infra.messaging;
 
-import com.commerce.event.outbox.OutboxMessage;
-import com.commerce.event.outbox.OutboxStore;
+import com.commerce.common.event.outbox.OutboxMessage;
+import com.commerce.common.event.outbox.OutboxStore;
 import java.sql.Timestamp;
 import java.time.Clock;
 import java.util.List;
