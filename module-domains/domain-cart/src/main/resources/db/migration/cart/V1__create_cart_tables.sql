@@ -18,6 +18,8 @@ CREATE TABLE cart.cart_item (
     quantity   INTEGER     NOT NULL,
     created_at TIMESTAMPTZ NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL,
+    -- 동일 라인 동시 수량 합산(더블서밋)의 유실을 낙관락으로 막는다.
+    version    BIGINT      NOT NULL DEFAULT 0,
     CONSTRAINT pk_cart_item PRIMARY KEY (id)
 );
 
