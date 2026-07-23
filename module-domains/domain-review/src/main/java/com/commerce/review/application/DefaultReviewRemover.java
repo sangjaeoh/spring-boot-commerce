@@ -2,8 +2,8 @@ package com.commerce.review.application;
 
 import com.commerce.review.application.provided.ReviewRemover;
 import com.commerce.review.application.required.ReviewRepository;
-import com.commerce.review.domain.ReviewErrorCode;
-import com.commerce.review.domain.ReviewNotFoundException;
+import com.commerce.review.domain.exception.ReviewErrorCode;
+import com.commerce.review.domain.exception.ReviewNotFoundException;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

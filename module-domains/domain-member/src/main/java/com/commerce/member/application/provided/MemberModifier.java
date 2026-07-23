@@ -1,10 +1,10 @@
 package com.commerce.member.application.provided;
 
-import com.commerce.member.domain.InvalidPasswordException;
-import com.commerce.member.domain.MemberNotFoundException;
-import com.commerce.member.domain.MemberStatusException;
-import com.commerce.member.domain.PasswordMismatchException;
 import com.commerce.member.domain.SuspensionReason;
+import com.commerce.member.domain.exception.InvalidPasswordException;
+import com.commerce.member.domain.exception.MemberNotFoundException;
+import com.commerce.member.domain.exception.MemberStatusException;
+import com.commerce.member.domain.exception.PasswordMismatchException;
 import java.util.UUID;
 
 /** 회원 상태 전이·표시 이름 변경·패스워드 교체를 담당하는 서비스다. */

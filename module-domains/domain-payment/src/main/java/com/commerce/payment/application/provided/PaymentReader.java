@@ -1,7 +1,7 @@
 package com.commerce.payment.application.provided;
 
 import com.commerce.payment.application.info.PaymentInfo;
-import com.commerce.payment.domain.PaymentNotFoundException;
+import com.commerce.payment.domain.exception.PaymentNotFoundException;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;

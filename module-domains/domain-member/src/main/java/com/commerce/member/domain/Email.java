@@ -1,5 +1,7 @@
 package com.commerce.member.domain;
 
+import com.commerce.member.domain.exception.InvalidEmailException;
+import com.commerce.member.domain.exception.MemberErrorCode;
 import java.util.regex.Pattern;
 
 /** 회원 이메일 값 객체다. */

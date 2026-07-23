@@ -2,9 +2,9 @@ package com.commerce.stock.application;
 
 import com.commerce.stock.application.provided.StockAppender;
 import com.commerce.stock.application.required.StockRepository;
-import com.commerce.stock.domain.DuplicateStockException;
 import com.commerce.stock.domain.Stock;
-import com.commerce.stock.domain.StockErrorCode;
+import com.commerce.stock.domain.exception.DuplicateStockException;
+import com.commerce.stock.domain.exception.StockErrorCode;
 import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;

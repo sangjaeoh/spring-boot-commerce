@@ -1,6 +1,9 @@
 package com.commerce.coupon.domain;
 
 import com.commerce.core.id.UuidV7Generator;
+import com.commerce.coupon.domain.exception.CouponErrorCode;
+import com.commerce.coupon.domain.exception.CouponExpiredException;
+import com.commerce.coupon.domain.exception.CouponStatusException;
 import com.commerce.jpa.entity.BaseTimeEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

@@ -3,6 +3,8 @@ package com.commerce.cart.domain;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.commerce.cart.domain.exception.CartItemNotFoundException;
+import com.commerce.cart.domain.exception.InvalidCartItemException;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;

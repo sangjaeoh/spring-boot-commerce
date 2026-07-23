@@ -1,7 +1,7 @@
 package com.commerce.coupon.application.provided;
 
-import com.commerce.coupon.domain.CouponNotFoundException;
-import com.commerce.coupon.domain.CouponStatusException;
+import com.commerce.coupon.domain.exception.CouponNotFoundException;
+import com.commerce.coupon.domain.exception.CouponStatusException;
 import java.util.UUID;
 
 /** 쿠폰 정책 발급 가능·중지 전환을 담당하는 서비스다. */

@@ -2,12 +2,12 @@ package com.commerce.member.application;
 
 import com.commerce.member.application.provided.MemberAppender;
 import com.commerce.member.application.required.MemberRepository;
-import com.commerce.member.domain.DuplicateEmailException;
 import com.commerce.member.domain.Email;
-import com.commerce.member.domain.InvalidPasswordException;
 import com.commerce.member.domain.Member;
-import com.commerce.member.domain.MemberErrorCode;
 import com.commerce.member.domain.MemberRole;
+import com.commerce.member.domain.exception.DuplicateEmailException;
+import com.commerce.member.domain.exception.InvalidPasswordException;
+import com.commerce.member.domain.exception.MemberErrorCode;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;

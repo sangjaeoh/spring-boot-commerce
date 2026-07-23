@@ -1,6 +1,6 @@
 package com.commerce.inquiry.application.provided;
 
-import com.commerce.inquiry.domain.InvalidInquiryException;
+import com.commerce.inquiry.domain.exception.InvalidInquiryException;
 import java.util.UUID;
 
 /** 문의 작성을 담당하는 서비스다. */

@@ -1,6 +1,6 @@
 package com.commerce.review.application.provided;
 
-import com.commerce.review.domain.ReviewNotFoundException;
+import com.commerce.review.domain.exception.ReviewNotFoundException;
 import java.util.UUID;
 
 /** 리뷰 삭제를 담당하는 서비스다. */

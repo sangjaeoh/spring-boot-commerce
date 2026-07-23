@@ -1,6 +1,6 @@
 package com.commerce.cart.application.provided;
 
-import com.commerce.cart.domain.InvalidCartItemException;
+import com.commerce.cart.domain.exception.InvalidCartItemException;
 import java.util.UUID;
 
 /** 장바구니 담기를 담당하는 서비스다. */

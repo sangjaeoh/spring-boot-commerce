@@ -2,6 +2,8 @@ package com.commerce.payment.domain;
 
 import com.commerce.core.id.UuidV7Generator;
 import com.commerce.jpa.entity.BaseTimeEntity;
+import com.commerce.payment.domain.exception.PaymentErrorCode;
+import com.commerce.payment.domain.exception.PaymentStatusException;
 import com.commerce.shared.entity.Money;
 import com.commerce.shared.entity.MoneyConverter;
 import jakarta.persistence.Column;

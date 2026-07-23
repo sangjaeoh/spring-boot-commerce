@@ -1,7 +1,7 @@
 package com.commerce.product.application.provided;
 
 import com.commerce.product.application.info.ProductInfo;
-import com.commerce.product.domain.ProductNotFoundException;
+import com.commerce.product.domain.exception.ProductNotFoundException;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;

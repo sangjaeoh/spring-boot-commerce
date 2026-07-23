@@ -2,9 +2,9 @@ package com.commerce.review.application;
 
 import com.commerce.review.application.provided.ReviewAppender;
 import com.commerce.review.application.required.ReviewRepository;
-import com.commerce.review.domain.DuplicateReviewException;
 import com.commerce.review.domain.Review;
-import com.commerce.review.domain.ReviewErrorCode;
+import com.commerce.review.domain.exception.DuplicateReviewException;
+import com.commerce.review.domain.exception.ReviewErrorCode;
 import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;

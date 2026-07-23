@@ -3,8 +3,8 @@ package com.commerce.payment.application.provided;
 import com.commerce.payment.application.info.GatewayTransactionInfo;
 import com.commerce.payment.application.info.PaymentInfo;
 import com.commerce.payment.domain.FailureReason;
-import com.commerce.payment.domain.PaymentNotFoundException;
-import com.commerce.payment.domain.PaymentStatusException;
+import com.commerce.payment.domain.exception.PaymentNotFoundException;
+import com.commerce.payment.domain.exception.PaymentStatusException;
 import java.util.UUID;
 
 /** 결제 승인·취소와 리컨실 확정 기록을 조율하는 서비스다. PG 호출은 포트에 위임한다. */

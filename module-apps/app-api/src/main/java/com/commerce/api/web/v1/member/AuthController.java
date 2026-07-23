@@ -13,7 +13,7 @@ import com.commerce.member.application.info.MemberInfo;
 import com.commerce.member.application.provided.MemberCredentialValidator;
 import com.commerce.member.application.provided.MemberReader;
 import com.commerce.member.application.provided.PasswordResetProcessor;
-import com.commerce.member.domain.MemberNotFoundException;
+import com.commerce.member.domain.exception.MemberNotFoundException;
 import com.commerce.web.exception.UnauthenticatedException;
 import com.commerce.web.exception.WebErrorCode;
 import io.swagger.v3.oas.annotations.Operation;

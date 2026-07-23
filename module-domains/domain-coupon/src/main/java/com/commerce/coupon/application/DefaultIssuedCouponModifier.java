@@ -2,9 +2,9 @@ package com.commerce.coupon.application;
 
 import com.commerce.coupon.application.provided.IssuedCouponModifier;
 import com.commerce.coupon.application.required.IssuedCouponRepository;
-import com.commerce.coupon.domain.CouponErrorCode;
 import com.commerce.coupon.domain.IssuedCoupon;
-import com.commerce.coupon.domain.IssuedCouponNotFoundException;
+import com.commerce.coupon.domain.exception.CouponErrorCode;
+import com.commerce.coupon.domain.exception.IssuedCouponNotFoundException;
 import java.time.Clock;
 import java.util.UUID;
 import org.springframework.stereotype.Service;

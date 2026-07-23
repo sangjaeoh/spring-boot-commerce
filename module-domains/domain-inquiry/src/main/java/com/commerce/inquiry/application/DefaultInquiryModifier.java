@@ -2,8 +2,8 @@ package com.commerce.inquiry.application;
 
 import com.commerce.inquiry.application.provided.InquiryModifier;
 import com.commerce.inquiry.application.required.InquiryRepository;
-import com.commerce.inquiry.domain.InquiryErrorCode;
-import com.commerce.inquiry.domain.InquiryNotFoundException;
+import com.commerce.inquiry.domain.exception.InquiryErrorCode;
+import com.commerce.inquiry.domain.exception.InquiryNotFoundException;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

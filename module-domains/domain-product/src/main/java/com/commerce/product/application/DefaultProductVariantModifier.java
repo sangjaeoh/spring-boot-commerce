@@ -2,9 +2,9 @@ package com.commerce.product.application;
 
 import com.commerce.product.application.provided.ProductVariantModifier;
 import com.commerce.product.application.required.ProductVariantRepository;
-import com.commerce.product.domain.ProductErrorCode;
 import com.commerce.product.domain.ProductVariant;
-import com.commerce.product.domain.ProductVariantNotFoundException;
+import com.commerce.product.domain.exception.ProductErrorCode;
+import com.commerce.product.domain.exception.ProductVariantNotFoundException;
 import com.commerce.shared.entity.Money;
 import java.util.UUID;
 import org.springframework.stereotype.Service;

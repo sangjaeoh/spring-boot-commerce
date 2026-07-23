@@ -3,6 +3,7 @@ package com.commerce.payment.domain;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.commerce.payment.domain.exception.PaymentStatusException;
 import com.commerce.shared.entity.Money;
 import java.time.Instant;
 import java.util.UUID;

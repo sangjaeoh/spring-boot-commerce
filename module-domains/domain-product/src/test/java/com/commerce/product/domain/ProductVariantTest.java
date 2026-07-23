@@ -3,6 +3,8 @@ package com.commerce.product.domain;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.commerce.product.domain.exception.InvalidVariantException;
+import com.commerce.product.domain.exception.ProductVariantStatusException;
 import com.commerce.shared.entity.Money;
 import java.util.List;
 import java.util.UUID;

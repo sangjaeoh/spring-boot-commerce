@@ -1,7 +1,7 @@
 package com.commerce.inquiry.application.provided;
 
-import com.commerce.inquiry.domain.InquiryNotFoundException;
-import com.commerce.inquiry.domain.InvalidInquiryException;
+import com.commerce.inquiry.domain.exception.InquiryNotFoundException;
+import com.commerce.inquiry.domain.exception.InvalidInquiryException;
 import java.util.UUID;
 
 /** 문의 답변을 담당하는 서비스다. */

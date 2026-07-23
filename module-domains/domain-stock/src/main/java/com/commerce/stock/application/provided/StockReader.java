@@ -1,7 +1,7 @@
 package com.commerce.stock.application.provided;
 
 import com.commerce.stock.application.info.StockInfo;
-import com.commerce.stock.domain.StockNotFoundException;
+import com.commerce.stock.domain.exception.StockNotFoundException;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;

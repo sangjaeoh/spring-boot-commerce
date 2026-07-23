@@ -1,8 +1,8 @@
 package com.commerce.product.application.provided;
 
-import com.commerce.product.domain.InvalidVariantException;
-import com.commerce.product.domain.ProductVariantNotFoundException;
-import com.commerce.product.domain.ProductVariantStatusException;
+import com.commerce.product.domain.exception.InvalidVariantException;
+import com.commerce.product.domain.exception.ProductVariantNotFoundException;
+import com.commerce.product.domain.exception.ProductVariantStatusException;
 import com.commerce.shared.entity.Money;
 import java.util.UUID;
 

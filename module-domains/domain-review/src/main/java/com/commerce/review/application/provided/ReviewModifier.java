@@ -1,7 +1,7 @@
 package com.commerce.review.application.provided;
 
-import com.commerce.review.domain.InvalidReviewException;
-import com.commerce.review.domain.ReviewNotFoundException;
+import com.commerce.review.domain.exception.InvalidReviewException;
+import com.commerce.review.domain.exception.ReviewNotFoundException;
 import java.util.UUID;
 
 /** 리뷰 수정을 담당하는 서비스다. */

@@ -1,7 +1,7 @@
 package com.commerce.payment.application.provided;
 
-import com.commerce.payment.domain.DuplicatePaymentException;
 import com.commerce.payment.domain.PaymentMethod;
+import com.commerce.payment.domain.exception.DuplicatePaymentException;
 import com.commerce.shared.entity.Money;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;

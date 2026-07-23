@@ -1,7 +1,7 @@
 package com.commerce.member.application.provided;
 
-import com.commerce.member.domain.MemberNotFoundException;
 import com.commerce.member.domain.WithdrawalReason;
+import com.commerce.member.domain.exception.MemberNotFoundException;
 import java.util.UUID;
 
 /** 회원 탈퇴(논리삭제)를 담당하는 서비스다. */

@@ -2,11 +2,11 @@ package com.commerce.order.application.provided;
 
 import com.commerce.event.order.OrderPaid;
 import com.commerce.order.domain.CancellationReason;
-import com.commerce.order.domain.FulfillmentStatusException;
 import com.commerce.order.domain.HoldReason;
-import com.commerce.order.domain.OrderNotFoundException;
-import com.commerce.order.domain.OrderStatusException;
 import com.commerce.order.domain.RefundReason;
+import com.commerce.order.domain.exception.FulfillmentStatusException;
+import com.commerce.order.domain.exception.OrderNotFoundException;
+import com.commerce.order.domain.exception.OrderStatusException;
 import java.util.UUID;
 
 /** 주문 결제·이행 상태 전이를 담당하는 서비스다. */

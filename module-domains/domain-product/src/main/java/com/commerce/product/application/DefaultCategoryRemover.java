@@ -2,8 +2,8 @@ package com.commerce.product.application;
 
 import com.commerce.product.application.provided.CategoryRemover;
 import com.commerce.product.application.required.CategoryRepository;
-import com.commerce.product.domain.CategoryNotFoundException;
-import com.commerce.product.domain.ProductErrorCode;
+import com.commerce.product.domain.exception.CategoryNotFoundException;
+import com.commerce.product.domain.exception.ProductErrorCode;
 import java.time.Clock;
 import java.util.UUID;
 import org.springframework.stereotype.Service;

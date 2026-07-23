@@ -1,6 +1,8 @@
 package com.commerce.inquiry.domain;
 
 import com.commerce.core.id.UuidV7Generator;
+import com.commerce.inquiry.domain.exception.InquiryErrorCode;
+import com.commerce.inquiry.domain.exception.InvalidInquiryException;
 import com.commerce.jpa.entity.BaseTimeEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

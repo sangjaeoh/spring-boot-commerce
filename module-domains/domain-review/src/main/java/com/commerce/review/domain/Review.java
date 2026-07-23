@@ -2,6 +2,8 @@ package com.commerce.review.domain;
 
 import com.commerce.core.id.UuidV7Generator;
 import com.commerce.jpa.entity.BaseTimeEntity;
+import com.commerce.review.domain.exception.InvalidReviewException;
+import com.commerce.review.domain.exception.ReviewErrorCode;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
