@@ -11,7 +11,9 @@ import com.commerce.domain.review.application.provided.ReviewRemover;
 import com.commerce.domain.review.application.required.ReviewRepository;
 import com.commerce.domain.review.domain.Review;
 import com.commerce.domain.review.domain.exception.DuplicateReviewException;
+import com.commerce.domain.review.domain.exception.ReviewErrorCode;
 import com.commerce.domain.review.domain.exception.ReviewNotFoundException;
+import java.util.Objects;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -19,6 +21,7 @@ import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
+import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -60,18 +63,21 @@ class ReviewPersistenceTest {
     private final ReviewRemover reviewRemover;
     private final ReviewReader reviewReader;
     private final ReviewRepository reviewRepository;
+    private final TestEntityManager entityManager;
 
     ReviewPersistenceTest(
             ReviewAppender reviewAppender,
             ReviewModifier reviewModifier,
             ReviewRemover reviewRemover,
             ReviewReader reviewReader,
-            ReviewRepository reviewRepository) {
+            ReviewRepository reviewRepository,
+            TestEntityManager entityManager) {
         this.reviewAppender = reviewAppender;
         this.reviewModifier = reviewModifier;
         this.reviewRemover = reviewRemover;
         this.reviewReader = reviewReader;
         this.reviewRepository = reviewRepository;
+        this.entityManager = entityManager;
     }
 
     @Test
@@ -146,6 +152,48 @@ class ReviewPersistenceTest {
         reviewRemover.remove(reviewId, memberId);
         assertThat(reviewReader.getProductPage(productId, PageRequest.of(0, 10)))
                 .isEmpty();
+    }
+
+    @Test
+    @DisplayName("관리자 제거 후 리뷰가 상품별 페이지에서 빠진다")
+    void removeByAdminExcludesReviewFromProductPage() {
+        UUID productId = UUID.randomUUID();
+        UUID reviewId = reviewAppender.write(UUID.randomUUID(), productId, 1, "부적절한 본문");
+
+        reviewRemover.removeByAdmin(reviewId, "욕설 포함");
+
+        assertThat(reviewReader.getProductPage(productId, PageRequest.of(0, 10)))
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("관리자 제거는 행에 사유·삭제 시각을 보존한다")
+    void removeByAdminPreservesReasonOnRow() {
+        UUID reviewId = reviewAppender.write(UUID.randomUUID(), UUID.randomUUID(), 1, "부적절한 본문");
+
+        reviewRemover.removeByAdmin(reviewId, "욕설 포함");
+
+        entityManager.flush();
+        entityManager.clear();
+        Review removed = Objects.requireNonNull(entityManager.find(Review.class, reviewId));
+        assertThat(removed.getDeletedAt()).isNotNull();
+        assertThat(removed.getRemovedReason()).isEqualTo("욕설 포함");
+    }
+
+    @Test
+    @DisplayName("없는 리뷰·이미 제거된 리뷰의 관리자 제거는 REVIEW_NOT_FOUND로 거부된다")
+    void removeByAdminRejectsMissingOrRemovedReview() {
+        assertThatThrownBy(() -> reviewRemover.removeByAdmin(UUID.randomUUID(), "사유"))
+                .isInstanceOf(ReviewNotFoundException.class)
+                .extracting("errorCode")
+                .isEqualTo(ReviewErrorCode.REVIEW_NOT_FOUND);
+
+        UUID reviewId = reviewAppender.write(UUID.randomUUID(), UUID.randomUUID(), 1, "부적절한 본문");
+        reviewRemover.removeByAdmin(reviewId, "욕설 포함");
+        assertThatThrownBy(() -> reviewRemover.removeByAdmin(reviewId, "재제거"))
+                .isInstanceOf(ReviewNotFoundException.class)
+                .extracting("errorCode")
+                .isEqualTo(ReviewErrorCode.REVIEW_NOT_FOUND);
     }
 
     @Test
