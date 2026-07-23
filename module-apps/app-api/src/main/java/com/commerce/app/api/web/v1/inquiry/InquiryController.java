@@ -57,6 +57,14 @@ public class InquiryController {
                 responseCode = "401",
                 description = "미인증",
                 content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+        @ApiResponse(
+                responseCode = "404",
+                description = "상품 없음",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
+        @ApiResponse(
+                responseCode = "409",
+                description = "자격 미달 회원(정지·탈퇴)",
+                content = @Content(schema = @Schema(implementation = ProblemDetail.class))),
     })
     @Authenticated
     @PostMapping
