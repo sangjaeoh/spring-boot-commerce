@@ -1,6 +1,7 @@
 package com.commerce.domain.order.application.info;
 
 import com.commerce.domain.order.domain.CancellationReason;
+import com.commerce.domain.order.domain.Fulfillment;
 import com.commerce.domain.order.domain.FulfillmentStatus;
 import com.commerce.domain.order.domain.HoldReason;
 import com.commerce.domain.order.domain.Order;
@@ -49,14 +50,14 @@ public record OrderInfo(
         lines = List.copyOf(lines);
     }
 
-    /** 주문 엔티티에서 조회 모델을 만든다. */
-    public static OrderInfo from(Order order) {
+    /** 주문·이행 엔티티에서 조회 모델을 만든다. 이행 행이 없으면(미개시) 시작 전으로 합성한다. */
+    public static OrderInfo of(Order order, @Nullable Fulfillment fulfillment) {
         return new OrderInfo(
                 order.getId(),
                 order.getOrderNumber(),
                 order.getMemberId(),
                 order.getStatus(),
-                order.getFulfillmentStatus(),
+                fulfillment == null ? FulfillmentStatus.NOT_STARTED : fulfillment.getStatus(),
                 order.getTotalAmount(),
                 order.getDiscountAmount(),
                 order.getShippingFee(),
@@ -67,13 +68,13 @@ public record OrderInfo(
                 order.getLines().stream().map(OrderLineInfo::from).toList(),
                 order.getStockDeductedAt(),
                 order.getPaidAt(),
-                order.getShippedAt(),
-                order.getCarrier(),
-                order.getTrackingNumber(),
-                order.getDeliveredAt(),
+                fulfillment == null ? null : fulfillment.getShippedAt(),
+                fulfillment == null ? null : fulfillment.getCarrier(),
+                fulfillment == null ? null : fulfillment.getTrackingNumber(),
+                fulfillment == null ? null : fulfillment.getDeliveredAt(),
                 order.getCancelledAt(),
                 order.getCancellationReason(),
-                order.getHoldReason(),
+                fulfillment == null ? null : fulfillment.getHoldReason(),
                 order.getRefundedAt(),
                 order.getRefundReason(),
                 order.getReturnStatus(),

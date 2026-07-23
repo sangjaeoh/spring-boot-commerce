@@ -38,6 +38,7 @@
 | 반품 | 신규 `@Embeddable record ReturnRequest(returnStatus, returnRequestedAt, returnReason)` | `Return`은 자바 예약어라 `ReturnRequest`로 명명. 동일 패턴 |
 
 - `Cancellation`·`ReturnRequest`는 불변 레코드이며 자기 축 전이 메서드를 갖는다(예: `Cancellation.request(now)`가 새 인스턴스를 반환). `Order`는 전이 후 `this.cancellation = this.cancellation.request(now)` 형태로 필드를 교체한다.
+- 구현 중 발견: 취소·반품 이력이 없는 주문(임베더블 전 컴포넌트가 `null`)을 조회하면 Hibernate가 `cancellation`/`returnRequest` 필드 자체를 `null`로 접는다(레코드 임베더블도 예외 없음, `hibernate.create_empty_composites.enabled` 글로벌 설정도 이 경로에는 효과 없었다). `Order`는 이 필드를 직접 읽지 않고 방어적 접근자(`cancellation()`/`returnRequest()` — 필드가 `null`이면 빈 인스턴스로 대체)로만 읽는다.
 - 컬럼 매핑은 기존과 동일(같은 테이블, 같은 컬럼명) — 임베더블 도입 자체는 스키마 변경이 아니다.
 - `Order`의 7개 메서드(`cancel`·`requestCancellation`·`beginLineCancellation`·`refund`·`requestReturn`·`requestLineReturn`·`beginLineReturn`)는 현재 자기 필드로 읽던 `fulfillmentStatus`를 더 이상 갖지 않으므로 파라미터로 받는다. 예: `cancel(CancellationReason reason, FulfillmentStatus fulfillmentStatus, Instant now)`. 내부 헬퍼 `isShippedOrDelivered()`도 필드 대신 파라미터를 검사하도록만 바뀐다 — 판정 로직 자체는 그대로.
 - `OrderModifier`(provided) 시그니처는 `UUID orderId` 등 기존 그대로다. `DefaultOrderModifier`가 `FulfillmentRepository`를 추가로 주입받아 필요한 메서드에서 `Fulfillment`를 먼저 읽고 그 상태를 `Order` 엔티티 메서드에 넘겨준다.
@@ -76,7 +77,7 @@
 
 ## 마이그레이션 (expand-contract)
 
-1. **expand**: `ordering.fulfillment` 테이블 생성(인덱스: `order_id` 유니크) + `orders`의 기존 6개 컬럼값으로 백필 INSERT.
+1. **expand**: `ordering.fulfillment` 테이블 생성(인덱스: `order_id` 유니크) + `orders`의 기존 6개 컬럼값으로 백필 INSERT. `orders.fulfillment_status`는 원래 `NOT NULL`인데 `Order` 엔티티가 더는 이 컬럼을 채우지 않으므로, 같은 expand 마이그레이션에서 `ALTER TABLE ... ALTER COLUMN fulfillment_status DROP NOT NULL`로 제약을 먼저 완화해야 신규 INSERT가 막히지 않는다(구현 중 실제로 이 제약 위반이 재현돼 추가함).
 2. 코드 전환: 위 도메인·애플리케이션·query 변경을 배포해 이행축 읽기·쓰기가 전부 `fulfillment` 테이블을 거치게 한다.
 3. **contract**(`-- contract` 헤더 파일 분리): `orders`에서 `fulfillment_status`·`shipped_at`·`carrier`·`tracking_number`·`delivered_at`·`hold_reason` 6개 컬럼 제거.
 

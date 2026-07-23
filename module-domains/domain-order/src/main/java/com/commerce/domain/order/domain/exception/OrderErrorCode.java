@@ -13,6 +13,7 @@ public enum OrderErrorCode implements ErrorCode {
     RETURN_NOT_REQUESTED("ORDER_RETURN_NOT_REQUESTED", "반품 요청 상태의 주문이 아니다.", 409),
     INVALID_FULFILLMENT_TRANSITION("ORDER_INVALID_FULFILLMENT_TRANSITION", "허용되지 않은 이행 상태 전이다.", 409),
     NOT_PAID("ORDER_NOT_PAID", "결제 완료 주문만 이행할 수 있다.", 409),
+    FULFILLMENT_NOT_READY("ORDER_FULFILLMENT_NOT_READY", "이행 생성이 아직 반영되지 않았다. 잠시 후 다시 시도해 달라.", 409),
     ORDER_LINE_NOT_FOUND("ORDER_LINE_NOT_FOUND", "주문 라인을 찾을 수 없다.", 404),
     PARTIALLY_CANCELLED("ORDER_PARTIALLY_CANCELLED", "부분 취소된 주문은 전체 취소할 수 없다. 남은 라인을 취소해 달라.", 409),
     EMPTY_ORDER("ORDER_EMPTY", "주문 라인은 1개 이상이어야 한다.", 400),

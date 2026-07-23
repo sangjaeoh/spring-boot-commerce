@@ -2,7 +2,6 @@ package com.commerce.domain.order.domain;
 
 import com.commerce.common.core.id.UuidV7Generator;
 import com.commerce.common.jpa.entity.BaseTimeEntity;
-import com.commerce.domain.order.domain.exception.FulfillmentStatusException;
 import com.commerce.domain.order.domain.exception.InvalidOrderException;
 import com.commerce.domain.order.domain.exception.OrderErrorCode;
 import com.commerce.domain.order.domain.exception.OrderLineNotFoundException;
@@ -30,7 +29,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 
-/** 주문 애그리거트 루트다. 라인·배송지를 주문 시점 스냅샷으로 보관한다. */
+/** 주문 애그리거트 루트다. 라인·배송지를 주문 시점 스냅샷으로 보관한다. 이행(배송) 축은 별도 {@link Fulfillment} 애그리거트가 갖는다. */
 @Entity
 @Table(schema = "ordering", name = "orders")
 public class Order extends BaseTimeEntity<UUID> {
@@ -51,11 +50,6 @@ public class Order extends BaseTimeEntity<UUID> {
     @Enumerated(EnumType.STRING)
     @Column(name = "status")
     private OrderStatus status;
-
-    /** 이행 축 상태. */
-    @Enumerated(EnumType.STRING)
-    @Column(name = "fulfillment_status")
-    private FulfillmentStatus fulfillmentStatus;
 
     /** 라인 합계. 할인·배송비 반영 전. */
     @Convert(converter = MoneyConverter.class)
@@ -91,26 +85,6 @@ public class Order extends BaseTimeEntity<UUID> {
     @Embedded
     private Address shippingAddress;
 
-    /** 출고 시각. */
-    @Column(name = "shipped_at")
-    @Nullable
-    private Instant shippedAt;
-
-    /** 택배사. */
-    @Column(name = "carrier")
-    @Nullable
-    private String carrier;
-
-    /** 운송장 번호. */
-    @Column(name = "tracking_number")
-    @Nullable
-    private String trackingNumber;
-
-    /** 배송 완료 시각. */
-    @Column(name = "delivered_at")
-    @Nullable
-    private Instant deliveredAt;
-
     /** 전 라인 재고 차감 완료 시각. */
     @Column(name = "stock_deducted_at")
     @Nullable
@@ -121,27 +95,9 @@ public class Order extends BaseTimeEntity<UUID> {
     @Nullable
     private Instant paidAt;
 
-    /** 취소 개시 요청 시각. */
-    @Column(name = "cancel_requested_at")
-    @Nullable
-    private Instant cancelRequestedAt;
-
-    /** 취소 시각. */
-    @Column(name = "cancelled_at")
-    @Nullable
-    private Instant cancelledAt;
-
-    /** 취소 사유. */
-    @Enumerated(EnumType.STRING)
-    @Column(name = "cancellation_reason")
-    @Nullable
-    private CancellationReason cancellationReason;
-
-    /** 이행 보류 사유. 보류 중일 때만 있다. */
-    @Enumerated(EnumType.STRING)
-    @Column(name = "hold_reason")
-    @Nullable
-    private HoldReason holdReason;
+    /** 취소 축. */
+    @Embedded
+    private Cancellation cancellation;
 
     /** 환불 시각. */
     @Column(name = "refunded_at")
@@ -154,22 +110,9 @@ public class Order extends BaseTimeEntity<UUID> {
     @Nullable
     private RefundReason refundReason;
 
-    /** 반품 요청 축 상태. 요청이 없으면 없다. */
-    @Enumerated(EnumType.STRING)
-    @Column(name = "return_status")
-    @Nullable
-    private ReturnStatus returnStatus;
-
-    /** 반품 요청 시각. */
-    @Column(name = "return_requested_at")
-    @Nullable
-    private Instant returnRequestedAt;
-
-    /** 반품 요청 사유. 승인되면 이 사유로 환불한다. */
-    @Enumerated(EnumType.STRING)
-    @Column(name = "return_reason")
-    @Nullable
-    private RefundReason returnReason;
+    /** 주문 단위 반품 요청 축. */
+    @Embedded
+    private ReturnRequest returnRequest;
 
     /** 낙관락 버전. */
     @Version
@@ -189,8 +132,9 @@ public class Order extends BaseTimeEntity<UUID> {
         this.shippingAddress = shippingAddress;
         this.shippingFee = shippingFee;
         this.status = OrderStatus.PENDING;
-        this.fulfillmentStatus = FulfillmentStatus.NOT_STARTED;
         this.refundedAmount = Money.ZERO;
+        this.cancellation = new Cancellation(null, null, null);
+        this.returnRequest = new ReturnRequest(null, null, null);
     }
 
     /**
@@ -219,7 +163,7 @@ public class Order extends BaseTimeEntity<UUID> {
     }
 
     /**
-     * 결제를 완료한다. 이행을 준비 중으로 전진시킨다.
+     * 결제를 완료한다.
      *
      * @throws OrderStatusException 결제 진행 중({@code PENDING})이 아니면
      */
@@ -228,7 +172,6 @@ public class Order extends BaseTimeEntity<UUID> {
             throw new OrderStatusException(OrderErrorCode.INVALID_ORDER_STATE_TRANSITION);
         }
         this.status = OrderStatus.PAID;
-        this.fulfillmentStatus = FulfillmentStatus.PREPARING;
         this.paidAt = now;
     }
 
@@ -249,16 +192,15 @@ public class Order extends BaseTimeEntity<UUID> {
      *
      * @throws OrderStatusException 이미 취소·환불됐거나 출고 이후면
      */
-    public void cancel(CancellationReason reason, Instant now) {
+    public void cancel(CancellationReason reason, FulfillmentStatus fulfillmentStatus, Instant now) {
         if (status == OrderStatus.CANCELLED || status == OrderStatus.REFUNDED) {
             throw new OrderStatusException(OrderErrorCode.INVALID_ORDER_STATE_TRANSITION);
         }
-        if (status == OrderStatus.PAID && isShippedOrDelivered()) {
+        if (status == OrderStatus.PAID && isShippedOrDelivered(fulfillmentStatus)) {
             throw new OrderStatusException(OrderErrorCode.CANCEL_NOT_ALLOWED);
         }
         this.status = OrderStatus.CANCELLED;
-        this.cancelledAt = now;
-        this.cancellationReason = reason;
+        this.cancellation = cancellation().complete(reason, now);
     }
 
     /**
@@ -266,8 +208,8 @@ public class Order extends BaseTimeEntity<UUID> {
      *
      * @throws OrderStatusException 결제 완료 주문이 아니거나 출고 이후면
      */
-    public void requestCancellation(Instant now) {
-        if (cancelRequestedAt != null) {
+    public void requestCancellation(FulfillmentStatus fulfillmentStatus, Instant now) {
+        if (cancellation().cancelRequestedAt() != null) {
             return;
         }
         // 부분 환불 이력이 있으면 전액 PG 취소가 이중 환불이 된다 — 남은 라인은 라인 단위로 취소한다.
@@ -277,18 +219,18 @@ public class Order extends BaseTimeEntity<UUID> {
         if (status != OrderStatus.PAID) {
             throw new OrderStatusException(OrderErrorCode.INVALID_ORDER_STATE_TRANSITION);
         }
-        if (isShippedOrDelivered()) {
+        if (isShippedOrDelivered(fulfillmentStatus)) {
             throw new OrderStatusException(OrderErrorCode.CANCEL_NOT_ALLOWED);
         }
-        this.cancelRequestedAt = now;
+        this.cancellation = cancellation().request(now);
     }
 
     /**
-     * 배송 완료된 주문을 전체 반품 환불 처리한다. 이행 축은 DELIVERED로 남는다.
+     * 배송 완료된 주문을 전체 반품 환불 처리한다.
      *
      * @throws OrderStatusException 결제 완료·배송 완료 주문이 아니거나 이미 환불됐으면
      */
-    public void refund(RefundReason reason, Instant now) {
+    public void refund(RefundReason reason, FulfillmentStatus fulfillmentStatus, Instant now) {
         if (status == OrderStatus.REFUNDED) {
             throw new OrderStatusException(OrderErrorCode.INVALID_ORDER_STATE_TRANSITION);
         }
@@ -307,8 +249,8 @@ public class Order extends BaseTimeEntity<UUID> {
         this.status = OrderStatus.REFUNDED;
         this.refundedAt = now;
         this.refundReason = reason;
-        if (returnStatus == ReturnStatus.REQUESTED) {
-            this.returnStatus = ReturnStatus.COMPLETED;
+        if (returnRequest().returnStatus() == ReturnStatus.REQUESTED) {
+            this.returnRequest = returnRequest().complete();
         }
     }
 
@@ -317,8 +259,8 @@ public class Order extends BaseTimeEntity<UUID> {
      *
      * @throws OrderStatusException 이미 요청 중이거나, 배송 완료된 결제 주문이 아니면
      */
-    public void requestReturn(RefundReason reason, Instant now) {
-        if (returnStatus == ReturnStatus.REQUESTED) {
+    public void requestReturn(RefundReason reason, FulfillmentStatus fulfillmentStatus, Instant now) {
+        if (returnRequest().returnStatus() == ReturnStatus.REQUESTED) {
             throw new OrderStatusException(OrderErrorCode.RETURN_ALREADY_REQUESTED);
         }
         // 부분 환불 이력이 있으면 전체 반품 환불이 이중 집행이 된다 — 잔여 라인은 라인 단위로 반품한다.
@@ -333,9 +275,7 @@ public class Order extends BaseTimeEntity<UUID> {
         if (status != OrderStatus.PAID || fulfillmentStatus != FulfillmentStatus.DELIVERED) {
             throw new OrderStatusException(OrderErrorCode.RETURN_NOT_ALLOWED);
         }
-        this.returnStatus = ReturnStatus.REQUESTED;
-        this.returnRequestedAt = now;
-        this.returnReason = reason;
+        this.returnRequest = returnRequest().request(reason, now);
     }
 
     /**
@@ -344,67 +284,10 @@ public class Order extends BaseTimeEntity<UUID> {
      * @throws OrderStatusException 반품 요청 상태가 아니면
      */
     public void rejectReturn() {
-        if (returnStatus != ReturnStatus.REQUESTED) {
+        if (returnRequest().returnStatus() != ReturnStatus.REQUESTED) {
             throw new OrderStatusException(OrderErrorCode.RETURN_NOT_REQUESTED);
         }
-        this.returnStatus = ReturnStatus.REJECTED;
-    }
-
-    /**
-     * 출고한다. 택배사·운송장 번호를 기록한다.
-     *
-     * @throws FulfillmentStatusException 결제 완료 주문이 아니거나, 준비 중이 아니거나, 취소가 진행 중이면
-     */
-    public void ship(String carrier, String trackingNumber, Instant now) {
-        requirePaid();
-        requireFulfillment(FulfillmentStatus.PREPARING);
-        if (cancelRequestedAt != null) {
-            throw new FulfillmentStatusException(OrderErrorCode.CANCEL_IN_PROGRESS);
-        }
-        // 라인 취소 진행 중 출고를 허용하면 출고된 주문이 취소로 수렴·전액 환불되는 창이 생긴다.
-        if (lines.stream().anyMatch(line -> line.getStatus() == OrderLineStatus.CANCELLING)) {
-            throw new FulfillmentStatusException(OrderErrorCode.CANCEL_IN_PROGRESS);
-        }
-        this.fulfillmentStatus = FulfillmentStatus.SHIPPED;
-        this.shippedAt = now;
-        this.carrier = carrier;
-        this.trackingNumber = trackingNumber;
-    }
-
-    /**
-     * 배송 완료 처리한다.
-     *
-     * @throws FulfillmentStatusException 결제 완료 주문이 아니거나 출고된 상태가 아니면
-     */
-    public void confirmDelivery(Instant now) {
-        requirePaid();
-        requireFulfillment(FulfillmentStatus.SHIPPED);
-        this.fulfillmentStatus = FulfillmentStatus.DELIVERED;
-        this.deliveredAt = now;
-    }
-
-    /**
-     * 이행을 보류한다.
-     *
-     * @throws FulfillmentStatusException 결제 완료 주문이 아니거나 준비 중이 아니면
-     */
-    public void holdFulfillment(HoldReason reason) {
-        requirePaid();
-        requireFulfillment(FulfillmentStatus.PREPARING);
-        this.fulfillmentStatus = FulfillmentStatus.ON_HOLD;
-        this.holdReason = reason;
-    }
-
-    /**
-     * 이행 보류를 해제한다.
-     *
-     * @throws FulfillmentStatusException 결제 완료 주문이 아니거나 보류 중이 아니면
-     */
-    public void releaseFulfillment() {
-        requirePaid();
-        requireFulfillment(FulfillmentStatus.ON_HOLD);
-        this.fulfillmentStatus = FulfillmentStatus.PREPARING;
-        this.holdReason = null;
+        this.returnRequest = returnRequest().reject();
     }
 
     /** 라인 금액을 합산해 라인 합계를 계산한다. */
@@ -427,23 +310,22 @@ public class Order extends BaseTimeEntity<UUID> {
         this.payAmount = totalAmount.minus(discountAmount).plus(shippingFee);
     }
 
-    /** 출고 이후 상태인지 판정한다. */
-    private boolean isShippedOrDelivered() {
+    /** 이행 축 상태가 출고 이후인지 판정한다. */
+    private static boolean isShippedOrDelivered(FulfillmentStatus fulfillmentStatus) {
         return fulfillmentStatus == FulfillmentStatus.SHIPPED || fulfillmentStatus == FulfillmentStatus.DELIVERED;
     }
 
-    /** 결제 완료 상태가 아니면 거부한다. */
-    private void requirePaid() {
-        if (status != OrderStatus.PAID) {
-            throw new FulfillmentStatusException(OrderErrorCode.NOT_PAID);
-        }
+    /**
+     * 취소 축을 읽는다. 전 컴포넌트가 null인 임베더블을 Hibernate가 조회 시 필드 자체를 null로 접는
+     * 경우가 있어(모든 컬럼이 null인 행), 빈 값으로 방어한다.
+     */
+    private Cancellation cancellation() {
+        return cancellation != null ? cancellation : new Cancellation(null, null, null);
     }
 
-    /** 이행 상태가 기대값이 아니면 거부한다. */
-    private void requireFulfillment(FulfillmentStatus expected) {
-        if (fulfillmentStatus != expected) {
-            throw new FulfillmentStatusException(OrderErrorCode.INVALID_FULFILLMENT_TRANSITION);
-        }
+    /** 반품 요청 축을 읽는다. {@link #cancellation()}과 같은 이유로 방어한다. */
+    private ReturnRequest returnRequest() {
+        return returnRequest != null ? returnRequest : new ReturnRequest(null, null, null);
     }
 
     /** 주문 식별자에서 외부 노출용 주문 번호를 만든다. */
@@ -473,10 +355,6 @@ public class Order extends BaseTimeEntity<UUID> {
 
     public OrderStatus getStatus() {
         return status;
-    }
-
-    public FulfillmentStatus getFulfillmentStatus() {
-        return fulfillmentStatus;
     }
 
     public Money getTotalAmount() {
@@ -511,36 +389,16 @@ public class Order extends BaseTimeEntity<UUID> {
         return paidAt;
     }
 
-    public @Nullable Instant getShippedAt() {
-        return shippedAt;
-    }
-
-    public @Nullable String getCarrier() {
-        return carrier;
-    }
-
-    public @Nullable String getTrackingNumber() {
-        return trackingNumber;
-    }
-
-    public @Nullable Instant getDeliveredAt() {
-        return deliveredAt;
-    }
-
     public @Nullable Instant getCancelRequestedAt() {
-        return cancelRequestedAt;
+        return cancellation().cancelRequestedAt();
     }
 
     public @Nullable Instant getCancelledAt() {
-        return cancelledAt;
+        return cancellation().cancelledAt();
     }
 
     public @Nullable CancellationReason getCancellationReason() {
-        return cancellationReason;
-    }
-
-    public @Nullable HoldReason getHoldReason() {
-        return holdReason;
+        return cancellation().cancellationReason();
     }
 
     public @Nullable Instant getRefundedAt() {
@@ -552,15 +410,15 @@ public class Order extends BaseTimeEntity<UUID> {
     }
 
     public @Nullable ReturnStatus getReturnStatus() {
-        return returnStatus;
+        return returnRequest().returnStatus();
     }
 
     public @Nullable Instant getReturnRequestedAt() {
-        return returnRequestedAt;
+        return returnRequest().returnRequestedAt();
     }
 
     public @Nullable RefundReason getReturnReason() {
-        return returnReason;
+        return returnRequest().returnReason();
     }
 
     /** 주문 라인 집합을 변경 불가 뷰로 반환한다. */
@@ -581,11 +439,11 @@ public class Order extends BaseTimeEntity<UUID> {
      * @throws OrderStatusException 결제 완료·출고 전 주문이 아니거나, 전체 취소가 진행 중이거나, 라인이 주문됨 상태가 아니면
      * @throws OrderLineNotFoundException 라인이 없으면
      */
-    public Money beginLineCancellation(UUID lineId) {
-        if (status != OrderStatus.PAID || isShippedOrDelivered()) {
+    public Money beginLineCancellation(UUID lineId, FulfillmentStatus fulfillmentStatus) {
+        if (status != OrderStatus.PAID || isShippedOrDelivered(fulfillmentStatus)) {
             throw new OrderStatusException(OrderErrorCode.CANCEL_NOT_ALLOWED);
         }
-        if (cancelRequestedAt != null) {
+        if (cancellation().cancelRequestedAt() != null) {
             throw new OrderStatusException(OrderErrorCode.CANCEL_IN_PROGRESS);
         }
         OrderLine line = findLine(lineId);
@@ -613,8 +471,7 @@ public class Order extends BaseTimeEntity<UUID> {
         boolean allCancelled = lines.stream().allMatch(l -> l.getStatus() == OrderLineStatus.CANCELLED);
         if (allCancelled) {
             this.status = OrderStatus.CANCELLED;
-            this.cancelledAt = now;
-            this.cancellationReason = CancellationReason.CUSTOMER_REQUEST;
+            this.cancellation = cancellation().complete(CancellationReason.CUSTOMER_REQUEST, now);
         }
         return allCancelled;
     }
@@ -625,11 +482,11 @@ public class Order extends BaseTimeEntity<UUID> {
      * @throws OrderStatusException 배송 완료된 결제 주문이 아니거나, 전체 반품이 진행 중이거나, 라인이 주문됨 상태가 아니면
      * @throws OrderLineNotFoundException 라인이 없으면
      */
-    public void requestLineReturn(UUID lineId, RefundReason reason) {
+    public void requestLineReturn(UUID lineId, RefundReason reason, FulfillmentStatus fulfillmentStatus) {
         if (status != OrderStatus.PAID || fulfillmentStatus != FulfillmentStatus.DELIVERED) {
             throw new OrderStatusException(OrderErrorCode.RETURN_NOT_ALLOWED);
         }
-        if (returnStatus == ReturnStatus.REQUESTED) {
+        if (returnRequest().returnStatus() == ReturnStatus.REQUESTED) {
             throw new OrderStatusException(OrderErrorCode.RETURN_ALREADY_REQUESTED);
         }
         OrderLine line = findLine(lineId);
@@ -659,11 +516,11 @@ public class Order extends BaseTimeEntity<UUID> {
      * @throws OrderStatusException 라인이 반품 요청 상태가 아니면
      * @throws OrderLineNotFoundException 라인이 없으면
      */
-    public Money beginLineReturn(UUID lineId) {
+    public Money beginLineReturn(UUID lineId, FulfillmentStatus fulfillmentStatus) {
         if (status != OrderStatus.PAID || fulfillmentStatus != FulfillmentStatus.DELIVERED) {
             throw new OrderStatusException(OrderErrorCode.RETURN_NOT_ALLOWED);
         }
-        if (returnStatus == ReturnStatus.REQUESTED) {
+        if (returnRequest().returnStatus() == ReturnStatus.REQUESTED) {
             throw new OrderStatusException(OrderErrorCode.RETURN_ALREADY_REQUESTED);
         }
         OrderLine line = findLine(lineId);

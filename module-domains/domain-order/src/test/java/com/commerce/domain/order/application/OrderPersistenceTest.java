@@ -41,7 +41,7 @@ import org.testcontainers.utility.DockerImageName;
 /**
  * order 도메인의 영속 이음새를 실 PostgreSQL로 검증하는 테스트다.
  *
- * <p>두 테이블 {@code ddl-auto=validate} 정합, Address 임베디드·Money 컬럼 왕복, 라인 캐스케이드, 이행 전이를 확인한다.
+ * <p>두 테이블 {@code ddl-auto=validate} 정합, Address 임베디드·Money 컬럼 왕복, 라인 캐스케이드를 확인한다.
  */
 @DataJpaTest(
         properties = {
@@ -108,26 +108,6 @@ class OrderPersistenceTest {
         assertThat(order.lines().get(0).optionLabel()).isEqualTo("Red / L");
         assertThat(order.shippingAddress().recipientName()).isEqualTo("홍길동");
         assertThat(order.orderNumber()).isNotBlank();
-    }
-
-    @Test
-    @DisplayName("결제·출고·배송 완료 이행이 반영되고 운송장 기록이 왕복한다")
-    void fulfillmentFlowPersists() {
-        UUID orderId = place();
-        em.flush();
-        orderModifier.markPaid(orderId);
-        em.flush();
-        orderModifier.ship(orderId, "CJ대한통운", "688900123456");
-        em.flush();
-        orderModifier.confirmDelivery(orderId);
-        em.flush();
-        em.clear();
-
-        OrderInfo order = orderReader.getOrder(orderId);
-        assertThat(order.status()).isEqualTo(OrderStatus.PAID);
-        assertThat(order.fulfillmentStatus()).isEqualTo(FulfillmentStatus.DELIVERED);
-        assertThat(order.carrier()).isEqualTo("CJ대한통운");
-        assertThat(order.trackingNumber()).isEqualTo("688900123456");
     }
 
     @Test

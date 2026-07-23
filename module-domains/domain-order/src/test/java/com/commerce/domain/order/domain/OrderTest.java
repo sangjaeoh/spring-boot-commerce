@@ -3,7 +3,6 @@ package com.commerce.domain.order.domain;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.commerce.domain.order.domain.exception.FulfillmentStatusException;
 import com.commerce.domain.order.domain.exception.InvalidOrderException;
 import com.commerce.domain.order.domain.exception.OrderErrorCode;
 import com.commerce.domain.order.domain.exception.OrderLineNotFoundException;
@@ -18,8 +17,6 @@ import org.junit.jupiter.api.Test;
 class OrderTest {
 
     private static final Instant NOW = Instant.parse("2025-06-15T00:00:00Z");
-    private static final String CARRIER = "CJ대한통운";
-    private static final String TRACKING_NUMBER = "688900123456";
 
     private OrderLineSnapshot line(long price, int quantity) {
         return new OrderLineSnapshot(UUID.randomUUID(), UUID.randomUUID(), "티셔츠", "Red / L", Money.of(price), quantity);
@@ -40,13 +37,12 @@ class OrderTest {
     }
 
     @Test
-    @DisplayName("생성 시 금액을 자기 계산하고 PENDING·NOT_STARTED다")
+    @DisplayName("생성 시 금액을 자기 계산하고 PENDING이다")
     void placeComputesAmounts() {
         Order order = place(Money.ZERO, Money.of(3000L), null);
         assertThat(order.getTotalAmount()).isEqualTo(Money.of(20000L));
         assertThat(order.getPayAmount()).isEqualTo(Money.of(23000L));
         assertThat(order.getStatus()).isEqualTo(OrderStatus.PENDING);
-        assertThat(order.getFulfillmentStatus()).isEqualTo(FulfillmentStatus.NOT_STARTED);
         assertThat(order.getOrderNumber()).isNotBlank();
     }
 
@@ -81,11 +77,10 @@ class OrderTest {
     }
 
     @Test
-    @DisplayName("결제 완료는 PAID로, 이행을 준비 중으로 전진시킨다")
+    @DisplayName("결제 완료는 PAID로 전이한다")
     void markPaidTransitions() {
         Order order = paidOrder();
         assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
-        assertThat(order.getFulfillmentStatus()).isEqualTo(FulfillmentStatus.PREPARING);
     }
 
     @Test
@@ -108,7 +103,7 @@ class OrderTest {
     void markStockDeductedRejectsNonPending() {
         assertThatThrownBy(() -> paidOrder().markStockDeducted(NOW)).isInstanceOf(OrderStatusException.class);
         Order cancelled = place(Money.ZERO, Money.ZERO, null);
-        cancelled.cancel(CancellationReason.CUSTOMER_REQUEST, NOW);
+        cancelled.cancel(CancellationReason.CUSTOMER_REQUEST, FulfillmentStatus.NOT_STARTED, NOW);
         assertThatThrownBy(() -> cancelled.markStockDeducted(NOW)).isInstanceOf(OrderStatusException.class);
     }
 
@@ -116,7 +111,7 @@ class OrderTest {
     @DisplayName("PENDING 주문을 취소한다")
     void cancelPendingOrder() {
         Order order = place(Money.ZERO, Money.ZERO, null);
-        order.cancel(CancellationReason.CUSTOMER_REQUEST, NOW);
+        order.cancel(CancellationReason.CUSTOMER_REQUEST, FulfillmentStatus.NOT_STARTED, NOW);
         assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
     }
 
@@ -124,8 +119,7 @@ class OrderTest {
     @DisplayName("출고 이후 주문은 취소할 수 없다")
     void cancelRejectedAfterShipped() {
         Order order = paidOrder();
-        order.ship(CARRIER, TRACKING_NUMBER, NOW);
-        assertThatThrownBy(() -> order.cancel(CancellationReason.CUSTOMER_REQUEST, NOW))
+        assertThatThrownBy(() -> order.cancel(CancellationReason.CUSTOMER_REQUEST, FulfillmentStatus.SHIPPED, NOW))
                 .isInstanceOf(OrderStatusException.class);
     }
 
@@ -142,12 +136,11 @@ class OrderTest {
     @DisplayName("결제 완료 주문은 준비·보류 상태에서 취소할 수 있다")
     void cancelPaidBeforeShip() {
         Order preparing = paidOrder();
-        preparing.cancel(CancellationReason.CUSTOMER_REQUEST, NOW);
+        preparing.cancel(CancellationReason.CUSTOMER_REQUEST, FulfillmentStatus.PREPARING, NOW);
         assertThat(preparing.getStatus()).isEqualTo(OrderStatus.CANCELLED);
 
         Order onHold = paidOrder();
-        onHold.holdFulfillment(HoldReason.STOCK_DELAY);
-        onHold.cancel(CancellationReason.STOCK_SHORTAGE, NOW);
+        onHold.cancel(CancellationReason.STOCK_SHORTAGE, FulfillmentStatus.ON_HOLD, NOW);
         assertThat(onHold.getStatus()).isEqualTo(OrderStatus.CANCELLED);
     }
 
@@ -155,10 +148,10 @@ class OrderTest {
     @DisplayName("취소 개시는 마커를 남기고 재개시는 아무것도 하지 않는다")
     void requestCancellationSetsMarkerOnce() {
         Order order = paidOrder();
-        order.requestCancellation(NOW);
+        order.requestCancellation(FulfillmentStatus.PREPARING, NOW);
         assertThat(order.getCancelRequestedAt()).isEqualTo(NOW);
 
-        order.requestCancellation(NOW.plusSeconds(60));
+        order.requestCancellation(FulfillmentStatus.PREPARING, NOW.plusSeconds(60));
         assertThat(order.getCancelRequestedAt()).isEqualTo(NOW);
     }
 
@@ -166,8 +159,7 @@ class OrderTest {
     @DisplayName("보류 중 주문도 취소를 개시할 수 있다")
     void requestCancellationAllowsOnHold() {
         Order order = paidOrder();
-        order.holdFulfillment(HoldReason.STOCK_DELAY);
-        order.requestCancellation(NOW);
+        order.requestCancellation(FulfillmentStatus.ON_HOLD, NOW);
         assertThat(order.getCancelRequestedAt()).isEqualTo(NOW);
     }
 
@@ -175,46 +167,36 @@ class OrderTest {
     @DisplayName("미결제·취소된·출고된 주문은 취소를 개시할 수 없다")
     void requestCancellationRejectsIneligibleStates() {
         Order pending = place(Money.ZERO, Money.ZERO, null);
-        assertThatThrownBy(() -> pending.requestCancellation(NOW)).isInstanceOf(OrderStatusException.class);
+        assertThatThrownBy(() -> pending.requestCancellation(FulfillmentStatus.NOT_STARTED, NOW))
+                .isInstanceOf(OrderStatusException.class);
 
         Order cancelled = paidOrder();
-        cancelled.cancel(CancellationReason.CUSTOMER_REQUEST, NOW);
-        assertThatThrownBy(() -> cancelled.requestCancellation(NOW)).isInstanceOf(OrderStatusException.class);
+        cancelled.cancel(CancellationReason.CUSTOMER_REQUEST, FulfillmentStatus.PREPARING, NOW);
+        assertThatThrownBy(() -> cancelled.requestCancellation(FulfillmentStatus.PREPARING, NOW))
+                .isInstanceOf(OrderStatusException.class);
 
         Order shipped = paidOrder();
-        shipped.ship(CARRIER, TRACKING_NUMBER, NOW);
-        assertThatThrownBy(() -> shipped.requestCancellation(NOW)).isInstanceOf(OrderStatusException.class);
+        assertThatThrownBy(() -> shipped.requestCancellation(FulfillmentStatus.SHIPPED, NOW))
+                .isInstanceOf(OrderStatusException.class);
     }
 
     @Test
-    @DisplayName("취소 개시된 주문은 출고할 수 없고 취소는 완결할 수 있다")
-    void shipRejectedWhileCancellationInProgress() {
+    @DisplayName("취소 개시된 주문의 취소는 완결할 수 있다")
+    void cancelCompletesWhileCancellationRequested() {
         Order order = paidOrder();
-        order.requestCancellation(NOW);
+        order.requestCancellation(FulfillmentStatus.PREPARING, NOW);
 
-        assertThatThrownBy(() -> order.ship(CARRIER, TRACKING_NUMBER, NOW))
-                .isInstanceOfSatisfying(
-                        FulfillmentStatusException.class,
-                        ex -> assertThat(ex.getErrorCode()).isEqualTo(OrderErrorCode.CANCEL_IN_PROGRESS));
+        order.cancel(CancellationReason.CUSTOMER_REQUEST, FulfillmentStatus.PREPARING, NOW);
 
-        order.cancel(CancellationReason.CUSTOMER_REQUEST, NOW);
         assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
     }
 
-    private Order deliveredOrder() {
-        Order order = paidOrder();
-        order.ship(CARRIER, TRACKING_NUMBER, NOW);
-        order.confirmDelivery(NOW);
-        return order;
-    }
-
     @Test
-    @DisplayName("배송 완료 주문을 환불하면 REFUNDED가 되고 이행 축은 DELIVERED로 남는다")
+    @DisplayName("배송 완료 주문을 환불하면 REFUNDED가 된다")
     void refundDeliveredOrder() {
-        Order order = deliveredOrder();
-        order.refund(RefundReason.PRODUCT_DEFECT, NOW);
+        Order order = paidOrder();
+        order.refund(RefundReason.PRODUCT_DEFECT, FulfillmentStatus.DELIVERED, NOW);
         assertThat(order.getStatus()).isEqualTo(OrderStatus.REFUNDED);
-        assertThat(order.getFulfillmentStatus()).isEqualTo(FulfillmentStatus.DELIVERED);
         assertThat(order.getRefundedAt()).isNotNull();
         assertThat(order.getRefundReason()).isEqualTo(RefundReason.PRODUCT_DEFECT);
     }
@@ -222,12 +204,9 @@ class OrderTest {
     @Test
     @DisplayName("배송 완료 전(준비·출고) 주문은 환불할 수 없다")
     void refundRejectedBeforeDelivery() {
-        assertThatThrownBy(() -> paidOrder().refund(RefundReason.CHANGE_OF_MIND, NOW))
+        assertThatThrownBy(() -> paidOrder().refund(RefundReason.CHANGE_OF_MIND, FulfillmentStatus.PREPARING, NOW))
                 .isInstanceOf(OrderStatusException.class);
-
-        Order shipped = paidOrder();
-        shipped.ship(CARRIER, TRACKING_NUMBER, NOW);
-        assertThatThrownBy(() -> shipped.refund(RefundReason.CHANGE_OF_MIND, NOW))
+        assertThatThrownBy(() -> paidOrder().refund(RefundReason.CHANGE_OF_MIND, FulfillmentStatus.SHIPPED, NOW))
                 .isInstanceOf(OrderStatusException.class);
     }
 
@@ -235,70 +214,27 @@ class OrderTest {
     @DisplayName("취소된 주문은 환불할 수 없다")
     void refundRejectedForCancelledOrder() {
         Order order = paidOrder();
-        order.cancel(CancellationReason.CUSTOMER_REQUEST, NOW);
-        assertThatThrownBy(() -> order.refund(RefundReason.CHANGE_OF_MIND, NOW))
+        order.cancel(CancellationReason.CUSTOMER_REQUEST, FulfillmentStatus.PREPARING, NOW);
+        assertThatThrownBy(() -> order.refund(RefundReason.CHANGE_OF_MIND, FulfillmentStatus.PREPARING, NOW))
                 .isInstanceOf(OrderStatusException.class);
     }
 
     @Test
     @DisplayName("환불은 1회만 유효하고 환불된 주문은 취소도 할 수 없다")
     void refundIsOneShotAndBlocksCancel() {
-        Order order = deliveredOrder();
-        order.refund(RefundReason.PRODUCT_DEFECT, NOW);
-        assertThatThrownBy(() -> order.refund(RefundReason.PRODUCT_DEFECT, NOW))
+        Order order = paidOrder();
+        order.refund(RefundReason.PRODUCT_DEFECT, FulfillmentStatus.DELIVERED, NOW);
+        assertThatThrownBy(() -> order.refund(RefundReason.PRODUCT_DEFECT, FulfillmentStatus.DELIVERED, NOW))
                 .isInstanceOf(OrderStatusException.class);
-        assertThatThrownBy(() -> order.cancel(CancellationReason.ADMIN_ACTION, NOW))
+        assertThatThrownBy(() -> order.cancel(CancellationReason.ADMIN_ACTION, FulfillmentStatus.DELIVERED, NOW))
                 .isInstanceOf(OrderStatusException.class);
-    }
-
-    @Test
-    @DisplayName("이행 전진은 결제 완료에서만 유효하다")
-    void fulfillmentRequiresPaid() {
-        Order pending = place(Money.ZERO, Money.ZERO, null);
-        assertThatThrownBy(() -> pending.ship(CARRIER, TRACKING_NUMBER, NOW))
-                .isInstanceOf(FulfillmentStatusException.class);
-    }
-
-    @Test
-    @DisplayName("준비→출고→배송 완료로 이행한다")
-    void fulfillmentFlow() {
-        Order order = paidOrder();
-        order.ship(CARRIER, TRACKING_NUMBER, NOW);
-        assertThat(order.getFulfillmentStatus()).isEqualTo(FulfillmentStatus.SHIPPED);
-        order.confirmDelivery(NOW);
-        assertThat(order.getFulfillmentStatus()).isEqualTo(FulfillmentStatus.DELIVERED);
-    }
-
-    @Test
-    @DisplayName("출고 시 택배사·운송장 번호를 기록하고 출고 전에는 null이다")
-    void shipRecordsTrackingInfo() {
-        Order order = paidOrder();
-        assertThat(order.getCarrier()).isNull();
-        assertThat(order.getTrackingNumber()).isNull();
-
-        order.ship(CARRIER, TRACKING_NUMBER, NOW);
-
-        assertThat(order.getCarrier()).isEqualTo(CARRIER);
-        assertThat(order.getTrackingNumber()).isEqualTo(TRACKING_NUMBER);
-    }
-
-    @Test
-    @DisplayName("보류와 해제를 오간다. 보류 중에는 출고할 수 없다")
-    void holdAndRelease() {
-        Order order = paidOrder();
-        order.holdFulfillment(HoldReason.FRAUD_REVIEW);
-        assertThat(order.getFulfillmentStatus()).isEqualTo(FulfillmentStatus.ON_HOLD);
-        assertThatThrownBy(() -> order.ship(CARRIER, TRACKING_NUMBER, NOW))
-                .isInstanceOf(FulfillmentStatusException.class);
-        order.releaseFulfillment();
-        assertThat(order.getFulfillmentStatus()).isEqualTo(FulfillmentStatus.PREPARING);
     }
 
     @Test
     @DisplayName("배송 완료 결제 주문에 반품을 요청하면 REQUESTED와 사유·시각이 기록된다")
     void requestReturnRecordsRequest() {
-        Order order = deliveredOrder();
-        order.requestReturn(RefundReason.PRODUCT_DEFECT, NOW);
+        Order order = paidOrder();
+        order.requestReturn(RefundReason.PRODUCT_DEFECT, FulfillmentStatus.DELIVERED, NOW);
         assertThat(order.getReturnStatus()).isEqualTo(ReturnStatus.REQUESTED);
         assertThat(order.getReturnReason()).isEqualTo(RefundReason.PRODUCT_DEFECT);
         assertThat(order.getReturnRequestedAt()).isEqualTo(NOW);
@@ -308,63 +244,61 @@ class OrderTest {
     @Test
     @DisplayName("배송 완료 아닌(준비·출고·미결제) 주문은 반품을 요청할 수 없다")
     void requestReturnRejectsUndelivered() {
-        assertThatThrownBy(() -> paidOrder().requestReturn(RefundReason.CHANGE_OF_MIND, NOW))
+        assertThatThrownBy(
+                        () -> paidOrder().requestReturn(RefundReason.CHANGE_OF_MIND, FulfillmentStatus.PREPARING, NOW))
                 .isInstanceOfSatisfying(
                         OrderStatusException.class,
                         ex -> assertThat(ex.getErrorCode()).isEqualTo(OrderErrorCode.RETURN_NOT_ALLOWED));
 
-        Order shipped = paidOrder();
-        shipped.ship(CARRIER, TRACKING_NUMBER, NOW);
-        assertThatThrownBy(() -> shipped.requestReturn(RefundReason.CHANGE_OF_MIND, NOW))
+        assertThatThrownBy(() -> paidOrder().requestReturn(RefundReason.CHANGE_OF_MIND, FulfillmentStatus.SHIPPED, NOW))
                 .isInstanceOf(OrderStatusException.class);
 
         Order pending = place(Money.ZERO, Money.ZERO, null);
-        assertThatThrownBy(() -> pending.requestReturn(RefundReason.CHANGE_OF_MIND, NOW))
+        assertThatThrownBy(() -> pending.requestReturn(RefundReason.CHANGE_OF_MIND, FulfillmentStatus.NOT_STARTED, NOW))
                 .isInstanceOf(OrderStatusException.class);
     }
 
     @Test
     @DisplayName("환불 완료된 주문은 반품을 요청할 수 없다")
     void requestReturnRejectsRefundedOrder() {
-        Order order = deliveredOrder();
-        order.refund(RefundReason.CS_MANUAL, NOW);
-        assertThatThrownBy(() -> order.requestReturn(RefundReason.CHANGE_OF_MIND, NOW))
+        Order order = paidOrder();
+        order.refund(RefundReason.CS_MANUAL, FulfillmentStatus.DELIVERED, NOW);
+        assertThatThrownBy(() -> order.requestReturn(RefundReason.CHANGE_OF_MIND, FulfillmentStatus.DELIVERED, NOW))
                 .isInstanceOf(OrderStatusException.class);
     }
 
     @Test
     @DisplayName("반품 요청 중 재요청은 거부된다")
     void requestReturnRejectsDuplicate() {
-        Order order = deliveredOrder();
-        order.requestReturn(RefundReason.PRODUCT_DEFECT, NOW);
-        assertThatThrownBy(() -> order.requestReturn(RefundReason.PRODUCT_DEFECT, NOW))
+        Order order = paidOrder();
+        order.requestReturn(RefundReason.PRODUCT_DEFECT, FulfillmentStatus.DELIVERED, NOW);
+        assertThatThrownBy(() -> order.requestReturn(RefundReason.PRODUCT_DEFECT, FulfillmentStatus.DELIVERED, NOW))
                 .isInstanceOfSatisfying(
                         OrderStatusException.class,
                         ex -> assertThat(ex.getErrorCode()).isEqualTo(OrderErrorCode.RETURN_ALREADY_REQUESTED));
     }
 
     @Test
-    @DisplayName("반품 거절은 REJECTED로 전이하고 주문은 PAID·DELIVERED로 남는다")
+    @DisplayName("반품 거절은 REJECTED로 전이하고 주문은 PAID로 남는다")
     void rejectReturnKeepsOrderState() {
-        Order order = deliveredOrder();
-        order.requestReturn(RefundReason.CHANGE_OF_MIND, NOW);
+        Order order = paidOrder();
+        order.requestReturn(RefundReason.CHANGE_OF_MIND, FulfillmentStatus.DELIVERED, NOW);
         order.rejectReturn();
         assertThat(order.getReturnStatus()).isEqualTo(ReturnStatus.REJECTED);
         assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
-        assertThat(order.getFulfillmentStatus()).isEqualTo(FulfillmentStatus.DELIVERED);
         assertThat(order.getRefundedAt()).isNull();
     }
 
     @Test
     @DisplayName("요청 상태가 아니면 반품을 거절할 수 없다")
     void rejectReturnRequiresRequested() {
-        Order order = deliveredOrder();
+        Order order = paidOrder();
         assertThatThrownBy(order::rejectReturn)
                 .isInstanceOfSatisfying(
                         OrderStatusException.class,
                         ex -> assertThat(ex.getErrorCode()).isEqualTo(OrderErrorCode.RETURN_NOT_REQUESTED));
 
-        order.requestReturn(RefundReason.CHANGE_OF_MIND, NOW);
+        order.requestReturn(RefundReason.CHANGE_OF_MIND, FulfillmentStatus.DELIVERED, NOW);
         order.rejectReturn();
         assertThatThrownBy(order::rejectReturn).isInstanceOf(OrderStatusException.class);
     }
@@ -372,10 +306,10 @@ class OrderTest {
     @Test
     @DisplayName("거절 후 재요청은 허용된다")
     void requestReturnAllowedAfterRejection() {
-        Order order = deliveredOrder();
-        order.requestReturn(RefundReason.CHANGE_OF_MIND, NOW);
+        Order order = paidOrder();
+        order.requestReturn(RefundReason.CHANGE_OF_MIND, FulfillmentStatus.DELIVERED, NOW);
         order.rejectReturn();
-        order.requestReturn(RefundReason.PRODUCT_DEFECT, NOW.plusSeconds(60));
+        order.requestReturn(RefundReason.PRODUCT_DEFECT, FulfillmentStatus.DELIVERED, NOW.plusSeconds(60));
         assertThat(order.getReturnStatus()).isEqualTo(ReturnStatus.REQUESTED);
         assertThat(order.getReturnReason()).isEqualTo(RefundReason.PRODUCT_DEFECT);
         assertThat(order.getReturnRequestedAt()).isEqualTo(NOW.plusSeconds(60));
@@ -384,12 +318,13 @@ class OrderTest {
     @Test
     @DisplayName("반품 요청된 주문이 환불되면 반품은 COMPLETED로 완결된다")
     void refundCompletesRequestedReturn() {
-        Order order = deliveredOrder();
-        order.requestReturn(RefundReason.PRODUCT_DEFECT, NOW);
-        order.refund(RefundReason.PRODUCT_DEFECT, NOW);
+        Order order = paidOrder();
+        order.requestReturn(RefundReason.PRODUCT_DEFECT, FulfillmentStatus.DELIVERED, NOW);
+        order.refund(RefundReason.PRODUCT_DEFECT, FulfillmentStatus.DELIVERED, NOW);
         assertThat(order.getReturnStatus()).isEqualTo(ReturnStatus.COMPLETED);
         assertThat(order.getStatus()).isEqualTo(OrderStatus.REFUNDED);
     }
+
     // 동일 금액 3라인(각 10,000)·할인 1,000·배송비 0 — 안분에 끝전(1000/3)이 생기는 결제 완료 주문.
     private Order paidThreeLineDiscountedOrder() {
         Order order = Order.place(
@@ -413,11 +348,11 @@ class OrderTest {
         Order order = paidThreeLineDiscountedOrder();
         List<UUID> ids = lineIds(order);
 
-        Money first = order.beginLineCancellation(ids.get(0));
+        Money first = order.beginLineCancellation(ids.get(0), FulfillmentStatus.PREPARING);
         order.completeLineCancellation(ids.get(0), NOW);
-        Money second = order.beginLineCancellation(ids.get(1));
+        Money second = order.beginLineCancellation(ids.get(1), FulfillmentStatus.PREPARING);
         order.completeLineCancellation(ids.get(1), NOW);
-        Money third = order.beginLineCancellation(ids.get(2));
+        Money third = order.beginLineCancellation(ids.get(2), FulfillmentStatus.PREPARING);
         order.completeLineCancellation(ids.get(2), NOW);
 
         // 각 라인 할인 = 라인 금액 − 환불액. 내림 안분 333·333에 끝전 334가 마지막 잔액 환불로 흡수된다.
@@ -435,7 +370,7 @@ class OrderTest {
         Order order = paidThreeLineDiscountedOrder();
         UUID lineId = lineIds(order).get(0);
 
-        Money refund = order.beginLineCancellation(lineId);
+        Money refund = order.beginLineCancellation(lineId, FulfillmentStatus.PREPARING);
         assertThat(refund).isEqualTo(Money.of(9667L));
         assertThat(order.getRefundedAmount()).isEqualTo(Money.of(9667L));
         assertThat(lineOf(order, lineId).getStatus()).isEqualTo(OrderLineStatus.CANCELLING);
@@ -456,7 +391,7 @@ class OrderTest {
         order.markPaid(NOW);
         UUID lineId = lineIds(order).get(0);
 
-        Money refund = order.beginLineCancellation(lineId);
+        Money refund = order.beginLineCancellation(lineId, FulfillmentStatus.PREPARING);
         boolean converged = order.completeLineCancellation(lineId, NOW);
 
         assertThat(refund).isEqualTo(Money.of(13000L));
@@ -469,46 +404,40 @@ class OrderTest {
     @Test
     @DisplayName("라인 취소 개시는 결제 완료·출고 전 주문의 주문됨 라인에서만 허용된다")
     void beginLineCancellationGuards() {
-        // 미결제(PENDING) 주문 거부
         Order pending = place(Money.ZERO, Money.ZERO, null);
-        assertThatThrownBy(() -> pending.beginLineCancellation(lineIds(pending).get(0)))
+        assertThatThrownBy(() -> pending.beginLineCancellation(lineIds(pending).get(0), FulfillmentStatus.NOT_STARTED))
                 .isInstanceOf(OrderStatusException.class)
                 .extracting("errorCode")
                 .isEqualTo(OrderErrorCode.CANCEL_NOT_ALLOWED);
 
-        // 출고 이후 거부
         Order shipped = paidOrder();
-        shipped.ship(CARRIER, TRACKING_NUMBER, NOW);
-        assertThatThrownBy(() -> shipped.beginLineCancellation(lineIds(shipped).get(0)))
+        assertThatThrownBy(() -> shipped.beginLineCancellation(lineIds(shipped).get(0), FulfillmentStatus.SHIPPED))
                 .isInstanceOf(OrderStatusException.class)
                 .extracting("errorCode")
                 .isEqualTo(OrderErrorCode.CANCEL_NOT_ALLOWED);
 
-        // 전체 취소 진행 중 거부
         Order cancelRequested = paidOrder();
-        cancelRequested.requestCancellation(NOW);
+        cancelRequested.requestCancellation(FulfillmentStatus.PREPARING, NOW);
         assertThatThrownBy(() -> cancelRequested.beginLineCancellation(
-                        lineIds(cancelRequested).get(0)))
+                        lineIds(cancelRequested).get(0), FulfillmentStatus.PREPARING))
                 .isInstanceOf(OrderStatusException.class)
                 .extracting("errorCode")
                 .isEqualTo(OrderErrorCode.CANCEL_IN_PROGRESS);
 
-        // 미존재 라인 거부
         Order order = paidThreeLineDiscountedOrder();
-        assertThatThrownBy(() -> order.beginLineCancellation(UUID.randomUUID()))
+        assertThatThrownBy(() -> order.beginLineCancellation(UUID.randomUUID(), FulfillmentStatus.PREPARING))
                 .isInstanceOf(OrderLineNotFoundException.class)
                 .extracting("errorCode")
                 .isEqualTo(OrderErrorCode.ORDER_LINE_NOT_FOUND);
 
-        // 취소 진행 중·취소된 라인 재개시 거부
         UUID lineId = lineIds(order).get(0);
-        order.beginLineCancellation(lineId);
-        assertThatThrownBy(() -> order.beginLineCancellation(lineId))
+        order.beginLineCancellation(lineId, FulfillmentStatus.PREPARING);
+        assertThatThrownBy(() -> order.beginLineCancellation(lineId, FulfillmentStatus.PREPARING))
                 .isInstanceOf(OrderStatusException.class)
                 .extracting("errorCode")
                 .isEqualTo(OrderErrorCode.INVALID_ORDER_STATE_TRANSITION);
         order.completeLineCancellation(lineId, NOW);
-        assertThatThrownBy(() -> order.beginLineCancellation(lineId))
+        assertThatThrownBy(() -> order.beginLineCancellation(lineId, FulfillmentStatus.PREPARING))
                 .isInstanceOf(OrderStatusException.class)
                 .extracting("errorCode")
                 .isEqualTo(OrderErrorCode.INVALID_ORDER_STATE_TRANSITION);
@@ -530,9 +459,9 @@ class OrderTest {
     @DisplayName("부분 취소 이력이 있는 주문의 전체 취소 개시는 거부된다")
     void requestCancellationRejectsPartiallyCancelledOrder() {
         Order order = paidThreeLineDiscountedOrder();
-        order.beginLineCancellation(lineIds(order).get(0));
+        order.beginLineCancellation(lineIds(order).get(0), FulfillmentStatus.PREPARING);
 
-        assertThatThrownBy(() -> order.requestCancellation(NOW))
+        assertThatThrownBy(() -> order.requestCancellation(FulfillmentStatus.PREPARING, NOW))
                 .isInstanceOf(OrderStatusException.class)
                 .extracting("errorCode")
                 .isEqualTo(OrderErrorCode.PARTIALLY_CANCELLED);
@@ -554,7 +483,8 @@ class OrderTest {
 
         long refundSum = 0;
         for (UUID lineId : ids) {
-            refundSum += order.beginLineCancellation(lineId).amount();
+            refundSum += order.beginLineCancellation(lineId, FulfillmentStatus.PREPARING)
+                    .amount();
             order.completeLineCancellation(lineId, NOW);
         }
 
@@ -568,47 +498,25 @@ class OrderTest {
     void refundRejectsPartiallyCancelledOrder() {
         Order order = paidThreeLineDiscountedOrder();
         UUID lineId = lineIds(order).get(0);
-        order.beginLineCancellation(lineId);
+        order.beginLineCancellation(lineId, FulfillmentStatus.PREPARING);
         order.completeLineCancellation(lineId, NOW);
-        order.ship(CARRIER, TRACKING_NUMBER, NOW);
-        order.confirmDelivery(NOW);
 
-        assertThatThrownBy(() -> order.refund(RefundReason.PRODUCT_DEFECT, NOW))
+        assertThatThrownBy(() -> order.refund(RefundReason.PRODUCT_DEFECT, FulfillmentStatus.DELIVERED, NOW))
                 .isInstanceOf(OrderStatusException.class)
                 .extracting("errorCode")
                 .isEqualTo(OrderErrorCode.PARTIALLY_CANCELLED);
     }
 
     @Test
-    @DisplayName("취소 진행 중 라인이 있는 주문의 출고는 거부된다")
-    void shipRejectsWhileLineCancellationInProgress() {
-        Order order = paidThreeLineDiscountedOrder();
-        order.beginLineCancellation(lineIds(order).get(0));
-
-        assertThatThrownBy(() -> order.ship(CARRIER, TRACKING_NUMBER, NOW))
-                .isInstanceOf(FulfillmentStatusException.class)
-                .extracting("errorCode")
-                .isEqualTo(OrderErrorCode.CANCEL_IN_PROGRESS);
-    }
-
-    // 결제 완료·배송 완료된 3라인 할인 주문 — 반품 가능 상태.
-    private Order deliveredThreeLineDiscountedOrder() {
-        Order order = paidThreeLineDiscountedOrder();
-        order.ship(CARRIER, TRACKING_NUMBER, NOW);
-        order.confirmDelivery(NOW);
-        return order;
-    }
-
-    @Test
     @DisplayName("라인 반품 요청·승인이 공유 산식으로 환불액을 확정하고 라인을 RETURNED로 완결한다")
     void lineReturnRequestAndApprovalConfirmsRefund() {
-        Order order = deliveredThreeLineDiscountedOrder();
+        Order order = paidThreeLineDiscountedOrder();
         UUID lineId = lineIds(order).get(0);
 
-        order.requestLineReturn(lineId, RefundReason.PRODUCT_DEFECT);
+        order.requestLineReturn(lineId, RefundReason.PRODUCT_DEFECT, FulfillmentStatus.DELIVERED);
         assertThat(lineOf(order, lineId).getStatus()).isEqualTo(OrderLineStatus.RETURN_REQUESTED);
 
-        Money refund = order.beginLineReturn(lineId);
+        Money refund = order.beginLineReturn(lineId, FulfillmentStatus.DELIVERED);
         assertThat(refund).isEqualTo(Money.of(9667L));
         assertThat(lineOf(order, lineId).getStatus()).isEqualTo(OrderLineStatus.RETURNING);
         assertThat(order.getRefundedAmount()).isEqualTo(Money.of(9667L));
@@ -623,49 +531,46 @@ class OrderTest {
     @Test
     @DisplayName("라인 반품 요청은 배송 완료된 주문의 주문됨 라인에서만 허용된다")
     void requestLineReturnGuards() {
-        // 배송 전 주문 거부
         Order paid = paidThreeLineDiscountedOrder();
-        assertThatThrownBy(() -> paid.requestLineReturn(lineIds(paid).get(0), RefundReason.PRODUCT_DEFECT))
+        assertThatThrownBy(() -> paid.requestLineReturn(
+                        lineIds(paid).get(0), RefundReason.PRODUCT_DEFECT, FulfillmentStatus.PREPARING))
                 .isInstanceOf(OrderStatusException.class)
                 .extracting("errorCode")
                 .isEqualTo(OrderErrorCode.RETURN_NOT_ALLOWED);
 
-        // 이미 반품 완료된 라인 재요청 거부
-        Order order = deliveredThreeLineDiscountedOrder();
+        Order order = paidThreeLineDiscountedOrder();
         UUID returned = lineIds(order).get(0);
-        order.requestLineReturn(returned, RefundReason.PRODUCT_DEFECT);
-        order.beginLineReturn(returned);
+        order.requestLineReturn(returned, RefundReason.PRODUCT_DEFECT, FulfillmentStatus.DELIVERED);
+        order.beginLineReturn(returned, FulfillmentStatus.DELIVERED);
         order.completeLineReturn(returned, NOW);
-        assertThatThrownBy(() -> order.requestLineReturn(returned, RefundReason.PRODUCT_DEFECT))
+        assertThatThrownBy(() ->
+                        order.requestLineReturn(returned, RefundReason.PRODUCT_DEFECT, FulfillmentStatus.DELIVERED))
                 .isInstanceOf(OrderStatusException.class)
                 .extracting("errorCode")
                 .isEqualTo(OrderErrorCode.INVALID_ORDER_STATE_TRANSITION);
 
-        // 요청 중 라인 재요청 거부
         UUID requested = lineIds(order).get(1);
-        order.requestLineReturn(requested, RefundReason.PRODUCT_DEFECT);
-        assertThatThrownBy(() -> order.requestLineReturn(requested, RefundReason.CHANGE_OF_MIND))
+        order.requestLineReturn(requested, RefundReason.PRODUCT_DEFECT, FulfillmentStatus.DELIVERED);
+        assertThatThrownBy(() ->
+                        order.requestLineReturn(requested, RefundReason.CHANGE_OF_MIND, FulfillmentStatus.DELIVERED))
                 .isInstanceOf(OrderStatusException.class)
                 .extracting("errorCode")
                 .isEqualTo(OrderErrorCode.INVALID_ORDER_STATE_TRANSITION);
 
-        // 취소된 라인 반품 요청 거부(상태 배타)
         Order mixed = paidThreeLineDiscountedOrder();
         UUID cancelled = lineIds(mixed).get(0);
-        mixed.beginLineCancellation(cancelled);
+        mixed.beginLineCancellation(cancelled, FulfillmentStatus.PREPARING);
         mixed.completeLineCancellation(cancelled, NOW);
-        mixed.ship(CARRIER, TRACKING_NUMBER, NOW);
-        mixed.confirmDelivery(NOW);
-        assertThatThrownBy(() -> mixed.requestLineReturn(cancelled, RefundReason.PRODUCT_DEFECT))
+        assertThatThrownBy(() ->
+                        mixed.requestLineReturn(cancelled, RefundReason.PRODUCT_DEFECT, FulfillmentStatus.DELIVERED))
                 .isInstanceOf(OrderStatusException.class)
                 .extracting("errorCode")
                 .isEqualTo(OrderErrorCode.INVALID_ORDER_STATE_TRANSITION);
 
-        // 전체 반품 진행 중 라인 요청 거부
-        Order fullReturn = deliveredThreeLineDiscountedOrder();
-        fullReturn.requestReturn(RefundReason.PRODUCT_DEFECT, NOW);
-        assertThatThrownBy(
-                        () -> fullReturn.requestLineReturn(lineIds(fullReturn).get(0), RefundReason.PRODUCT_DEFECT))
+        Order fullReturn = paidThreeLineDiscountedOrder();
+        fullReturn.requestReturn(RefundReason.PRODUCT_DEFECT, FulfillmentStatus.DELIVERED, NOW);
+        assertThatThrownBy(() -> fullReturn.requestLineReturn(
+                        lineIds(fullReturn).get(0), RefundReason.PRODUCT_DEFECT, FulfillmentStatus.DELIVERED))
                 .isInstanceOf(OrderStatusException.class)
                 .extracting("errorCode")
                 .isEqualTo(OrderErrorCode.RETURN_ALREADY_REQUESTED);
@@ -674,11 +579,10 @@ class OrderTest {
     @Test
     @DisplayName("전 라인 반품 완결 시 주문이 REFUNDED로 수렴하고 혼합(취소+반품) 종결도 REFUNDED다")
     void allLineReturnsConvergeToRefunded() {
-        // 순수 반품 수렴
-        Order order = deliveredThreeLineDiscountedOrder();
+        Order order = paidThreeLineDiscountedOrder();
         for (UUID lineId : lineIds(order)) {
-            order.requestLineReturn(lineId, RefundReason.PRODUCT_DEFECT);
-            order.beginLineReturn(lineId);
+            order.requestLineReturn(lineId, RefundReason.PRODUCT_DEFECT, FulfillmentStatus.DELIVERED);
+            order.beginLineReturn(lineId, FulfillmentStatus.DELIVERED);
             order.completeLineReturn(lineId, NOW);
         }
         assertThat(order.getStatus()).isEqualTo(OrderStatus.REFUNDED);
@@ -686,16 +590,13 @@ class OrderTest {
         assertThat(order.getRefundedAt()).isEqualTo(NOW);
         assertThat(order.getRefundReason()).isEqualTo(RefundReason.PRODUCT_DEFECT);
 
-        // 혼합 종결: 라인 1 취소 후 잔여 2 반품 — REFUNDED 수렴
         Order mixed = paidThreeLineDiscountedOrder();
         UUID cancelled = lineIds(mixed).get(0);
-        mixed.beginLineCancellation(cancelled);
+        mixed.beginLineCancellation(cancelled, FulfillmentStatus.PREPARING);
         mixed.completeLineCancellation(cancelled, NOW);
-        mixed.ship(CARRIER, TRACKING_NUMBER, NOW);
-        mixed.confirmDelivery(NOW);
         for (UUID lineId : List.of(lineIds(mixed).get(1), lineIds(mixed).get(2))) {
-            mixed.requestLineReturn(lineId, RefundReason.CHANGE_OF_MIND);
-            mixed.beginLineReturn(lineId);
+            mixed.requestLineReturn(lineId, RefundReason.CHANGE_OF_MIND, FulfillmentStatus.DELIVERED);
+            mixed.beginLineReturn(lineId, FulfillmentStatus.DELIVERED);
             mixed.completeLineReturn(lineId, NOW);
         }
         assertThat(mixed.getStatus()).isEqualTo(OrderStatus.REFUNDED);
@@ -705,37 +606,36 @@ class OrderTest {
     @Test
     @DisplayName("라인 반품 거절은 라인을 주문됨으로 되돌리고 재요청이 가능하다")
     void rejectLineReturnRestoresOrderedLine() {
-        Order order = deliveredThreeLineDiscountedOrder();
+        Order order = paidThreeLineDiscountedOrder();
         UUID lineId = lineIds(order).get(0);
-        order.requestLineReturn(lineId, RefundReason.PRODUCT_DEFECT);
+        order.requestLineReturn(lineId, RefundReason.PRODUCT_DEFECT, FulfillmentStatus.DELIVERED);
 
         order.rejectLineReturn(lineId);
 
         assertThat(lineOf(order, lineId).getStatus()).isEqualTo(OrderLineStatus.ORDERED);
         assertThat(lineOf(order, lineId).getReturnReason()).isNull();
-        order.requestLineReturn(lineId, RefundReason.CHANGE_OF_MIND);
+        order.requestLineReturn(lineId, RefundReason.CHANGE_OF_MIND, FulfillmentStatus.DELIVERED);
         assertThat(lineOf(order, lineId).getStatus()).isEqualTo(OrderLineStatus.RETURN_REQUESTED);
     }
 
     @Test
     @DisplayName("전체 반품 요청은 부분 환불 이력·라인 반품 진행 중이면 거부된다")
     void requestReturnRejectsPartialHistory() {
-        // 부분 취소 이력 거부
         Order partiallyCancelled = paidThreeLineDiscountedOrder();
         UUID cancelled = lineIds(partiallyCancelled).get(0);
-        partiallyCancelled.beginLineCancellation(cancelled);
+        partiallyCancelled.beginLineCancellation(cancelled, FulfillmentStatus.PREPARING);
         partiallyCancelled.completeLineCancellation(cancelled, NOW);
-        partiallyCancelled.ship(CARRIER, TRACKING_NUMBER, NOW);
-        partiallyCancelled.confirmDelivery(NOW);
-        assertThatThrownBy(() -> partiallyCancelled.requestReturn(RefundReason.PRODUCT_DEFECT, NOW))
+        assertThatThrownBy(() ->
+                        partiallyCancelled.requestReturn(RefundReason.PRODUCT_DEFECT, FulfillmentStatus.DELIVERED, NOW))
                 .isInstanceOf(OrderStatusException.class)
                 .extracting("errorCode")
                 .isEqualTo(OrderErrorCode.PARTIALLY_CANCELLED);
 
-        // 라인 반품 진행 중 거부
-        Order lineReturning = deliveredThreeLineDiscountedOrder();
-        lineReturning.requestLineReturn(lineIds(lineReturning).get(0), RefundReason.PRODUCT_DEFECT);
-        assertThatThrownBy(() -> lineReturning.requestReturn(RefundReason.PRODUCT_DEFECT, NOW))
+        Order lineReturning = paidThreeLineDiscountedOrder();
+        lineReturning.requestLineReturn(
+                lineIds(lineReturning).get(0), RefundReason.PRODUCT_DEFECT, FulfillmentStatus.DELIVERED);
+        assertThatThrownBy(() ->
+                        lineReturning.requestReturn(RefundReason.PRODUCT_DEFECT, FulfillmentStatus.DELIVERED, NOW))
                 .isInstanceOf(OrderStatusException.class)
                 .extracting("errorCode")
                 .isEqualTo(OrderErrorCode.RETURN_ALREADY_REQUESTED);
@@ -744,10 +644,10 @@ class OrderTest {
     @Test
     @DisplayName("라인 이력이 있는 주문의 전체 반품 환불 집행은 거부된다")
     void refundRejectsAnyLineHistory() {
-        // 반품 요청 라인(환불 미확정 — refundedAmount 프록시가 침묵하는 케이스)
-        Order requested = deliveredThreeLineDiscountedOrder();
-        requested.requestLineReturn(lineIds(requested).get(0), RefundReason.PRODUCT_DEFECT);
-        assertThatThrownBy(() -> requested.refund(RefundReason.PRODUCT_DEFECT, NOW))
+        Order requested = paidThreeLineDiscountedOrder();
+        requested.requestLineReturn(
+                lineIds(requested).get(0), RefundReason.PRODUCT_DEFECT, FulfillmentStatus.DELIVERED);
+        assertThatThrownBy(() -> requested.refund(RefundReason.PRODUCT_DEFECT, FulfillmentStatus.DELIVERED, NOW))
                 .isInstanceOf(OrderStatusException.class)
                 .extracting("errorCode")
                 .isEqualTo(OrderErrorCode.INVALID_ORDER_STATE_TRANSITION);
@@ -758,11 +658,11 @@ class OrderTest {
     void beginLineReturnGuardsOrderState() {
         // 반품 요청 라인을 만든 뒤 주문 상태가 어긋난 경우를 재현할 수 없으므로(요청 가드가 선행),
         // 전체 반품 요청과의 공존(쓰기 스큐 잔여 상태)을 직접 재현해 집행 가드를 단언한다.
-        Order order = deliveredThreeLineDiscountedOrder();
-        order.requestLineReturn(lineIds(order).get(0), RefundReason.PRODUCT_DEFECT);
+        Order order = paidThreeLineDiscountedOrder();
+        order.requestLineReturn(lineIds(order).get(0), RefundReason.PRODUCT_DEFECT, FulfillmentStatus.DELIVERED);
         forceFullReturnRequested(order);
 
-        assertThatThrownBy(() -> order.beginLineReturn(lineIds(order).get(0)))
+        assertThatThrownBy(() -> order.beginLineReturn(lineIds(order).get(0), FulfillmentStatus.DELIVERED))
                 .isInstanceOf(OrderStatusException.class)
                 .extracting("errorCode")
                 .isEqualTo(OrderErrorCode.RETURN_ALREADY_REQUESTED);
@@ -771,12 +671,12 @@ class OrderTest {
     @Test
     @DisplayName("전체 반품 거절 후 라인 반품 요청은 허용된다")
     void lineReturnAllowedAfterFullReturnRejection() {
-        Order order = deliveredThreeLineDiscountedOrder();
-        order.requestReturn(RefundReason.PRODUCT_DEFECT, NOW);
+        Order order = paidThreeLineDiscountedOrder();
+        order.requestReturn(RefundReason.PRODUCT_DEFECT, FulfillmentStatus.DELIVERED, NOW);
         order.rejectReturn();
 
         UUID lineId = lineIds(order).get(0);
-        order.requestLineReturn(lineId, RefundReason.CHANGE_OF_MIND);
+        order.requestLineReturn(lineId, RefundReason.CHANGE_OF_MIND, FulfillmentStatus.DELIVERED);
 
         assertThat(lineOf(order, lineId).getStatus()).isEqualTo(OrderLineStatus.RETURN_REQUESTED);
     }
@@ -784,9 +684,9 @@ class OrderTest {
     /** 쓰기 스큐로만 도달 가능한 전체 반품 요청 공존 상태를 리플렉션으로 재현한다. */
     private static void forceFullReturnRequested(Order order) {
         try {
-            var field = Order.class.getDeclaredField("returnStatus");
+            var field = Order.class.getDeclaredField("returnRequest");
             field.setAccessible(true);
-            field.set(order, ReturnStatus.REQUESTED);
+            field.set(order, new ReturnRequest(ReturnStatus.REQUESTED, NOW, RefundReason.PRODUCT_DEFECT));
         } catch (ReflectiveOperationException e) {
             throw new IllegalStateException(e);
         }

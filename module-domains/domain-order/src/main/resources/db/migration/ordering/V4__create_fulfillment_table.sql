@@ -1,3 +1,8 @@
+-- orders.fulfillment_status는 코드 전환 후 더 이상 채워지지 않는다. contract 단계에서 컬럼째 제거하기
+-- 전까지 신규 INSERT가 NOT NULL 위반으로 막히지 않도록 제약을 완화한다.
+ALTER TABLE ordering.orders
+    ALTER COLUMN fulfillment_status DROP NOT NULL;
+
 CREATE TABLE ordering.fulfillment (
     id              UUID        NOT NULL,
     order_id        UUID        NOT NULL,

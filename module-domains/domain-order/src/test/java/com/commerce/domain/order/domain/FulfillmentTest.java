@@ -98,8 +98,7 @@ class FulfillmentTest {
     void holdAndReleaseRequireExpectedState() {
         Fulfillment shipped = Fulfillment.create(ORDER_ID);
         shipped.ship(CARRIER, TRACKING_NUMBER, false, NOW);
-        assertThatThrownBy(() -> shipped.hold(HoldReason.STOCK_DELAY))
-                .isInstanceOf(FulfillmentStatusException.class);
+        assertThatThrownBy(() -> shipped.hold(HoldReason.STOCK_DELAY)).isInstanceOf(FulfillmentStatusException.class);
 
         Fulfillment preparing = Fulfillment.create(ORDER_ID);
         assertThatThrownBy(preparing::release).isInstanceOf(FulfillmentStatusException.class);
