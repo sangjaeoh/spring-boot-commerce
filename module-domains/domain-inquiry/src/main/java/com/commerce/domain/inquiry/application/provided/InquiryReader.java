@@ -10,4 +10,7 @@ public interface InquiryReader {
 
     /** 상품의 문의 페이지를 최신 문의 우선으로 조회한다. */
     Page<InquiryInfo> getProductPage(UUID productId, Pageable pageable);
+
+    /** 답변 여부로 필터한 전체 문의 페이지를 최신 문의 우선으로 조회한다. */
+    Page<InquiryInfo> getAnswerStatusPage(boolean answered, Pageable pageable);
 }

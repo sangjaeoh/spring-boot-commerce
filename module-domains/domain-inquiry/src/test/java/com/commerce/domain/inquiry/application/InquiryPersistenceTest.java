@@ -27,7 +27,7 @@ import org.testcontainers.utility.DockerImageName;
 /**
  * inquiry 도메인의 영속 이음새를 실 PostgreSQL로 검증하는 테스트다.
  *
- * <p>{@code ddl-auto=validate} 정합, 작성·답변, 최신 문의 우선 페이지를 확인한다.
+ * <p>{@code ddl-auto=validate} 정합, 작성·답변, 최신 문의 우선 페이지, 답변 여부 필터를 확인한다.
  */
 @DataJpaTest(
         properties = {
@@ -96,6 +96,49 @@ class InquiryPersistenceTest {
 
         assertThatThrownBy(() -> inquiryModifier.answer(UUID.randomUUID(), "답변"))
                 .isInstanceOf(InquiryNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("미답변 필터는 미답변 문의만 최신 문의 우선으로 반환한다")
+    void answerStatusPageFiltersUnanswered() {
+        UUID productId = UUID.randomUUID();
+        UUID firstUnansweredId = inquiryAppender.write(UUID.randomUUID(), productId, "먼저 쓴 미답변 문의", false);
+        awaitNextMillisecond();
+        UUID secondUnansweredId = inquiryAppender.write(UUID.randomUUID(), productId, "나중에 쓴 미답변 문의", false);
+        UUID answeredId = inquiryAppender.write(UUID.randomUUID(), productId, "답변된 문의", false);
+        inquiryModifier.answer(answeredId, "답변입니다.");
+
+        assertThat(inquiryReader
+                        .getAnswerStatusPage(false, PageRequest.of(0, 10))
+                        .getContent())
+                .extracting(InquiryInfo::id)
+                .containsExactly(secondUnansweredId, firstUnansweredId);
+    }
+
+    // UUIDv7의 동일 밀리초 내 하위 비트는 랜덤이라, 순서 단언 전에 밀리초 경계를 넘겨 생성 시각을 분리한다.
+    private static void awaitNextMillisecond() {
+        long now = System.currentTimeMillis();
+        while (System.currentTimeMillis() == now) {
+            Thread.onSpinWait();
+        }
+    }
+
+    @Test
+    @DisplayName("답변 완료 문의는 미답변 필터에서 제외되고 답변 완료 필터에 포함된다")
+    void answeredInquiryMovesToAnsweredFilter() {
+        UUID inquiryId = inquiryAppender.write(UUID.randomUUID(), UUID.randomUUID(), "답변 대기 문의", false);
+        inquiryModifier.answer(inquiryId, "답변입니다.");
+
+        assertThat(inquiryReader
+                        .getAnswerStatusPage(false, PageRequest.of(0, 10))
+                        .getContent())
+                .extracting(InquiryInfo::id)
+                .doesNotContain(inquiryId);
+        assertThat(inquiryReader
+                        .getAnswerStatusPage(true, PageRequest.of(0, 10))
+                        .getContent())
+                .extracting(InquiryInfo::id)
+                .contains(inquiryId);
     }
 
     @Test

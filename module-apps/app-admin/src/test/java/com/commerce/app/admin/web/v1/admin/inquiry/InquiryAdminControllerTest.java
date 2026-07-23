@@ -1,6 +1,7 @@
 package com.commerce.app.admin.web.v1.admin.inquiry;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -84,6 +85,55 @@ class InquiryAdminControllerTest extends WebIntegrationTest {
                         .content(objectMapper.writeValueAsString(new InquiryAnswerRequest("답변"))))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("INQUIRY_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("관리자 미답변 목록 조회는 200이고 비밀글 문의도 전문과 페이지 메타로 실린다")
+    void unansweredListShowsFullContentToAdmin() throws Exception {
+        UUID memberId = registerMember();
+        UUID productId = UUID.randomUUID();
+        UUID inquiryId = inquiryAppender.write(memberId, productId, "비밀 문의 본문", true);
+
+        mvc.perform(get("/api/v1/admin/inquiries").header(HttpHeaders.AUTHORIZATION, adminBearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.inquiries[0].id").value(inquiryId.toString()))
+                .andExpect(jsonPath("$.inquiries[0].memberId").value(memberId.toString()))
+                .andExpect(jsonPath("$.inquiries[0].productId").value(productId.toString()))
+                .andExpect(jsonPath("$.inquiries[0].content").value("비밀 문의 본문"))
+                .andExpect(jsonPath("$.inquiries[0].secret").value(true))
+                .andExpect(jsonPath("$.inquiries[0].answer").doesNotExist())
+                .andExpect(jsonPath("$.page.number").value(1))
+                .andExpect(jsonPath("$.page.size").value(20));
+    }
+
+    @Test
+    @DisplayName("답변 완료 문의는 미답변 목록에서 제외되고 답변 완료 필터 목록에 실린다")
+    void answeredInquiryAppearsOnlyInAnsweredList() throws Exception {
+        UUID inquiryId = inquiryAppender.write(registerMember(), UUID.randomUUID(), "답변될 문의", false);
+
+        mvc.perform(post("/api/v1/admin/inquiries/{inquiryId}/answer", inquiryId)
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new InquiryAnswerRequest("답변입니다."))))
+                .andExpect(status().isNoContent());
+
+        mvc.perform(get("/api/v1/admin/inquiries").header(HttpHeaders.AUTHORIZATION, adminBearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.inquiries[?(@.id == '%s')]".formatted(inquiryId))
+                        .isEmpty());
+        mvc.perform(get("/api/v1/admin/inquiries")
+                        .param("answered", "true")
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.inquiries[?(@.id == '%s')]".formatted(inquiryId))
+                        .isNotEmpty());
+    }
+
+    @Test
+    @DisplayName("일반 회원의 관리자 목록 조회는 403으로 거부된다")
+    void listRejectsNonAdmin() throws Exception {
+        mvc.perform(get("/api/v1/admin/inquiries").header(HttpHeaders.AUTHORIZATION, bearer(registerMember())))
+                .andExpect(status().isForbidden());
     }
 
     private UUID registerMember() {
