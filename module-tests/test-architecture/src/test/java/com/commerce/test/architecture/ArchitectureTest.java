@@ -105,6 +105,9 @@ class ArchitectureTest {
     // JPA 매핑 클래스(@Entity·@MappedSuperclass) FQN 집합 — provided·info 시그니처 노출 금지 판정에 쓴다.
     private static final Set<String> MAPPED_TYPE_NAMES = mappedTypeNames();
 
+    // query 모듈 베이스 패키지 접두 — 엔티티 접근 면제·query 모듈 규칙이 공유한다. 계층 네임스페이스 고정.
+    private static final String QUERY_BASE_PACKAGE_PREFIX = "com.commerce.query.";
+
     // 발행 계약 FQN — 발행 주체 제한 규칙이 의존 대상으로 판정한다.
     private static final String MESSAGE_PUBLISHER = "com.commerce.common.event.publish.MessagePublisher";
 
@@ -158,16 +161,18 @@ class ArchitectureTest {
     }
 
     // 면제는 매핑 클래스 소유 모듈의 베이스 패키지 접두로 한정한다 — 전역 패키지명 기준(..application.. 등)이면
-    // 앱이 ...application 패키지를 만들어 생 엔티티를 참조해도 면제되는 우회가 생긴다.
+    // 앱이 ...application 패키지를 만들어 생 엔티티를 참조해도 면제되는 우회가 생긴다. query 모듈은 엔티티를
+    // 조회 구현에 쓰는 유형 특권(architecture.md query 모듈 구조)으로 면제한다.
     private static ArchRule jpaEntityAccessConfinedToDomainModules() {
         DescribedPredicate<CanBeAnnotated> jpaMapped = annotatedWith("jakarta.persistence.Entity")
                 .or(annotatedWith("jakarta.persistence.MappedSuperclass"))
                 .as("@Entity 또는 @MappedSuperclass 매핑 클래스");
         DescribedPredicate<JavaClass> entityOwningModuleInternal =
-                new DescribedPredicate<>("매핑 클래스 소유 모듈 내부 구역(domain·application)") {
+                new DescribedPredicate<>("매핑 클래스 소유 모듈 내부 구역(domain·application) 또는 query 모듈") {
                     @Override
                     public boolean test(JavaClass clazz) {
-                        return isEntityOwningModuleInternal(clazz.getPackageName());
+                        return isEntityOwningModuleInternal(clazz.getPackageName())
+                                || clazz.getPackageName().startsWith(QUERY_BASE_PACKAGE_PREFIX);
                     }
                 };
         return noClasses()
@@ -414,6 +419,70 @@ class ArchitectureTest {
                         domainZonePatterns(".application.provided.."), domainZonePatterns(".application.info..")))
                 .should(notExposeMappedTypesInBoundarySignatures())
                 .because("JPA 매핑 클래스는 모듈 밖 시그니처에 노출하지 않는다 — 경계는 info record로 변환한다." + " architecture.md 경계 원칙")
+                .check(CLASSES);
+    }
+
+    @Test
+    @DisplayName("query 모듈 공개 타입의 시그니처는 JPA 매핑 타입을 노출하지 않는다")
+    void queryModulePublicSignaturesDoNotExposeJpaMappedTypes() {
+        // 구현 클래스는 package-private라 대상 밖이다 — 공개 경계(provided·Info)만 검사한다.
+        classes()
+                .that()
+                .resideInAnyPackage(QUERY_BASE_PACKAGE_PREFIX + ".")
+                .and()
+                .arePublic()
+                .should(notExposeMappedTypesInBoundarySignatures())
+                .because("query 모듈은 엔티티를 조회 구현에만 쓰고 시그니처에 노출하지 않는다 — architecture.md query 모듈 구조")
+                .check(CLASSES);
+    }
+
+    @Test
+    @DisplayName("query 모듈은 도메인 리포지토리에 의존하지 않는다")
+    void queryModulesDoNotDependOnDomainRepositories() {
+        noClasses()
+                .that()
+                .resideInAnyPackage(QUERY_BASE_PACKAGE_PREFIX + ".")
+                .should()
+                .dependOnClassesThat()
+                .resideInAnyPackage("..application.required..")
+                .because("query 모듈 조회는 모듈 자체의 쿼리 구현(QueryDSL·EntityManager)으로 한다 — architecture.md query 모듈 구조")
+                .check(CLASSES);
+    }
+
+    @Test
+    @DisplayName("query 모듈은 JPA 쓰기 메서드를 호출하지 않는다")
+    void queryModulesDoNotWriteThroughEntityManager() {
+        // 네이티브 SQL 문자열·Session unwrap 우회까지는 잡지 못한다 — 그 축은 리뷰가 소유한다.
+        noClasses()
+                .that()
+                .resideInAnyPackage(QUERY_BASE_PACKAGE_PREFIX + ".")
+                .should()
+                .callMethodWhere(
+                        new DescribedPredicate<JavaMethodCall>("JPA 쓰기(persist·merge·remove·executeUpdate) 호출") {
+                            @Override
+                            public boolean test(JavaMethodCall call) {
+                                String owner = call.getTargetOwner().getName();
+                                if ("jakarta.persistence.EntityManager".equals(owner)) {
+                                    return Set.of("persist", "merge", "remove").contains(call.getName());
+                                }
+                                return owner.startsWith("jakarta.persistence.")
+                                        && "executeUpdate".equals(call.getName());
+                            }
+                        })
+                .because("query 모듈은 도메인 상태를 변경하지 않는다 — architecture.md query 모듈 구조")
+                .check(CLASSES);
+    }
+
+    @Test
+    @DisplayName("도메인·infra·이벤트 모듈은 query 모듈에 의존하지 않는다")
+    void domainInfraEventModulesDoNotDependOnQueryModules() {
+        noClasses()
+                .that()
+                .resideInAnyPackage("com.commerce.domain..", "com.commerce.infra..", "com.commerce.event..")
+                .should()
+                .dependOnClassesThat()
+                .resideInAnyPackage(QUERY_BASE_PACKAGE_PREFIX + ".")
+                .because("의존은 앱 → query 모듈 방향만 존재한다 — architecture.md query 모듈 구조")
                 .check(CLASSES);
     }
 

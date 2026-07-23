@@ -59,7 +59,7 @@
 
 ### 4. query 모듈 첫 도입 — 관리자 주문 검색
 
-- 진행: [ ] 설계 / [ ] 설계 리뷰 / [ ] 구현 / [ ] 코드 리뷰 / [ ] 게이트·커밋
+- 진행: [x] 설계 / [x] 설계 리뷰 / [x] 구현 / [x] 코드 리뷰 / [x] 게이트·커밋
 - 목표: 회원 이메일 축과 주문 상태 축이 걸친 관리자 주문 검색을 제공하고, query 모듈 유형의 첫 실물을 만든다.
 - 배경: `docs/architecture.md`가 query-{name} 계층을 정의했지만 실물이 0개다. 관리자 주문 목록은 상태 필터만 가능해 회원 이메일로 주문을 찾을 수 없다 — 축이 두 도메인(member·order)에 걸쳐 파사드 합성이 성립하지 않는 조회다.
 - 범위: `module-query/query-{name}` 모듈 신설(이름은 설계에서 결정) — settings 등록, provided 인터페이스 + Info record, QueryDSL 또는 `EntityManager` 크로스 스키마 조회. `convention.query-module` 컨벤션 플러그인이 미구현이므로 함께 구현하고(`build-logic`), 아키텍처 테스트가 query 모듈 규칙(도메인 상태 변경 금지·시그니처 엔티티 비노출·의존 방향)을 커버하도록 확장한다. 표면은 `GET /api/v1/admin/orders` 확장 vs 별도 검색 경로 중 설계에서 결정한다.

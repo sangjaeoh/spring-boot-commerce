@@ -441,6 +441,35 @@ class OrderAdminControllerTest extends WebIntegrationTest {
         return objectMapper.writeValueAsString(new OrderShipRequest("CJ대한통운", "688900123456"));
     }
 
+    @Test
+    @DisplayName("관리자 주문 검색은 200으로 이메일·상태 조건의 주문과 페이지 메타를 싣는다")
+    void adminOrderSearchFindsByEmailAndStatus() throws Exception {
+        String email = "search-" + UUID.randomUUID() + "@example.com";
+        UUID memberId = memberAppender.register(email, "테스터", "password-123!");
+        UUID orderId = placePendingOrder(memberId);
+
+        mvc.perform(get("/api/v1/admin/orders/search")
+                        .param("email", email)
+                        .param("status", "PENDING")
+                        .header(HttpHeaders.AUTHORIZATION, adminBearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.orders[0].id").value(orderId.toString()))
+                .andExpect(jsonPath("$.orders[0].memberId").value(memberId.toString()))
+                .andExpect(jsonPath("$.orders[0].memberEmail").value(email))
+                .andExpect(jsonPath("$.orders[0].status").value("PENDING"))
+                .andExpect(jsonPath("$.page.number").value(1))
+                .andExpect(jsonPath("$.page.size").value(20));
+    }
+
+    @Test
+    @DisplayName("일반 회원의 관리자 주문 검색은 403으로 거부된다")
+    void adminOrderSearchRejectsNonAdmin() throws Exception {
+        mvc.perform(get("/api/v1/admin/orders/search")
+                        .param("email", "someone@example.com")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(registerMember())))
+                .andExpect(status().isForbidden());
+    }
+
     private UUID checkoutForMember(UUID memberId) {
         UUID variantId = seedProduct(50);
         return placePaidOrder(memberId, variantId, 1);

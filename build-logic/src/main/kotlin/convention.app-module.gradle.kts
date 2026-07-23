@@ -5,7 +5,7 @@ plugins {
 }
 
 restrictProjectDependencies("app-module") { dependencyPath ->
-    listOf(":module-domains:", ":module-infra:", ":module-common:", ":module-events:")
+    listOf(":module-domains:", ":module-infra:", ":module-common:", ":module-events:", ":module-query:")
         .any { dependencyPath.startsWith(it) }
 }
 
