@@ -3,6 +3,7 @@ package com.commerce.domain.inquiry.application;
 import com.commerce.domain.inquiry.application.info.InquiryInfo;
 import com.commerce.domain.inquiry.application.provided.InquiryReader;
 import com.commerce.domain.inquiry.application.required.InquiryRepository;
+import com.commerce.domain.inquiry.domain.Inquiry;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -25,5 +26,14 @@ class DefaultInquiryReader implements InquiryReader {
         return inquiryRepository
                 .findByProductIdOrderByIdDesc(productId, pageable)
                 .map(InquiryInfo::from);
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public Page<InquiryInfo> getAnswerStatusPage(boolean answered, Pageable pageable) {
+        Page<Inquiry> page = answered
+                ? inquiryRepository.findByAnswerIsNotNullOrderByIdDesc(pageable)
+                : inquiryRepository.findByAnswerIsNullOrderByIdDesc(pageable);
+        return page.map(InquiryInfo::from);
     }
 }
