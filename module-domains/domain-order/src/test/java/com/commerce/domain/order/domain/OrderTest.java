@@ -591,6 +591,207 @@ class OrderTest {
                 .isEqualTo(OrderErrorCode.CANCEL_IN_PROGRESS);
     }
 
+    // 결제 완료·배송 완료된 3라인 할인 주문 — 반품 가능 상태.
+    private Order deliveredThreeLineDiscountedOrder() {
+        Order order = paidThreeLineDiscountedOrder();
+        order.ship(CARRIER, TRACKING_NUMBER, NOW);
+        order.confirmDelivery(NOW);
+        return order;
+    }
+
+    @Test
+    @DisplayName("라인 반품 요청·승인이 공유 산식으로 환불액을 확정하고 라인을 RETURNED로 완결한다")
+    void lineReturnRequestAndApprovalConfirmsRefund() {
+        Order order = deliveredThreeLineDiscountedOrder();
+        UUID lineId = lineIds(order).get(0);
+
+        order.requestLineReturn(lineId, RefundReason.PRODUCT_DEFECT);
+        assertThat(lineOf(order, lineId).getStatus()).isEqualTo(OrderLineStatus.RETURN_REQUESTED);
+
+        Money refund = order.beginLineReturn(lineId);
+        assertThat(refund).isEqualTo(Money.of(9667L));
+        assertThat(lineOf(order, lineId).getStatus()).isEqualTo(OrderLineStatus.RETURNING);
+        assertThat(order.getRefundedAmount()).isEqualTo(Money.of(9667L));
+
+        boolean converged = order.completeLineReturn(lineId, NOW);
+
+        assertThat(converged).isFalse();
+        assertThat(lineOf(order, lineId).getStatus()).isEqualTo(OrderLineStatus.RETURNED);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
+    }
+
+    @Test
+    @DisplayName("라인 반품 요청은 배송 완료된 주문의 주문됨 라인에서만 허용된다")
+    void requestLineReturnGuards() {
+        // 배송 전 주문 거부
+        Order paid = paidThreeLineDiscountedOrder();
+        assertThatThrownBy(() -> paid.requestLineReturn(lineIds(paid).get(0), RefundReason.PRODUCT_DEFECT))
+                .isInstanceOf(OrderStatusException.class)
+                .extracting("errorCode")
+                .isEqualTo(OrderErrorCode.RETURN_NOT_ALLOWED);
+
+        // 이미 반품 완료된 라인 재요청 거부
+        Order order = deliveredThreeLineDiscountedOrder();
+        UUID returned = lineIds(order).get(0);
+        order.requestLineReturn(returned, RefundReason.PRODUCT_DEFECT);
+        order.beginLineReturn(returned);
+        order.completeLineReturn(returned, NOW);
+        assertThatThrownBy(() -> order.requestLineReturn(returned, RefundReason.PRODUCT_DEFECT))
+                .isInstanceOf(OrderStatusException.class)
+                .extracting("errorCode")
+                .isEqualTo(OrderErrorCode.INVALID_ORDER_STATE_TRANSITION);
+
+        // 요청 중 라인 재요청 거부
+        UUID requested = lineIds(order).get(1);
+        order.requestLineReturn(requested, RefundReason.PRODUCT_DEFECT);
+        assertThatThrownBy(() -> order.requestLineReturn(requested, RefundReason.CHANGE_OF_MIND))
+                .isInstanceOf(OrderStatusException.class)
+                .extracting("errorCode")
+                .isEqualTo(OrderErrorCode.INVALID_ORDER_STATE_TRANSITION);
+
+        // 취소된 라인 반품 요청 거부(상태 배타)
+        Order mixed = paidThreeLineDiscountedOrder();
+        UUID cancelled = lineIds(mixed).get(0);
+        mixed.beginLineCancellation(cancelled);
+        mixed.completeLineCancellation(cancelled, NOW);
+        mixed.ship(CARRIER, TRACKING_NUMBER, NOW);
+        mixed.confirmDelivery(NOW);
+        assertThatThrownBy(() -> mixed.requestLineReturn(cancelled, RefundReason.PRODUCT_DEFECT))
+                .isInstanceOf(OrderStatusException.class)
+                .extracting("errorCode")
+                .isEqualTo(OrderErrorCode.INVALID_ORDER_STATE_TRANSITION);
+
+        // 전체 반품 진행 중 라인 요청 거부
+        Order fullReturn = deliveredThreeLineDiscountedOrder();
+        fullReturn.requestReturn(RefundReason.PRODUCT_DEFECT, NOW);
+        assertThatThrownBy(
+                        () -> fullReturn.requestLineReturn(lineIds(fullReturn).get(0), RefundReason.PRODUCT_DEFECT))
+                .isInstanceOf(OrderStatusException.class)
+                .extracting("errorCode")
+                .isEqualTo(OrderErrorCode.RETURN_ALREADY_REQUESTED);
+    }
+
+    @Test
+    @DisplayName("전 라인 반품 완결 시 주문이 REFUNDED로 수렴하고 혼합(취소+반품) 종결도 REFUNDED다")
+    void allLineReturnsConvergeToRefunded() {
+        // 순수 반품 수렴
+        Order order = deliveredThreeLineDiscountedOrder();
+        for (UUID lineId : lineIds(order)) {
+            order.requestLineReturn(lineId, RefundReason.PRODUCT_DEFECT);
+            order.beginLineReturn(lineId);
+            order.completeLineReturn(lineId, NOW);
+        }
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.REFUNDED);
+        assertThat(order.getRefundedAmount()).isEqualTo(order.getPayAmount());
+        assertThat(order.getRefundedAt()).isEqualTo(NOW);
+        assertThat(order.getRefundReason()).isEqualTo(RefundReason.PRODUCT_DEFECT);
+
+        // 혼합 종결: 라인 1 취소 후 잔여 2 반품 — REFUNDED 수렴
+        Order mixed = paidThreeLineDiscountedOrder();
+        UUID cancelled = lineIds(mixed).get(0);
+        mixed.beginLineCancellation(cancelled);
+        mixed.completeLineCancellation(cancelled, NOW);
+        mixed.ship(CARRIER, TRACKING_NUMBER, NOW);
+        mixed.confirmDelivery(NOW);
+        for (UUID lineId : List.of(lineIds(mixed).get(1), lineIds(mixed).get(2))) {
+            mixed.requestLineReturn(lineId, RefundReason.CHANGE_OF_MIND);
+            mixed.beginLineReturn(lineId);
+            mixed.completeLineReturn(lineId, NOW);
+        }
+        assertThat(mixed.getStatus()).isEqualTo(OrderStatus.REFUNDED);
+        assertThat(mixed.getRefundedAmount()).isEqualTo(mixed.getPayAmount());
+    }
+
+    @Test
+    @DisplayName("라인 반품 거절은 라인을 주문됨으로 되돌리고 재요청이 가능하다")
+    void rejectLineReturnRestoresOrderedLine() {
+        Order order = deliveredThreeLineDiscountedOrder();
+        UUID lineId = lineIds(order).get(0);
+        order.requestLineReturn(lineId, RefundReason.PRODUCT_DEFECT);
+
+        order.rejectLineReturn(lineId);
+
+        assertThat(lineOf(order, lineId).getStatus()).isEqualTo(OrderLineStatus.ORDERED);
+        assertThat(lineOf(order, lineId).getReturnReason()).isNull();
+        order.requestLineReturn(lineId, RefundReason.CHANGE_OF_MIND);
+        assertThat(lineOf(order, lineId).getStatus()).isEqualTo(OrderLineStatus.RETURN_REQUESTED);
+    }
+
+    @Test
+    @DisplayName("전체 반품 요청은 부분 환불 이력·라인 반품 진행 중이면 거부된다")
+    void requestReturnRejectsPartialHistory() {
+        // 부분 취소 이력 거부
+        Order partiallyCancelled = paidThreeLineDiscountedOrder();
+        UUID cancelled = lineIds(partiallyCancelled).get(0);
+        partiallyCancelled.beginLineCancellation(cancelled);
+        partiallyCancelled.completeLineCancellation(cancelled, NOW);
+        partiallyCancelled.ship(CARRIER, TRACKING_NUMBER, NOW);
+        partiallyCancelled.confirmDelivery(NOW);
+        assertThatThrownBy(() -> partiallyCancelled.requestReturn(RefundReason.PRODUCT_DEFECT, NOW))
+                .isInstanceOf(OrderStatusException.class)
+                .extracting("errorCode")
+                .isEqualTo(OrderErrorCode.PARTIALLY_CANCELLED);
+
+        // 라인 반품 진행 중 거부
+        Order lineReturning = deliveredThreeLineDiscountedOrder();
+        lineReturning.requestLineReturn(lineIds(lineReturning).get(0), RefundReason.PRODUCT_DEFECT);
+        assertThatThrownBy(() -> lineReturning.requestReturn(RefundReason.PRODUCT_DEFECT, NOW))
+                .isInstanceOf(OrderStatusException.class)
+                .extracting("errorCode")
+                .isEqualTo(OrderErrorCode.RETURN_ALREADY_REQUESTED);
+    }
+
+    @Test
+    @DisplayName("라인 이력이 있는 주문의 전체 반품 환불 집행은 거부된다")
+    void refundRejectsAnyLineHistory() {
+        // 반품 요청 라인(환불 미확정 — refundedAmount 프록시가 침묵하는 케이스)
+        Order requested = deliveredThreeLineDiscountedOrder();
+        requested.requestLineReturn(lineIds(requested).get(0), RefundReason.PRODUCT_DEFECT);
+        assertThatThrownBy(() -> requested.refund(RefundReason.PRODUCT_DEFECT, NOW))
+                .isInstanceOf(OrderStatusException.class)
+                .extracting("errorCode")
+                .isEqualTo(OrderErrorCode.INVALID_ORDER_STATE_TRANSITION);
+    }
+
+    @Test
+    @DisplayName("라인 반품 승인 개시는 배송 완료된 결제 주문·전체 반품 미진행에서만 허용된다")
+    void beginLineReturnGuardsOrderState() {
+        // 반품 요청 라인을 만든 뒤 주문 상태가 어긋난 경우를 재현할 수 없으므로(요청 가드가 선행),
+        // 전체 반품 요청과의 공존(쓰기 스큐 잔여 상태)을 직접 재현해 집행 가드를 단언한다.
+        Order order = deliveredThreeLineDiscountedOrder();
+        order.requestLineReturn(lineIds(order).get(0), RefundReason.PRODUCT_DEFECT);
+        forceFullReturnRequested(order);
+
+        assertThatThrownBy(() -> order.beginLineReturn(lineIds(order).get(0)))
+                .isInstanceOf(OrderStatusException.class)
+                .extracting("errorCode")
+                .isEqualTo(OrderErrorCode.RETURN_ALREADY_REQUESTED);
+    }
+
+    @Test
+    @DisplayName("전체 반품 거절 후 라인 반품 요청은 허용된다")
+    void lineReturnAllowedAfterFullReturnRejection() {
+        Order order = deliveredThreeLineDiscountedOrder();
+        order.requestReturn(RefundReason.PRODUCT_DEFECT, NOW);
+        order.rejectReturn();
+
+        UUID lineId = lineIds(order).get(0);
+        order.requestLineReturn(lineId, RefundReason.CHANGE_OF_MIND);
+
+        assertThat(lineOf(order, lineId).getStatus()).isEqualTo(OrderLineStatus.RETURN_REQUESTED);
+    }
+
+    /** 쓰기 스큐로만 도달 가능한 전체 반품 요청 공존 상태를 리플렉션으로 재현한다. */
+    private static void forceFullReturnRequested(Order order) {
+        try {
+            var field = Order.class.getDeclaredField("returnStatus");
+            field.setAccessible(true);
+            field.set(order, ReturnStatus.REQUESTED);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
     private static OrderLine lineOf(Order order, UUID lineId) {
         return order.getLines().stream()
                 .filter(l -> l.getId().equals(lineId))

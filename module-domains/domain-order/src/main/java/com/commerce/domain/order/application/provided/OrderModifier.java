@@ -79,6 +79,38 @@ public interface OrderModifier {
     void requestReturn(UUID orderId, UUID memberId, RefundReason reason);
 
     /**
+     * 회원 본인 주문의 라인 반품을 요청한다. 타인 주문은 미존재로 취급한다.
+     *
+     * @throws OrderNotFoundException 본인 주문이 없으면
+     * @throws OrderStatusException 배송 완료된 결제 주문이 아니거나, 전체 반품이 진행 중이거나, 라인이 주문됨 상태가 아니면
+     */
+    void requestLineReturn(UUID orderId, UUID memberId, UUID lineId, RefundReason reason);
+
+    /**
+     * 라인 반품 요청을 거절한다. 라인은 주문됨으로 돌아가 재요청할 수 있다.
+     *
+     * @throws OrderNotFoundException 주문이 없으면
+     * @throws OrderStatusException 라인이 반품 요청 상태가 아니면
+     */
+    void rejectLineReturn(UUID orderId, UUID lineId);
+
+    /**
+     * 라인 반품 승인을 개시한다. 환불액을 확정해 라인에 기록하고 확정 환불액을 반환한다.
+     *
+     * @throws OrderNotFoundException 주문이 없으면
+     * @throws OrderStatusException 라인이 반품 요청 상태가 아니면
+     */
+    Money beginLineReturn(UUID orderId, UUID lineId);
+
+    /**
+     * 반품 진행 중 라인을 반품으로 완결한다. 전 라인 종결로 주문이 환불에 수렴했으면 참을 반환한다.
+     *
+     * @throws OrderNotFoundException 주문이 없으면
+     * @throws OrderStatusException 라인이 반품 진행 중이 아니면
+     */
+    boolean completeLineReturn(UUID orderId, UUID lineId);
+
+    /**
      * 반품 요청을 거절한다. 주문은 PAID·DELIVERED로 남는다.
      *
      * @throws OrderNotFoundException 주문이 없으면
