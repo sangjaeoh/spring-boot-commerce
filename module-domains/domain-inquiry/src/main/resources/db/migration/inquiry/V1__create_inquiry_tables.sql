@@ -12,5 +12,4 @@ CREATE TABLE inquiry.inquiry (
     CONSTRAINT pk_inquiry PRIMARY KEY (id)
 );
 
--- 상품별 공개 목록 조회 축.
 CREATE INDEX ix_inquiry_product_id ON inquiry.inquiry (product_id);
