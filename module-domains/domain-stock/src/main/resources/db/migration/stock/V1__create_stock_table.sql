@@ -11,5 +11,4 @@ CREATE TABLE stock.stock (
     CONSTRAINT pk_stock PRIMARY KEY (id)
 );
 
--- 변형당 재고 1행. 유니크 인덱스가 논리 FK 조회 인덱스를 겸한다.
 CREATE UNIQUE INDEX ux_stock_variant_id ON stock.stock (variant_id);
