@@ -99,6 +99,18 @@
 - `OrderPersistenceTest`에 대응하는 `FulfillmentPersistenceTest` 신설, `DefaultOrderModifier`/`DefaultOrderReader` 테스트는 두 리포지토리 조율을 반영해 갱신한다.
 - `query-order`의 `DefaultOrderSearchReader` 테스트는 조인 추가를 반영해 갱신한다(행동·응답 형태는 불변).
 
+## 구현 중 발견 — 동시성 재보장 (비관락)
+
+`app-api`의 기존 동시성 테스트(`OrderCancellationFacadeTest.concurrentCancelAndShipNeverLeaveRefundedShippedOrphan`, `CyclicBarrier`로 취소 개시와 출고를 같은 순간에 커밋시켜 최악의 인터리빙을 강제)가 분리 후 실패했다. 원인: 분리 전에는 `requestCancellation()`(취소 마커 기록)과 `ship()`이 같은 `Order` 행·같은 `@Version`을 썼기 때문에 낙관락이 둘을 우연히 직렬화했다. 분리 후 `ship()`은 `Order`를 읽기만 하고 `Fulfillment`만 쓰므로 이 우연한 직렬화가 사라져, 두 스레드가 서로의 커밋 전 상태를 보고 동시에 통과할 수 있었다 — 결제 취소(환불)까지 실행된 뒤에야 뒤늦게 거부되면 "환불 고아"(결제 CANCELLED × 주문 SHIPPED)가 남는다.
+
+`entity-persistence.md`의 last-write-wins 기본 원칙에 대한 예외로 비관락을 도입해 재보장한다:
+
+- 이행축(`fulfillmentStatus`)을 읽어 취소·반품 개시를 가르는 `Order` 측 메서드(`cancel`·`requestCancellation`·`beginLineCancellation`·`refund`·`requestReturn`·`requestLineReturn`·`beginLineReturn`)는 `Order` 행을 `FOR UPDATE`(`PESSIMISTIC_WRITE`)로 조회한 뒤에야 이행축을 읽는다.
+- 결제·취소축을 읽어 이행 전이를 가르는 `Fulfillment` 측 메서드(`ship`·`confirmDelivery`·`holdFulfillment`·`releaseFulfillment`)는 `Order` 행을 `FOR SHARE`(`PESSIMISTIC_READ`)로 조회한 뒤에야 결제·취소축을 읽는다.
+- 코드 순서(수신자 `find*(orderId)`가 인자 `fulfillmentStatusOf(orderId)`보다 먼저 평가됨, Java의 좌→우 평가 순서)가 잠금 선점 후 판정을 보장한다 — 잠금을 먼저 건 트랜잭션이 이기고, 진 트랜잭션은 이긴 트랜잭션의 커밋 결과를 본 뒤 판정한다.
+- `PaymentProcessor`가 이미 쓰는 `TransactionTemplate`(`PlatformTransactionManager` 주입) 패턴은 재사용하지 않는다 — 이 락은 선언적 `@Transactional` 메서드 안에서 리포지토리 조회 시점에 거는 것이라 트랜잭션 경계 자체는 그대로다.
+- `OrderRepository`에 `findByIdForUpdate`·`findByIdAndMemberIdForUpdate`·`findByIdForShare` 3개 락 조회를 추가했다(`@Lock` + `@Query`).
+
 ## 리스크·트레이드오프
 
 - **엔티티 자기완결성 약화**: `Order`의 취소·반품 계열 7개 메서드, `Fulfillment`의 `ship()`이 더 이상 필요한 사실을 스스로 조회하지 않고 파라미터로 받는다. 교차 애그리거트 불변식 검사가 엔티티에서 서비스 계층(`DefaultOrderModifier`)으로 일부 이동한다 — 표준적인 DDD 트레이드오프이지만 리뷰 시 파라미터 전달 누락(예: `cancelInProgress` 계산 실수)을 코드 검토로 잡아야 한다.

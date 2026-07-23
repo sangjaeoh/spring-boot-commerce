@@ -78,13 +78,13 @@ class DefaultOrderModifier implements OrderModifier {
     @Transactional
     @Override
     public void cancel(UUID orderId, CancellationReason reason) {
-        find(orderId).cancel(reason, fulfillmentStatusOf(orderId), clock.instant());
+        findForUpdate(orderId).cancel(reason, fulfillmentStatusOf(orderId), clock.instant());
     }
 
     @Transactional
     @Override
     public Money beginLineCancellation(UUID orderId, UUID lineId) {
-        return find(orderId).beginLineCancellation(lineId, fulfillmentStatusOf(orderId));
+        return findForUpdate(orderId).beginLineCancellation(lineId, fulfillmentStatusOf(orderId));
     }
 
     @Transactional
@@ -96,20 +96,20 @@ class DefaultOrderModifier implements OrderModifier {
     @Transactional
     @Override
     public void requestCancellation(UUID orderId) {
-        find(orderId).requestCancellation(fulfillmentStatusOf(orderId), clock.instant());
+        findForUpdate(orderId).requestCancellation(fulfillmentStatusOf(orderId), clock.instant());
     }
 
     @Transactional
     @Override
     public void refund(UUID orderId, RefundReason reason) {
-        find(orderId).refund(reason, fulfillmentStatusOf(orderId), clock.instant());
+        findForUpdate(orderId).refund(reason, fulfillmentStatusOf(orderId), clock.instant());
     }
 
     @Transactional
     @Override
     public void requestReturn(UUID orderId, UUID memberId, RefundReason reason) {
         Order order = orderRepository
-                .findByIdAndMemberId(orderId, memberId)
+                .findByIdAndMemberIdForUpdate(orderId, memberId)
                 .orElseThrow(() -> new OrderNotFoundException(OrderErrorCode.ORDER_NOT_FOUND));
         order.requestReturn(reason, fulfillmentStatusOf(orderId), clock.instant());
     }
@@ -118,7 +118,7 @@ class DefaultOrderModifier implements OrderModifier {
     @Override
     public void requestLineReturn(UUID orderId, UUID memberId, UUID lineId, RefundReason reason) {
         Order order = orderRepository
-                .findByIdAndMemberId(orderId, memberId)
+                .findByIdAndMemberIdForUpdate(orderId, memberId)
                 .orElseThrow(() -> new OrderNotFoundException(OrderErrorCode.ORDER_NOT_FOUND));
         order.requestLineReturn(lineId, reason, fulfillmentStatusOf(orderId));
     }
@@ -132,7 +132,7 @@ class DefaultOrderModifier implements OrderModifier {
     @Transactional
     @Override
     public Money beginLineReturn(UUID orderId, UUID lineId) {
-        return find(orderId).beginLineReturn(lineId, fulfillmentStatusOf(orderId));
+        return findForUpdate(orderId).beginLineReturn(lineId, fulfillmentStatusOf(orderId));
     }
 
     @Transactional
@@ -150,7 +150,7 @@ class DefaultOrderModifier implements OrderModifier {
     @Transactional
     @Override
     public void ship(UUID orderId, String carrier, String trackingNumber) {
-        Order order = find(orderId);
+        Order order = findForShare(orderId);
         boolean cancelInProgress = order.getCancelRequestedAt() != null
                 || order.getLines().stream().anyMatch(line -> line.getStatus() == OrderLineStatus.CANCELLING);
         requireFulfillment(orderId, order).ship(carrier, trackingNumber, cancelInProgress, clock.instant());
@@ -159,21 +159,21 @@ class DefaultOrderModifier implements OrderModifier {
     @Transactional
     @Override
     public void confirmDelivery(UUID orderId) {
-        Order order = find(orderId);
+        Order order = findForShare(orderId);
         requireFulfillment(orderId, order).confirmDelivery(clock.instant());
     }
 
     @Transactional
     @Override
     public void holdFulfillment(UUID orderId, HoldReason reason) {
-        Order order = find(orderId);
+        Order order = findForShare(orderId);
         requireFulfillment(orderId, order).hold(reason);
     }
 
     @Transactional
     @Override
     public void releaseFulfillment(UUID orderId) {
-        Order order = find(orderId);
+        Order order = findForShare(orderId);
         requireFulfillment(orderId, order).release();
     }
 
@@ -181,6 +181,26 @@ class DefaultOrderModifier implements OrderModifier {
     private Order find(UUID orderId) {
         return orderRepository
                 .findById(orderId)
+                .orElseThrow(() -> new OrderNotFoundException(OrderErrorCode.ORDER_NOT_FOUND));
+    }
+
+    /**
+     * 주문을 찾아 쓰기 잠금(FOR UPDATE)을 건다. 이행축을 읽어 취소·반품 개시를 가르는 메서드가 쓴다 —
+     * {@link OrderRepository#findByIdForUpdate(UUID)} 참조.
+     */
+    private Order findForUpdate(UUID orderId) {
+        return orderRepository
+                .findByIdForUpdate(orderId)
+                .orElseThrow(() -> new OrderNotFoundException(OrderErrorCode.ORDER_NOT_FOUND));
+    }
+
+    /**
+     * 주문을 찾아 공유 잠금(FOR SHARE)을 건다. 결제·취소축을 읽어 이행 전이를 가르는 메서드가 쓴다 —
+     * {@link OrderRepository#findByIdForShare(UUID)} 참조.
+     */
+    private Order findForShare(UUID orderId) {
+        return orderRepository
+                .findByIdForShare(orderId)
                 .orElseThrow(() -> new OrderNotFoundException(OrderErrorCode.ORDER_NOT_FOUND));
     }
 

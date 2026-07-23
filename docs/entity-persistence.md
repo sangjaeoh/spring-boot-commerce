@@ -165,6 +165,14 @@ public abstract class BaseTimeEntity<ID extends Serializable> implements Persist
 - 재시도 폭주가 확인되면 비관락으로 승격한다.
 - 비관락 설계 규칙은 승격 채택 시 이 문서에 추가한다.
 
+### 비관락 (애그리거트 분리로 낙관락 직렬화를 잃은 경우)
+
+- 원래 같은 애그리거트(같은 `@Version`)였던 두 축이 분리되어, 서로 다른 애그리거트를 각각 읽고 쓰는 두 쓰기 경로 사이의 순서 보장이 사라지면 비관락으로 재보장한다.
+- 상대 축을 읽어 자기 쓰기를 가르는 쪽은 자기 애그리거트를 `FOR UPDATE`(`PESSIMISTIC_WRITE`)로 조회한 뒤에야 상대 축을 읽는다.
+- 상대 축의 쓰기를 가르기 위해 자기 축을 읽기만 하는 쪽은 자기 애그리거트를 `FOR SHARE`(`PESSIMISTIC_READ`)로 조회한 뒤에야 그 축을 읽는다.
+- 조회는 리포지토리에 `@Lock` + `@Query`로 전용 메서드를 둔다.
+- 호출부는 잠금 조회(수신자)를 상대 축 읽기(인자)보다 먼저 평가되는 순서로 작성한다(예: `findForUpdate(id).intent(otherAxisOf(id))`) — 잠금 선점 순서가 판정 순서를 결정한다.
+
 ### 소프트삭제
 
 - 삭제는 논리삭제를 기본으로 한다.
