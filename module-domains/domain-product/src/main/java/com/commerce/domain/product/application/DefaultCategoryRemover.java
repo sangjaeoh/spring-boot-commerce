@@ -1,11 +1,13 @@
 package com.commerce.domain.product.application;
 
+import com.commerce.domain.product.application.provided.CategoryCacheNames;
 import com.commerce.domain.product.application.provided.CategoryRemover;
 import com.commerce.domain.product.application.required.CategoryRepository;
 import com.commerce.domain.product.domain.exception.CategoryNotFoundException;
 import com.commerce.domain.product.domain.exception.ProductErrorCode;
 import java.time.Clock;
 import java.util.UUID;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,6 +23,7 @@ class DefaultCategoryRemover implements CategoryRemover {
         this.clock = clock;
     }
 
+    @CacheEvict(cacheNames = CategoryCacheNames.CATEGORY, allEntries = true)
     @Transactional
     @Override
     public void delete(UUID categoryId) {

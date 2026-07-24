@@ -1,10 +1,12 @@
 package com.commerce.domain.product.application;
 
+import com.commerce.domain.product.application.provided.CategoryCacheNames;
 import com.commerce.domain.product.application.provided.CategoryModifier;
 import com.commerce.domain.product.application.required.CategoryRepository;
 import com.commerce.domain.product.domain.exception.CategoryNotFoundException;
 import com.commerce.domain.product.domain.exception.ProductErrorCode;
 import java.util.UUID;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,6 +20,7 @@ class DefaultCategoryModifier implements CategoryModifier {
         this.categoryRepository = categoryRepository;
     }
 
+    @CacheEvict(cacheNames = CategoryCacheNames.CATEGORY, allEntries = true)
     @Transactional
     @Override
     public void rename(UUID categoryId, String newName) {

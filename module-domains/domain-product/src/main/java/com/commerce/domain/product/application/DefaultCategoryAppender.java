@@ -1,9 +1,11 @@
 package com.commerce.domain.product.application;
 
 import com.commerce.domain.product.application.provided.CategoryAppender;
+import com.commerce.domain.product.application.provided.CategoryCacheNames;
 import com.commerce.domain.product.application.required.CategoryRepository;
 import com.commerce.domain.product.domain.Category;
 import java.util.UUID;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,6 +19,7 @@ class DefaultCategoryAppender implements CategoryAppender {
         this.categoryRepository = categoryRepository;
     }
 
+    @CacheEvict(cacheNames = CategoryCacheNames.CATEGORY, allEntries = true)
     @Transactional
     @Override
     public UUID create(String name) {
