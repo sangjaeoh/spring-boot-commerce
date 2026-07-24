@@ -46,8 +46,7 @@ class DefaultOrderModifier implements OrderModifier {
      * 결제를 완료하고 이행을 준비 중으로 생성한다.
      *
      * <p>결제 완료와 이행 생성은 같은 유스케이스의 단일 사건이라 한 트랜잭션에서 함께 처리한다(같은
-     * 도메인 모듈 내 다중 애그리거트 조율 예외 — architecture.md). {@link FulfillmentPreparationListener}는
-     * {@code OrderPaid}를 소비해 같은 생성을 존재 확인 후 수행하는 자기치유 안전망으로 남긴다.
+     * 도메인 모듈 내 다중 애그리거트 조율 예외 — architecture.md).
      */
     @Transactional
     @Override

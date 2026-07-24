@@ -399,7 +399,7 @@ class ArchitectureTest {
                 EVENT_PUBLISHER_DOMAINS);
         assertEquals(
                 Map.of(
-                        "com.commerce.event.order.OrderPaid", Set.of("cart", "order"),
+                        "com.commerce.event.order.OrderPaid", Set.of("cart"),
                         "com.commerce.event.stock.StockRestocked", Set.of("wishlist")),
                 EVENT_CONSUMER_DOMAINS);
     }

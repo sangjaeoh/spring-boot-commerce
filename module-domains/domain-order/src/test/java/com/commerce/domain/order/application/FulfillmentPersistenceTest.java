@@ -37,9 +37,8 @@ import org.testcontainers.utility.DockerImageName;
 /**
  * 이행 애그리거트의 생성 조율·전이·조회 합성을 실 PostgreSQL로 검증하는 테스트다.
  *
- * <p>{@code markPaid}가 결제 완료와 같은 호출 안에서 이행을 동기 생성하므로(각각 별도 트랜잭션), 별도
- * 리스너 호출 없이 바로 이행 전이를 검증할 수 있다. 리스너 자체의 소비 행동은
- * {@link FulfillmentPreparationListenerTest}가 소유한다.
+ * <p>{@code markPaid}가 결제 완료와 이행 생성을 한 트랜잭션에서 원자적으로 처리하므로, 바로 이어서 이행
+ * 전이를 검증할 수 있다.
  */
 @DataJpaTest(
         properties = {

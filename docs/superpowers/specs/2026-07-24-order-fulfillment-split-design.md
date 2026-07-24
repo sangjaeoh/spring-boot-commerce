@@ -66,7 +66,7 @@
 - 구현 중 발견(생성 시점, 더 중대함): "리스너가 생성을 전담한다"는 원 설계는 틀렸다. 아웃박스 릴레이는 `app-batch`에서만 켜져 있다(다른 실행 앱은 꺼둔다 — 중복 재발행 방지, DOMAIN_MODEL.md 기존 서술). 즉 `app-api`·`app-admin` 프로세스에서는 `OrderPaid`가 아웃박스에 기록만 될 뿐 그 프로세스 안에서 `FulfillmentPreparationListener`가 호출되는 시점이 정해져 있지 않다 — 다음 배치 릴레이 폴링까지 임의 지연된다. "엣지 케이스"로 적었던 "결제 커밋과 생성 사이 짧은 창"은 사실 밀리초가 아니라 배치 주기 단위였다.
   - 1차 수정(과도기): `DefaultOrderModifier.markPaid()`를 `TransactionTemplate` 두 블록(결제 완료 커밋 1개, 이행 생성 커밋 1개)으로 나눠 "트랜잭션당 애그리거트 1개"를 지키면서 같은 호출 안에서 둘 다 끝내도록 했다(payment 도메인의 `DefaultPaymentProcessor`가 쓰는 기존 패턴 재사용).
   - 2차 수정(최종): 사용자와의 설계 재검토에서 "결제 완료와 이행 생성은 같은 유스케이스의 단일 사건"이라는 판단에 이르러(Vernon "Effective Aggregate Design Part II"의 "Ask Whose Job It Is" 타이브레이커 근거), 이를 architecture.md의 정식 규칙 "같은 도메인 모듈 내 다중 애그리거트 조율" 예외로 문서화하고 `markPaid()`를 단일 `@Transactional` 메서드로 재합쳤다. `TransactionTemplate`·`PlatformTransactionManager` 의존은 제거했다.
-  - `FulfillmentPreparationListener`는 폐기하지 않는다 — `markPaid()`가 원자적이라 정상 경로에서는 항상 no-op이지만, `OrderPaid`는 이미 cart 소비를 위해 발행되므로 추가 비용 없이 자기치유 여지를 남겨둔다.
+  - 3차 수정(최종): `markPaid()`가 원자적이라 `FulfillmentPreparationListener`는 정상 경로에서 항상 no-op이 되고, 자기치유 근거(두 번째 트랜잭션만 실패하는 창)도 함께 사라졌다 — 클래스·테스트를 삭제했다. `OrderErrorCode.FULFILLMENT_NOT_READY`·관련 가드 코드는 방어적으로 남긴다(실제로는 도달 불가에 가깝다).
   - 파급: 이행 생성이 진짜 "레이스 창"이 아니게 되면서, 설계상 있었던 "쓰기(진짜 레이스 창)" 시나리오(`shipRejectsBeforeFulfillmentCreated`)는 공개 API로 재현할 수 없어졌다 — 테스트에서 제거했다(`FULFILLMENT_NOT_READY` 가드 코드 자체는 방어적으로 남긴다).
 - `order_id` 유니크 인덱스로 재전달 시 중복 생성을 막는다(멱등 가드).
 
@@ -89,12 +89,12 @@
 ## 엣지 케이스
 
 - **조회(정상 경로)**: `Fulfillment` 행이 없는 경우는 `PENDING`(결제 전) 주문의 정상 상태다 — 결제 전이라 이행이 시작될 이유가 없다. `getOrder`류는 행 없음을 `FulfillmentStatus.NOT_STARTED`·이행 관련 필드 전부 `null`로 합성해 반환한다.
-- **쓰기(방어적 가드, 정상 경로로는 도달 불가)**: `markPaid()`가 결제 완료 커밋과 이행 생성 커밋을 같은 호출 안에서 순서대로 끝내므로, 정상 호출 경로로는 "PAID인데 Fulfillment 없음" 상태가 만들어지지 않는다. 다만 두 번째(이행 생성) 트랜잭션만 실패하는 드문 경우 이 상태가 실제로 남을 수 있어, `ship`·`confirmDelivery`·`holdFulfillment`·`releaseFulfillment`는 여전히 이를 `OrderErrorCode.FULFILLMENT_NOT_READY`(409, `FulfillmentStatusException`)로 방어한다 — 클라이언트 재시도, `FulfillmentPreparationListener`의 아웃박스 재전달이 뒤늦게 자기치유한다. 통합 테스트로 이 경로를 직접 재현하지는 않는다(공개 API로 그 상태를 만들 수 없어서다).
+- **쓰기(방어적 가드, 정상 경로로는 도달 불가)**: `markPaid()`가 결제 완료와 이행 생성을 한 트랜잭션에서 원자적으로 커밋하므로(같은 도메인 모듈 내 다중 애그리거트 조율 예외), 정상 호출 경로로는 "PAID인데 Fulfillment 없음" 상태 자체가 만들어지지 않는다. `ship`·`confirmDelivery`·`holdFulfillment`·`releaseFulfillment`의 `OrderErrorCode.FULFILLMENT_NOT_READY`(409, `FulfillmentStatusException`) 가드는 방어적으로 남기지만, 자기치유를 맡던 `FulfillmentPreparationListener`는 삭제했다(존재 이유였던 부분실패 창이 원자화로 사라졌다). 통합 테스트로 이 경로를 직접 재현하지는 않는다(공개 API로 그 상태를 만들 수 없어서다).
 
 ## 테스트 방침
 
 - 이번 작업은 리팩터다(`testing.md`: "리팩터는 새 시나리오를 만들지 않는다. 전후 테스트 통과가 기준이다") — `Order`·`Fulfillment`로 갈라지는 기존 행동은 새 시나리오 합의 없이 전후 테스트 통과로 검증한다.
-- `FulfillmentPreparationListener`(신규 생성 조율)는 새 행동이므로 시나리오 문장을 별도 합의한다 — 최소 "결제완료 시 Fulfillment가 PREPARING으로 생성됨"·"이벤트 중복 소비 시 1회만 생성됨(멱등)".
+- (최종 폐기) `FulfillmentPreparationListener`(신규 생성 조율)는 원래 새 행동으로 시나리오 합의 대상이었으나, `markPaid()` 원자화로 클래스 자체를 삭제했다 — 아래 "동시성 재보장" 이후 절 참조.
 - `OrderTest.java`(801줄)는 결제·취소·부분취소·반품 축만 남아 자연히 축소된다. 이행축 테스트는 신규 `FulfillmentTest`로 옮긴다 — 각 전이 메서드를 `Order` 없이 파라미터(불리언)로 직접 검증할 수 있어 픽스처가 단순해진다.
 - `OrderPersistenceTest`에 대응하는 `FulfillmentPersistenceTest` 신설, `DefaultOrderModifier`/`DefaultOrderReader` 테스트는 두 리포지토리 조율을 반영해 갱신한다.
 - `query-order`의 `DefaultOrderSearchReader` 테스트는 조인 추가를 반영해 갱신한다(행동·응답 형태는 불변).
@@ -125,7 +125,7 @@
 ## 완료 기준
 
 - 기존 `Order`·`OrderModifier`·`OrderReader`·`OrderInfo` 관련 시나리오가 전후 동일하게 통과한다(`./gradlew build` 그린).
-- `FulfillmentPreparationListener`의 합의된 신규 시나리오(생성·멱등)에 대응하는 `@DisplayName` 테스트가 있고 통과한다.
+- (최종 폐기, 해당 없음) `FulfillmentPreparationListener` 시나리오 — 클래스 자체가 삭제됐다.
 - `app-api`·`app-admin`의 `OrderModifier`·`OrderReader` 호출부 코드가 변경되지 않는다(계약 안정성 확인).
 - 아키텍처 테스트(리포지토리는 애그리거트 루트당 1개, 트랜잭션당 애그리거트 1개 등)가 새 `Fulfillment` 애그리거트에도 그대로 통과한다.
 - expand 마이그레이션 적용 후 코드 전환 완료 시점에만 contract 마이그레이션(`-- contract` 헤더)을 별도 커밋으로 추가한다.
