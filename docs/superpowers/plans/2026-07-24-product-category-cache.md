@@ -1483,6 +1483,7 @@ import org.springframework.cache.interceptor.CacheErrorHandler;
 import org.springframework.cache.interceptor.LoggingCacheErrorHandler;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.data.redis.cache.RedisCacheManager;
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceClientConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
@@ -1493,6 +1494,15 @@ import tools.jackson.databind.type.TypeFactory;
  *
  * <p>기존 공유 Redis 커넥션(멱등 키·레이트리밋·리프레시 토큰·스케줄 락)과 분리된 전용 커넥션을 쓴다 —
  * command timeout(300ms)을 캐시 전용으로 짧게 잡아 장애 시 빠르게 미스로 강등하기 위함이다.
+ *
+ * <p>이 커넥션은 별도 {@code @Bean}으로 노출하지 않고 {@link #cacheManager()} 안에서 지역 변수로만
+ * 만든다 — Spring Boot의 기본 {@code RedisConnectionFactory} 자동 구성(
+ * {@code LettuceConnectionConfiguration.redisConnectionFactory}, {@code @ConditionalOnMissingBean(
+ * RedisConnectionFactory.class)})은 타입 기준으로 미존재를 판정하므로, 이 타입의 빈을 하나라도 더
+ * 등록하면 자격·타입과 무관하게 자동 구성이 통째로 백오프한다. 그러면 기존 공유 커넥션(멱등 키·
+ * 리프레시 토큰·레이트리밋·스케줄 락이 쓰는 {@code StringRedisTemplate}·{@code RedisConnectionFactory})이
+ * 조용히 이 캐시 전용(300ms 타임아웃) 커넥션으로 바뀌어 버린다 — 별도 빈으로 노출하지 않으면 이 문제
+ * 자체가 생기지 않는다.
  */
 @Configuration
 @EnableCaching
@@ -1511,21 +1521,25 @@ class CacheConfig implements CachingConfigurer {
         this.meterRegistry = meterRegistry;
     }
 
-    @Bean
-    LettuceConnectionFactory cacheRedisConnectionFactory() {
-        LettuceClientConfiguration clientConfiguration =
-                LettuceClientConfiguration.builder().commandTimeout(Duration.ofMillis(300)).build();
-        return new LettuceConnectionFactory(new RedisStandaloneConfiguration(redisHost, redisPort), clientConfiguration);
-    }
-
     @Override
     @Bean
     public CacheManager cacheManager() {
+        LettuceClientConfiguration clientConfiguration =
+                LettuceClientConfiguration.builder().commandTimeout(Duration.ofMillis(300)).build();
+        LettuceConnectionFactory cacheRedisConnectionFactory =
+                new LettuceConnectionFactory(new RedisStandaloneConfiguration(redisHost, redisPort), clientConfiguration);
+        // 컨테이너가 관리하는 빈이 아니라 지역 변수라 생명주기 콜백을 직접 호출해야 한다.
+        cacheRedisConnectionFactory.afterPropertiesSet();
+
         List<CacheRegistration> registrations = List.of(new CacheRegistration(
                 CategoryCacheNames.CATEGORY,
                 Duration.ofMinutes(10),
                 TypeFactory.createDefaultInstance().constructCollectionType(List.class, CategoryInfo.class)));
-        CacheManager redisCacheManager = RedisCacheManagerFactory.build(cacheRedisConnectionFactory(), registrations);
+        RedisCacheManager redisCacheManager = RedisCacheManagerFactory.build(cacheRedisConnectionFactory, registrations);
+        // RedisCacheManager도 InitializingBean이지만 @Bean 메서드가 반환하는 건 EvictSafeCacheManager
+        // 쪽이라 컨테이너가 이 내부 인스턴스의 생명주기를 대신 관리해 주지 않는다 — 직접 호출해야
+        // getCacheConfigurations()·getCache(name)이 정상 동작한다.
+        redisCacheManager.afterPropertiesSet();
         return new EvictSafeCacheManager(redisCacheManager, meterRegistry);
     }
 
@@ -1537,9 +1551,9 @@ class CacheConfig implements CachingConfigurer {
 }
 ```
 
-- [ ] **Step 2b: 캐시 전용 커넥션에 헬스 인디케이터를 달지 않는다는 점을 확인**
+- [ ] **Step 2b: 캐시 전용 커넥션이 별도 빈으로 노출되지 않았는지, 헬스 인디케이터를 달지 않았는지 확인**
 
-새 코드가 `HealthIndicator`를 등록하지 않았는지 확인한다(등록하면 미스 강등 설계와 모순되는 readiness DOWN 전파가 생긴다). `CacheConfig.java`에 `HealthIndicator` 관련 빈이 없음을 육안 확인한다 — 별도 코드 작성 없음.
+`CacheConfig.java`에 `LettuceConnectionFactory`(또는 다른 `RedisConnectionFactory` 구현)를 반환하는 `@Bean` 메서드가 없음을 육안 확인한다 — 있으면 Spring Boot의 기본 `RedisConnectionFactory` 자동 구성이 백오프해 기존 공유 Redis 사용처(멱등 키·리프레시 토큰·레이트리밋·스케줄 락)가 캐시 전용(300ms 타임아웃) 커넥션으로 조용히 바뀐다. 캐시 전용 커넥션은 `cacheManager()` 메서드 안의 지역 변수여야 한다. `HealthIndicator`도 등록하지 않았는지 확인한다(등록하면 미스 강등 설계와 모순되는 readiness DOWN 전파가 생긴다).
 
 - [ ] **Step 3: 앱 부팅 확인**
 
