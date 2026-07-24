@@ -167,7 +167,7 @@ class CacheRegistrationTest {
 
     @Test
     void holdsNameTtlAndValueType() {
-        var valueType = TypeFactory.defaultInstance().constructType(String.class);
+        var valueType = TypeFactory.createDefaultInstance().constructType(String.class);
 
         var registration = new CacheRegistration("product:category:v1", Duration.ofMinutes(10), valueType);
 
@@ -222,7 +222,7 @@ class RedisCacheManagerFactoryTest {
     void registersOnlyDeclaredCacheNamesWithConfiguredTtl() {
         LettuceConnectionFactory connectionFactory =
                 new LettuceConnectionFactory(new RedisStandaloneConfiguration("localhost", 0));
-        var valueType = TypeFactory.defaultInstance().constructType(String.class);
+        var valueType = TypeFactory.createDefaultInstance().constructType(String.class);
         var registrations = List.of(new CacheRegistration("product:category:v1", Duration.ofMinutes(10), valueType));
 
         var cacheManager = RedisCacheManagerFactory.build(connectionFactory, registrations);
@@ -1521,7 +1521,7 @@ class CacheConfig implements CachingConfigurer {
         List<CacheRegistration> registrations = List.of(new CacheRegistration(
                 CategoryCacheNames.CATEGORY,
                 Duration.ofMinutes(10),
-                TypeFactory.defaultInstance().constructCollectionType(List.class, CategoryInfo.class)));
+                TypeFactory.createDefaultInstance().constructCollectionType(List.class, CategoryInfo.class)));
         CacheManager redisCacheManager = RedisCacheManagerFactory.build(cacheRedisConnectionFactory(), registrations);
         return new EvictSafeCacheManager(redisCacheManager, meterRegistry);
     }
