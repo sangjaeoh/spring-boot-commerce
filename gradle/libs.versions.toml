@@ -108,3 +108,10 @@ postgresql = { module = "org.postgresql:postgresql" }
 archunit-junit5 = { module = "com.tngtech.archunit:archunit-junit5", version.ref = "archunit" }
 # module-tests/test-architecture — 순수 JUnit5(스프링 미사용). 버전은 Spring Boot BOM
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
+
+# common-cache — 캐시 인프라(트랜잭션 지원·evict 데코레이터). 버전은 Spring Boot BOM
+spring-tx = { module = "org.springframework:spring-tx" }
+# common-cache — RedisCacheManager·타입 고정 직렬화기 조립(추상화만, lettuce/jedis는 POM상 optional이라 전이되지 않는다). 버전은 Spring Boot BOM
+spring-data-redis = { module = "org.springframework.data:spring-data-redis" }
+# common-cache — evict 실패 카운터(cache.evict.errors). 버전은 Spring Boot BOM
+micrometer-core = { module = "io.micrometer:micrometer-core" }
