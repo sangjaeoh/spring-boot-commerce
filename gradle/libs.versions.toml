@@ -113,5 +113,7 @@ junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
 spring-tx = { module = "org.springframework:spring-tx" }
 # common-cache — RedisCacheManager·타입 고정 직렬화기 조립(추상화만, lettuce/jedis는 POM상 optional이라 전이되지 않는다). 버전은 Spring Boot BOM
 spring-data-redis = { module = "org.springframework.data:spring-data-redis" }
+# common-cache — 테스트용 Redis 클라이언트. 버전은 Spring Boot BOM
+lettuce-core = { module = "io.lettuce:lettuce-core" }
 # common-cache — evict 실패 카운터(cache.evict.errors). 버전은 Spring Boot BOM
 micrometer-core = { module = "io.micrometer:micrometer-core" }

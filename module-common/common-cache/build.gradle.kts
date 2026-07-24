@@ -13,5 +13,6 @@ dependencies {
     implementation(libs.micrometer.core)
 
     testImplementation(libs.spring.boot.starter.test)
+    testImplementation(libs.lettuce.core)
     testRuntimeOnly(libs.junit.platform.launcher)
 }
