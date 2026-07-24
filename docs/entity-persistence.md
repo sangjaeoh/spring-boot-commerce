@@ -153,7 +153,7 @@ public abstract class BaseTimeEntity<ID extends Serializable> implements Persist
 - 소프트삭제 자식의 정리는 소프트삭제 전파가 담당한다 → 소프트삭제.
 - `deletedAt`이 없는 자식만 `orphanRemoval = true`로 정리한다.
 
-### 버저닝 (`@Version`)
+### 동시성 제어 — 낙관락 (기본)
 
 - 기본 전략은 last-write-wins다.
 - 서로 다른 주체의 동시 수정이 정상 흐름으로 발생하는 애그리거트는 `@Version`을 적용한다.
@@ -165,15 +165,17 @@ public abstract class BaseTimeEntity<ID extends Serializable> implements Persist
 - 서버는 자동 재시도하지 않는다.
 - 클라이언트가 재시도한다.
 - 재시도 폭주가 확인되면 비관락으로 승격한다.
-- 비관락 설계 규칙은 승격 채택 시 이 문서에 추가한다.
 
-### 비관락 (애그리거트 분리로 낙관락 직렬화를 잃은 경우)
+### 동시성 제어 — 비관락
 
-- 원래 같은 애그리거트(같은 `@Version`)였던 두 축이 분리되어, 서로 다른 애그리거트를 각각 읽고 쓰는 두 쓰기 경로 사이의 순서 보장이 사라지면 비관락으로 재보장한다.
-- 상대 축을 읽어 자기 쓰기를 가르는 쪽은 자기 애그리거트를 `FOR UPDATE`(`PESSIMISTIC_WRITE`)로 조회한 뒤에야 상대 축을 읽는다.
-- 상대 축의 쓰기를 가르기 위해 자기 축을 읽기만 하는 쪽은 자기 애그리거트를 `FOR SHARE`(`PESSIMISTIC_READ`)로 조회한 뒤에야 그 축을 읽는다.
-- 조회는 리포지토리에 `@Lock` + `@Query`로 전용 메서드를 둔다.
-- 호출부는 잠금 조회(수신자)를 상대 축 읽기(인자)보다 먼저 평가되는 순서로 작성한다(예: `findForUpdate(id).intent(otherAxisOf(id))`) — 잠금 선점 순서가 판정 순서를 결정한다.
+- 낙관락 재시도 폭주가 확인되면 비관락으로 승격한다.
+- 애그리거트 간 순서 보장이 무너진 경우의 승격 판단은 → [architecture](architecture.md)의 다중 애그리거트 조율.
+- 두 코드 경로가 공유하는 동기화 지점(행)을 서로 다른 잠금 모드로 직렬화한다.
+- 그 지점에 쓰기까지 하는 경로는 `FOR UPDATE`(`PESSIMISTIC_WRITE`)로 먼저 잠그고 나서 판단을 이어간다.
+- 그 지점을 읽기만 하는 경로는 `FOR SHARE`(`PESSIMISTIC_READ`)로 먼저 잠그고 나서 값을 읽는다.
+- 먼저 잠근 쪽이 이기고, 진 쪽은 이긴 쪽의 커밋 결과를 본 뒤 진행한다.
+- 잠금 조회는 리포지토리에 `@Lock` + `@Query` 전용 메서드로 둔다.
+- 호출부는 잠금 조회(수신자)가 의존 상태 읽기(인자)보다 먼저 평가되도록 작성한다 — 예: `lock(id).apply(readDependency(id))`. 자바는 인자보다 수신자를 먼저 평가하므로 이 순서가 잠금 선점 순서를 보장한다.
 
 ### 소프트삭제
 
