@@ -8,7 +8,7 @@ import com.commerce.domain.product.application.provided.CategoryCacheNames;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.util.List;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.data.redis.autoconfigure.DataRedisProperties;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.CachingConfigurer;
 import org.springframework.cache.annotation.EnableCaching;
@@ -16,6 +16,7 @@ import org.springframework.cache.interceptor.CacheErrorHandler;
 import org.springframework.cache.interceptor.LoggingCacheErrorHandler;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.data.redis.connection.RedisPassword;
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceClientConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
@@ -31,16 +32,11 @@ import tools.jackson.databind.type.TypeFactory;
 @EnableCaching
 class CacheConfig implements CachingConfigurer {
 
-    private final String redisHost;
-    private final int redisPort;
+    private final DataRedisProperties redisProperties;
     private final MeterRegistry meterRegistry;
 
-    CacheConfig(
-            @Value("${spring.data.redis.host}") String redisHost,
-            @Value("${spring.data.redis.port}") int redisPort,
-            MeterRegistry meterRegistry) {
-        this.redisHost = redisHost;
-        this.redisPort = redisPort;
+    CacheConfig(DataRedisProperties redisProperties, MeterRegistry meterRegistry) {
+        this.redisProperties = redisProperties;
         this.meterRegistry = meterRegistry;
     }
 
@@ -52,8 +48,16 @@ class CacheConfig implements CachingConfigurer {
         LettuceClientConfiguration clientConfiguration = LettuceClientConfiguration.builder()
                 .commandTimeout(Duration.ofMillis(300))
                 .build();
-        LettuceConnectionFactory cacheConnectionFactory = new LettuceConnectionFactory(
-                new RedisStandaloneConfiguration(redisHost, redisPort), clientConfiguration);
+        RedisStandaloneConfiguration standaloneConfiguration =
+                new RedisStandaloneConfiguration(redisProperties.getHost(), redisProperties.getPort());
+        standaloneConfiguration.setUsername(redisProperties.getUsername());
+        standaloneConfiguration.setPassword(
+                redisProperties.getPassword() == null
+                        ? RedisPassword.none()
+                        : RedisPassword.of(redisProperties.getPassword()));
+        standaloneConfiguration.setDatabase(redisProperties.getDatabase());
+        LettuceConnectionFactory cacheConnectionFactory =
+                new LettuceConnectionFactory(standaloneConfiguration, clientConfiguration);
         try {
             cacheConnectionFactory.afterPropertiesSet();
         } catch (Exception e) {
