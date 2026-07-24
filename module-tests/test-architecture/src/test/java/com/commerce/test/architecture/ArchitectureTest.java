@@ -6,6 +6,7 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.commerce.domain.member.domain.Member;
 import com.commerce.test.architecture.bypass.application.EntityReferencingFixture;
@@ -44,6 +45,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -126,6 +128,49 @@ class ArchitectureTest {
     // 이벤트 record FQN → 소비 도메인 루트: @EventListener 파라미터로 이벤트 record를 받는 도메인 application
     // 클래스에서 파생한다.
     private static final Map<String, Set<String>> EVENT_CONSUMER_DOMAINS = eventConsumerDomains();
+
+    // 이 모듈은 spring-context를 컴파일 의존하지 않는다(파일 전역 컨벤션 — 아래 기존 규칙들도 전부 애노테이션을
+    // FQN 문자열로 판정한다). 그래서 Cacheable.class 같은 실제 타입 리터럴 대신 FQN 문자열로 판정한다.
+    private static final String CACHEABLE_ANNOTATION = "org.springframework.cache.annotation.Cacheable";
+    private static final String CACHE_EVICT_ANNOTATION = "org.springframework.cache.annotation.CacheEvict";
+
+    // 캐시 애노테이션이 붙은 메서드 전수 — 아래 캐시 불변식 테스트들이 공유한다. CLASSES를 순회하므로 CLASSES 뒤에 둔다.
+    private static final List<JavaMethod> CACHEABLE_METHODS = CLASSES.stream()
+            .flatMap(clazz -> clazz.getMethods().stream())
+            .filter(method -> method.isAnnotatedWith(CACHEABLE_ANNOTATION))
+            .toList();
+
+    private static final List<JavaMethod> CACHE_EVICT_METHODS = CLASSES.stream()
+            .flatMap(clazz -> clazz.getMethods().stream())
+            .filter(method -> method.isAnnotatedWith(CACHE_EVICT_ANNOTATION))
+            .toList();
+
+    // {도메인}:{대상}:v{n} 또는 query:{모듈}:{대상}:v{n} — caching.md 이름·키·버전 규칙.
+    private static final Pattern CACHE_NAME_PATTERN =
+            Pattern.compile("^(query:[a-z]+:[a-z]+:v\\d+|[a-z]+:[a-z]+:v\\d+)$");
+
+    private static String cacheableName(JavaMethod method) {
+        return firstCacheName(method.getAnnotationOfType(CACHEABLE_ANNOTATION));
+    }
+
+    private static String cacheEvictName(JavaMethod method) {
+        return firstCacheName(method.getAnnotationOfType(CACHE_EVICT_ANNOTATION));
+    }
+
+    private static String firstCacheName(JavaAnnotation<?> annotation) {
+        Object[] cacheNames = (Object[]) annotation.get("cacheNames").orElseThrow();
+        return cacheNames[0].toString();
+    }
+
+    // JavaAnnotation.get()은 명시 선언 값이 없으면 애노테이션 기본값으로 대체한다 — 부재를 기본값과 동일하게
+    // 취급해도 되는 문자열·불리언 속성(condition·unless·key·beforeInvocation·allEntries)에 쓴다.
+    private static String stringAttribute(JavaAnnotation<?> annotation, String attribute) {
+        return annotation.get(attribute).map(Object::toString).orElse("");
+    }
+
+    private static boolean booleanAttribute(JavaAnnotation<?> annotation, String attribute) {
+        return annotation.get(attribute).map(value -> (Boolean) value).orElse(false);
+    }
 
     @Test
     @DisplayName("JPA 엔티티는 소유 도메인 모듈 내부에서만 접근된다")
@@ -1145,5 +1190,289 @@ class ArchitectureTest {
 
     private static boolean hasDeletedAtField(JavaClass entity) {
         return entity.getAllFields().stream().anyMatch(field -> field.getName().equals("deletedAt"));
+    }
+
+    @Test
+    @DisplayName("@Cacheable은 도메인 application의 provided 구현 또는 query 모듈 구현에만 선언된다")
+    void cacheableOnlyOnDomainProvidedImplOrQueryModule() {
+        for (JavaMethod method : CACHEABLE_METHODS) {
+            String packageName = method.getOwner().getPackageName();
+            boolean inDomainApplication = packageName.matches("com\\.commerce\\.domain\\.[a-z]+\\.application")
+                    || packageName.matches("com\\.commerce\\.domain\\.[a-z]+\\.application\\.provided");
+            boolean inQueryModule = packageName.startsWith(QUERY_BASE_PACKAGE_PREFIX);
+            assertTrue(inDomainApplication || inQueryModule, "@Cacheable이 허용 계층 밖에 있다: " + method.getFullName());
+        }
+    }
+
+    @Test
+    @DisplayName("@CacheEvict는 같은 모듈의 쓰기 서비스(Appender·Modifier·Remover·Processor)에만 선언된다")
+    void cacheEvictOnlySameModuleWriteServices() {
+        for (JavaMethod method : CACHE_EVICT_METHODS) {
+            String className = method.getOwner().getSimpleName();
+            assertTrue(
+                    className.matches("Default(.*)(Appender|Modifier|Remover|Processor)"),
+                    "@CacheEvict가 쓰기 서비스 밖에 있다: " + method.getFullName());
+        }
+    }
+
+    @Test
+    @DisplayName("@Cacheable 메서드·클래스는 @Transactional을 동시 선언하지 않는다")
+    void cacheableMethodsNotTransactional() {
+        String transactional = "org.springframework.transaction.annotation.Transactional";
+        for (JavaMethod method : CACHEABLE_METHODS) {
+            boolean methodLevel = method.isAnnotatedWith(transactional);
+            boolean classLevel = method.getOwner().isAnnotatedWith(transactional);
+            assertTrue(
+                    !methodLevel && !classLevel,
+                    "@Cacheable 메서드가 @Transactional과 같이 선언됐다(클래스 레벨 포함): " + method.getFullName());
+        }
+    }
+
+    // JSpecify @Nullable은 TYPE_USE 전용(@Target(TYPE_USE))이라 반환 타입에 붙으면 메서드 자체의
+    // RuntimeVisibleAnnotations가 아니라 RuntimeVisibleTypeAnnotations에 실린다. ArchUnit은 타입 애노테이션을
+    // 파싱하지 않아(visitTypeAnnotation 미구현) method.isAnnotatedWith(String)로는 항상 false다 — 리플렉션
+    // AnnotatedType으로 검사한다. 이 모듈은 jspecify도 컴파일 의존하지 않으므로 Nullable.class 리터럴 대신
+    // 애노테이션 타입 이름으로 비교한다.
+    @Test
+    @DisplayName("@Cacheable 메서드는 @Nullable 반환을 선언하지 않는다")
+    void cacheableMethodsNotNullableReturn() {
+        for (JavaMethod method : CACHEABLE_METHODS) {
+            boolean nullableReturn = Arrays.stream(
+                            method.reflect().getAnnotatedReturnType().getAnnotations())
+                    .anyMatch(annotation ->
+                            annotation.annotationType().getName().equals("org.jspecify.annotations.Nullable"));
+            assertTrue(!nullableReturn, "@Cacheable 메서드가 @Nullable 반환을 선언했다: " + method.getFullName());
+        }
+    }
+
+    @Test
+    @DisplayName("@Cacheable 반환 타입은 캐시 값 허용 타입(Info·컬렉션·표준 스칼라)이고 Page·Slice가 아니다")
+    void cacheableMethodsReturnAllowedValueTypes() {
+        Set<String> forbiddenRawTypes =
+                Set.of("org.springframework.data.domain.Page", "org.springframework.data.domain.Slice");
+        Set<String> scalarRawTypes = Set.of(
+                "java.lang.String",
+                "java.lang.Boolean",
+                "boolean",
+                "java.lang.Long",
+                "long",
+                "java.lang.Integer",
+                "int",
+                "java.util.UUID",
+                "java.time.Instant");
+        Set<String> collectionRawTypes = Set.of("java.util.List", "java.util.Collection", "java.util.Set");
+
+        for (JavaMethod method : CACHEABLE_METHODS) {
+            String rawType = method.getRawReturnType().getName();
+            assertTrue(
+                    !forbiddenRawTypes.contains(rawType), "@Cacheable이 Page/Slice를 직접 반환한다: " + method.getFullName());
+
+            boolean isInfoType = method.getRawReturnType().getSimpleName().endsWith("Info");
+            boolean isScalar = scalarRawTypes.contains(rawType);
+            boolean isCollectionOfInfo = collectionRawTypes.contains(rawType)
+                    && method.getReturnType() instanceof JavaParameterizedType parameterized
+                    && parameterized.getActualTypeArguments().stream()
+                            .allMatch(arg -> arg.toErasure().getSimpleName().endsWith("Info"));
+
+            assertTrue(
+                    isInfoType || isScalar || isCollectionOfInfo,
+                    "@Cacheable 반환 타입이 허용 캐시 값 타입이 아니다(Info·컬렉션<Info>·표준 스칼라만 허용): " + method.getFullName() + " -> "
+                            + rawType);
+        }
+    }
+
+    @Test
+    @DisplayName("@CachePut·condition·unless·beforeInvocation은 어디에도 쓰지 않는다")
+    void forbiddenCacheAttributesNotUsed() {
+        boolean anyCachePut = CLASSES.stream()
+                .flatMap(clazz -> clazz.getMethods().stream())
+                .anyMatch(method -> method.isAnnotatedWith("org.springframework.cache.annotation.CachePut"));
+        assertTrue(!anyCachePut, "@CachePut이 사용됐다 — caching.md 금지 목록");
+
+        for (JavaMethod method : CACHEABLE_METHODS) {
+            JavaAnnotation<JavaMethod> annotation = method.getAnnotationOfType(CACHEABLE_ANNOTATION);
+            assertTrue(
+                    stringAttribute(annotation, "condition").isEmpty(),
+                    "@Cacheable condition이 쓰였다: " + method.getFullName());
+            assertTrue(
+                    stringAttribute(annotation, "unless").isEmpty(), "@Cacheable unless가 쓰였다: " + method.getFullName());
+        }
+        for (JavaMethod method : CACHE_EVICT_METHODS) {
+            JavaAnnotation<JavaMethod> annotation = method.getAnnotationOfType(CACHE_EVICT_ANNOTATION);
+            assertTrue(
+                    !booleanAttribute(annotation, "beforeInvocation"),
+                    "@CacheEvict beforeInvocation이 쓰였다: " + method.getFullName());
+        }
+    }
+
+    @Test
+    @DisplayName("@Cacheable 캐시 이름마다 같은 모듈에 동명 @CacheEvict가 있다(query TTL-only 제외)")
+    void everyCacheableHasMatchingEvictInSameModule() {
+        for (JavaMethod method : CACHEABLE_METHODS) {
+            if (method.getOwner().getPackageName().startsWith(QUERY_BASE_PACKAGE_PREFIX)) {
+                continue; // TTL-only — evict 짝 제외
+            }
+            String name = cacheableName(method);
+            boolean hasEvict = CACHE_EVICT_METHODS.stream()
+                    .anyMatch(evict -> cacheEvictName(evict).equals(name)
+                            && sameDomainModule(evict.getOwner(), method.getOwner()));
+            assertTrue(hasEvict, "@Cacheable 캐시 이름에 짝이 되는 @CacheEvict가 없다: " + name);
+        }
+    }
+
+    @Test
+    @DisplayName("@CacheEvict 캐시 이름마다 같은 모듈에 동명 @Cacheable이 있다(고아 evict 금지)")
+    void everyCacheEvictHasMatchingCacheableInSameModule() {
+        for (JavaMethod method : CACHE_EVICT_METHODS) {
+            String name = cacheEvictName(method);
+            boolean hasCacheable = CACHEABLE_METHODS.stream()
+                    .anyMatch(cacheable -> cacheableName(cacheable).equals(name)
+                            && sameDomainModule(cacheable.getOwner(), method.getOwner()));
+            assertTrue(hasCacheable, "@CacheEvict가 고아다(대응 @Cacheable 없음): " + name);
+        }
+    }
+
+    private static boolean sameDomainModule(JavaClass a, JavaClass b) {
+        return domainModuleOf(a).equals(domainModuleOf(b));
+    }
+
+    private static String domainModuleOf(JavaClass clazz) {
+        String[] segments = clazz.getPackageName().split("\\.");
+        // com.commerce.domain.{name}.application... → segments[2] == "domain", segments[3] == {name}
+        return segments.length > 3 ? segments[2] + "." + segments[3] : clazz.getPackageName();
+    }
+
+    @Test
+    @DisplayName("캐시 이름은 {도메인}:{대상}:v{n} 또는 query:{모듈}:{대상}:v{n} 형식이다")
+    void cacheNamesMatchNamingFormat() {
+        for (JavaMethod method : CACHEABLE_METHODS) {
+            assertTrue(
+                    CACHE_NAME_PATTERN.matcher(cacheableName(method)).matches(),
+                    "캐시 이름 형식 위반: " + cacheableName(method));
+        }
+    }
+
+    @Test
+    @DisplayName("@Cacheable과 키 지정 @CacheEvict는 key를 명시한다(allEntries=true evict는 제외)")
+    void cacheableAndKeyedEvictDeclareExplicitKey() {
+        for (JavaMethod method : CACHEABLE_METHODS) {
+            assertTrue(
+                    !stringAttribute(method.getAnnotationOfType(CACHEABLE_ANNOTATION), "key")
+                            .isEmpty(),
+                    "@Cacheable이 key를 명시하지 않았다: " + method.getFullName());
+        }
+        for (JavaMethod method : CACHE_EVICT_METHODS) {
+            JavaAnnotation<JavaMethod> annotation = method.getAnnotationOfType(CACHE_EVICT_ANNOTATION);
+            if (booleanAttribute(annotation, "allEntries")) {
+                continue;
+            }
+            assertTrue(
+                    !stringAttribute(annotation, "key").isEmpty(),
+                    "키 지정 @CacheEvict가 key를 명시하지 않았다: " + method.getFullName());
+        }
+    }
+
+    @Test
+    @DisplayName("같은 모듈에서 버전만 다른 같은 캐시 이름은 공존하지 않는다")
+    void noVersionOnlyDuplicateNamesInSameModule() {
+        Map<String, Set<String>> byModuleAndBase = new HashMap<>();
+        for (JavaMethod method : CACHEABLE_METHODS) {
+            String name = cacheableName(method);
+            String base = name.replaceAll(":v\\d+$", "");
+            String key = domainModuleOf(method.getOwner()) + "::" + base;
+            byModuleAndBase.computeIfAbsent(key, k -> new HashSet<>()).add(name);
+        }
+        byModuleAndBase.forEach(
+                (key, names) -> assertTrue(names.size() <= 1, "같은 모듈에 버전만 다른 같은 이름이 공존한다: " + key + " -> " + names));
+    }
+
+    @Test
+    @DisplayName("애노테이션 캐시 이름 값 전수는 이름 상수 클래스가 선언한 값과 일치한다")
+    void annotationCacheNamesMatchDeclaredConstants() {
+        Set<String> declaredConstants = new HashSet<>();
+        for (JavaClass clazz : CLASSES) {
+            if (!clazz.getSimpleName().endsWith("CacheNames")) {
+                continue;
+            }
+            for (JavaField field : clazz.getFields()) {
+                if (!field.getRawType().getName().equals("java.lang.String")) {
+                    continue;
+                }
+                try {
+                    declaredConstants.add(
+                            (String) Class.forName(field.getOwner().getName())
+                                    .getField(field.getName())
+                                    .get(null));
+                } catch (ReflectiveOperationException e) {
+                    throw new IllegalStateException(e);
+                }
+            }
+        }
+
+        Set<String> usedNames = new HashSet<>();
+        CACHEABLE_METHODS.forEach(method -> usedNames.add(cacheableName(method)));
+        CACHE_EVICT_METHODS.forEach(method -> usedNames.add(cacheEvictName(method)));
+
+        assertTrue(
+                declaredConstants.containsAll(usedNames),
+                "애노테이션이 이름 상수에 없는 값을 쓴다: " + usedNames + " vs " + declaredConstants);
+    }
+
+    // 실제 코드는 같은 모듈 내부에서도 provided 인터페이스(예: CategoryReader) 타입으로 주입받아 호출하므로 호출
+    // 바이트코드의 정적 대상은 구현 클래스가 아니라 인터페이스다. 소유 클래스 동일성만 비교하면 이 경로를 놓친다 —
+    // 호출 대상 타입이 캐시 메서드 소유 클래스의 상위 타입(또는 자기 자신)인지로 판정한다.
+    @Test
+    @DisplayName("쓰기 서비스·Validator는 같은 모듈의 @Cacheable 메서드를 직접 호출하지 않는다")
+    void writeServicesDoNotCallSameModuleCacheableMethodsDirectly() {
+        List<String> violations = new ArrayList<>();
+        CLASSES.stream()
+                .filter(clazz -> clazz.getSimpleName().matches("Default(.*)(Appender|Modifier|Remover|Processor)")
+                        || clazz.getSimpleName().endsWith("Validator"))
+                .forEach(writeService -> {
+                    String module = domainModuleOf(writeService);
+                    List<JavaMethod> sameModuleCacheable = CACHEABLE_METHODS.stream()
+                            .filter(cacheable ->
+                                    domainModuleOf(cacheable.getOwner()).equals(module))
+                            .toList();
+                    writeService.getMethodCallsFromSelf().forEach(call -> {
+                        JavaClass targetOwner = call.getTargetOwner();
+                        sameModuleCacheable.stream()
+                                .filter(cacheable -> cacheable.getName().equals(call.getName())
+                                        && targetOwner.isAssignableFrom(
+                                                cacheable.getOwner().getName()))
+                                .forEach(cacheable -> violations.add(writeService.getFullName()
+                                        + " 가 같은 모듈의 @Cacheable 메서드를 직접 호출한다: " + cacheable.getFullName()));
+                    });
+                });
+        assertEquals(List.of(), violations);
+    }
+
+    @Test
+    @DisplayName("@Cacheable 가진 도메인을 임베드하는 실행 앱은 캐시 구성(@EnableCaching)을 동반한다(런타임 전용 의존 앱 제외)")
+    void appsEmbeddingCacheableDomainsCarryCacheConfig() {
+        Set<String> cachedDomainModules = new HashSet<>();
+        for (JavaMethod method : CACHEABLE_METHODS) {
+            cachedDomainModules.add(domainModuleOf(method.getOwner()).replaceFirst("^domain\\.", ""));
+        }
+
+        Map<String, Set<String>> embeddedDomainsByApp = appDomainEmbeddings();
+        List<String> violations = new ArrayList<>();
+        embeddedDomainsByApp.forEach((app, embedded) -> {
+            if (app.equals("app-migration")) {
+                return; // 런타임 전용 의존 앱 — 캐시 구성 대상 아님
+            }
+            boolean embedsCachedDomain = embedded.stream().anyMatch(cachedDomainModules::contains);
+            if (!embedsCachedDomain) {
+                return;
+            }
+            String appBasePackage = "com.commerce.app." + app.replaceFirst("^app-", "");
+            boolean hasEnableCaching = CLASSES.stream()
+                    .filter(clazz -> clazz.getPackageName().startsWith(appBasePackage))
+                    .anyMatch(clazz -> clazz.isAnnotatedWith("org.springframework.cache.annotation.EnableCaching"));
+            if (!hasEnableCaching) {
+                violations.add(app + " 가 캐시 애노테이션 있는 도메인을 임베드하지만 @EnableCaching 구성이 없다");
+            }
+        });
+        assertEquals(List.of(), violations);
     }
 }
