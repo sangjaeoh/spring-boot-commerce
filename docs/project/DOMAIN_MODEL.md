@@ -5,6 +5,7 @@
 - 요구사항(*무엇을*)은 [`REQUIREMENTS.md`](./REQUIREMENTS.md)가 소유한다. 이 문서는 그 요구사항을 실현하는 모델을 소유한다.
 - 설계 규칙(ID·연관·상태 전이·소프트삭제 등)은 `docs/architecture.md`·`docs/entity-persistence.md`·`docs/coding-conventions.md`를 따른다. 이 문서는 그 규칙을 이 앱의 10개 도메인에 적용한 결과다.
 - 모듈 구조·빌드 순서 같은 "어떻게 세우는가"는 이 문서의 범위가 아니다(아키텍처 규칙 문서 `docs/`가 소유).
+- 기술 결정의 근거·기각한 대안은 [`decisions.md`](./decisions.md)가 소유한다. 이 문서는 결정된 모델만 서술하고 "왜"는 재서술하지 않는다.
 
 범위는 10개 도메인: 회원(member) · 상품(product) · 재고(stock) · 장바구니(cart) · 쿠폰(coupon) · 주문(order) · 결제(payment) · 위시리스트(wishlist) · 리뷰(review) · 문의(inquiry).
 
