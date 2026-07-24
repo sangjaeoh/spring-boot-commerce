@@ -81,6 +81,8 @@ public abstract class BaseTimeEntity<ID extends Serializable> implements Persist
 - `@GeneratedValue`를 사용하지 않는다.
 - ID는 DB 왕복 없이 애플리케이션에서 확정한다.
 - 응답에는 UUIDv7을 문자열로 반환한다.
+- 1:1로 소유되는 테이블은 예외로 소유 애그리거트의 ID를 그대로 공유 PK로 쓴다.
+- 이 경우 `create()`는 인자로 받은 소유 애그리거트의 ID를 그대로 쓰고 `UuidV7Generator.generate()`를 호출하지 않는다.
 
 ### 값 객체 매핑
 
