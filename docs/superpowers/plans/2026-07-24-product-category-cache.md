@@ -226,6 +226,9 @@ class RedisCacheManagerFactoryTest {
         var registrations = List.of(new CacheRegistration("product:category:v1", Duration.ofMinutes(10), valueType));
 
         var cacheManager = RedisCacheManagerFactory.build(connectionFactory, registrations);
+        // RedisCacheManager는 InitializingBean이라 실제 앱에서는 @Bean 등록 시 컨테이너가 이 호출을 대신한다.
+        // 컨테이너 없이 직접 생성하는 이 테스트에서는 초기화를 수동으로 트리거해야 getCacheConfigurations()가 채워진다.
+        cacheManager.afterPropertiesSet();
 
         assertThat(cacheManager.getCacheConfigurations()).containsOnlyKeys("product:category:v1");
         assertThat(cacheManager.getCacheConfigurations().get("product:category:v1").getTtlFunction())
