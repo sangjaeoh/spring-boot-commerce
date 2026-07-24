@@ -621,7 +621,7 @@
 
 - 전이: `PREPARING → SHIPPED`(`ship`, 주문 취소 진행 중이면 거부), `PREPARING → ON_HOLD`(`hold`) `→ PREPARING`(`release`), `SHIPPED → DELIVERED`(`confirmDelivery`).
 - 동시성: `Order`(취소축)와 `Fulfillment`(이행축)가 별도 애그리거트라 낙관락(각자의 `@Version`)만으로는 취소 개시와 출고의 동시 커밋을 직렬화하지 못한다. `ship` 등 이행 전이는 `Order` 행을 `FOR SHARE`로, `cancel`·`requestCancellation` 등 취소 전이는 `Order` 행을 `FOR UPDATE`로 조회한 뒤에야 상대 축을 읽어, 먼저 잠근 쪽이 이기고 진 쪽은 이긴 쪽의 커밋 결과를 보고 판정하게 한다(entity-persistence.md의 비관락 규칙).
-- 생성: 결제 완료(`OrderModifier.markPaid`)가 같은 호출 안에서 `Fulfillment.create(orderId)`까지 동기로 끝낸다 — 결제 완료 커밋과 이행 생성 커밋은 서로 다른 애그리거트라 각자 별도 트랜잭션이다("트랜잭션당 애그리거트 1개" 준수, `TransactionTemplate` 두 블록). `OrderPaid`를 소비하는 `FulfillmentPreparationListener`도 같은 생성을 수행해, 두 번째 트랜잭션이 실패하는 드문 경우의 자기치유 안전망을 겸한다(`order_id` 유니크 인덱스로 멱등). 아웃박스 릴레이는 `app-batch`에서만 켜져 있어(§아웃박스), 이 리스너 경로 하나만으로는 이행 생성을 실시간으로 보장할 수 없었다.
+- 생성: 결제 완료(`OrderModifier.markPaid`)가 `Fulfillment.create(orderId)`까지 한 트랜잭션에서 원자적으로 처리한다 — 결제 완료와 이행 생성은 같은 유스케이스의 단일 사건이라 "같은 도메인 모듈 내 다중 애그리거트 조율" 예외(architecture.md)를 적용했다. `OrderPaid`를 소비하는 `FulfillmentPreparationListener`도 같은 생성을 존재 확인 후 수행하지만(`order_id` 유니크 인덱스로 멱등), `markPaid`가 원자적이라 정상 경로에서는 항상 no-op이다. 아웃박스 릴레이는 `app-batch`에서만 켜져 있어(§아웃박스), 이 리스너 경로 하나만으로는 이행 생성을 실시간으로 보장할 수 없었던 것이 애초에 트랜잭션을 원자화한 이유다.
 
 ### OrderLine 필드
 

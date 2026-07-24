@@ -20,9 +20,7 @@ import com.commerce.event.order.OrderPaid;
 import java.time.Clock;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionTemplate;
 
 /** {@link OrderModifier}의 기본 구현이다. */
 @Service
@@ -31,42 +29,35 @@ class DefaultOrderModifier implements OrderModifier {
     private final OrderRepository orderRepository;
     private final FulfillmentRepository fulfillmentRepository;
     private final MessagePublisher messagePublisher;
-    private final TransactionTemplate transactionTemplate;
     private final Clock clock;
 
     DefaultOrderModifier(
             OrderRepository orderRepository,
             FulfillmentRepository fulfillmentRepository,
             MessagePublisher messagePublisher,
-            PlatformTransactionManager transactionManager,
             Clock clock) {
         this.orderRepository = orderRepository;
         this.fulfillmentRepository = fulfillmentRepository;
         this.messagePublisher = messagePublisher;
-        this.transactionTemplate = new TransactionTemplate(transactionManager);
         this.clock = clock;
     }
 
     /**
      * 결제를 완료하고 이행을 준비 중으로 생성한다.
      *
-     * <p>결제 완료(Order)와 이행 생성(Fulfillment)은 서로 다른 애그리거트라 각각 자기 트랜잭션으로
-     * 커밋한다(다중 애그리거트 조율은 {@code @Transactional}을 쓰지 않고 애그리거트별 쓰기로 분할한다).
-     * {@link FulfillmentPreparationListener}가 같은 생성을 {@code OrderPaid} 소비로도 수행해, 두 번째
-     * 트랜잭션이 실패해도 아웃박스 재전달이 뒤늦게 복구하는 안전망을 겸한다.
+     * <p>결제 완료와 이행 생성은 같은 유스케이스의 단일 사건이라 한 트랜잭션에서 함께 처리한다(같은
+     * 도메인 모듈 내 다중 애그리거트 조율 예외 — architecture.md). {@link FulfillmentPreparationListener}는
+     * {@code OrderPaid}를 소비해 같은 생성을 존재 확인 후 수행하는 자기치유 안전망으로 남긴다.
      */
+    @Transactional
     @Override
     public void markPaid(UUID orderId) {
-        transactionTemplate.executeWithoutResult(status -> {
-            Order order = find(orderId);
-            order.markPaid(clock.instant());
-            messagePublisher.publish(new OrderPaid(order.getId(), order.getMemberId(), order.getOrderedVariantIds()));
-        });
-        transactionTemplate.executeWithoutResult(status -> {
-            if (fulfillmentRepository.findByOrderId(orderId).isEmpty()) {
-                fulfillmentRepository.save(Fulfillment.create(orderId));
-            }
-        });
+        Order order = find(orderId);
+        order.markPaid(clock.instant());
+        messagePublisher.publish(new OrderPaid(order.getId(), order.getMemberId(), order.getOrderedVariantIds()));
+        if (fulfillmentRepository.findByOrderId(orderId).isEmpty()) {
+            fulfillmentRepository.save(Fulfillment.create(orderId));
+        }
     }
 
     @Transactional
