@@ -44,24 +44,28 @@ class CacheConfig implements CachingConfigurer {
         this.meterRegistry = meterRegistry;
     }
 
-    @Bean
-    LettuceConnectionFactory cacheRedisConnectionFactory() {
-        LettuceClientConfiguration clientConfiguration = LettuceClientConfiguration.builder()
-                .commandTimeout(Duration.ofMillis(300))
-                .build();
-        return new LettuceConnectionFactory(
-                new RedisStandaloneConfiguration(redisHost, redisPort), clientConfiguration);
-    }
-
     @Override
     @Bean
     public CacheManager cacheManager() {
+        // 캐시 전용 커넥션 팩토리를 로컬 변수로 생성한다(빈이 아님).
+        // 이렇게 하면 Boot의 공유 RedisConnectionFactory 자동구성이 억제되지 않는다.
+        LettuceClientConfiguration clientConfiguration = LettuceClientConfiguration.builder()
+                .commandTimeout(Duration.ofMillis(300))
+                .build();
+        LettuceConnectionFactory cacheConnectionFactory = new LettuceConnectionFactory(
+                new RedisStandaloneConfiguration(redisHost, redisPort), clientConfiguration);
+        try {
+            cacheConnectionFactory.afterPropertiesSet();
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to initialize cache connection factory", e);
+        }
+
         List<CacheRegistration> registrations = List.of(new CacheRegistration(
                 CategoryCacheNames.CATEGORY,
                 Duration.ofMinutes(10),
                 TypeFactory.createDefaultInstance().constructCollectionType(List.class, CategoryInfo.class)));
         org.springframework.data.redis.cache.RedisCacheManager redisCacheManager =
-                RedisCacheManagerFactory.build(cacheRedisConnectionFactory(), registrations);
+                RedisCacheManagerFactory.build(cacheConnectionFactory, registrations);
         try {
             redisCacheManager.afterPropertiesSet();
         } catch (Exception e) {
