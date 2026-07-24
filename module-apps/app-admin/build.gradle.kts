@@ -8,6 +8,7 @@ dependencies {
     // SecurityConfig가 JWT 필터·엔트리포인트를, AuthConfig가 토큰 코덱을 코드 참조한다.
     implementation(project(":module-common:common-auth"))
     implementation(project(":module-common:common-web"))
+    implementation(project(":module-common:common-cache"))
     implementation(project(":module-domains:domain-shared"))
     implementation(project(":module-domains:domain-member"))
     implementation(project(":module-domains:domain-product"))
@@ -24,6 +25,7 @@ dependencies {
     implementation(libs.spring.boot.starter.validation)
     implementation(libs.spring.boot.starter.data.jpa)
     implementation(libs.spring.boot.starter.actuator)
+    implementation(libs.spring.boot.starter.data.redis)
     implementation(libs.springdoc.openapi.starter.webmvc.ui)
 
     // 스테레오타입 빈만 조립한다(코드 참조 없음): 아웃박스 발행 transport·멱등 키 저장소·JDBC 드라이버.
