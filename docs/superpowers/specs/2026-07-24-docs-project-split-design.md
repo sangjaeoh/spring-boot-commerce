@@ -43,14 +43,38 @@ DOMAIN_MODEL.md    → docs/project/DOMAIN_MODEL.md    (git mv)
 | DOMAIN_MODEL.md | 도메인 모델·비즈니스 정책, 필드 수준 구현 모델 | 코드로 바로 옮겨지는 스펙인가 |
 | decisions.md | 기술 결정 근거·기각한 대안(ADR) | 이 결정을 뒤집어도 REQUIREMENTS·DOMAIN_MODEL 문구가 안 바뀌면 여기 소관 |
 
-## REQUIREMENTS.md 변경 — 제거 대상 (DOMAIN_MODEL과 중복)
+## REQUIREMENTS.md 변경 — 제거·정정 대상
 
-`제약·전제` 절에서 아래는 DOMAIN_MODEL.md가 이미 같은 내용을 문장 단위로 소유하므로 완전 삭제한다(별도 참조 문구도 남기지 않는다 — REQUIREMENTS.md 서두가 이미 "실현 모델은 DOMAIN_MODEL.md 소유"를 선언하므로 절마다 재확인이 불필요하다):
+DOMAIN_MODEL.md 1055줄은 "스케줄 주기·유예 프로퍼티·분산 락은 REQUIREMENTS.md 제약·전제가 소유한다"고 명시적으로 REQUIREMENTS.md에 소유권을 위임해놓았다 — 그래서 미확정 결제·PENDING 스윕 관련 서술은 전부 중복이 아니다. 실제 대조(DOMAIN_MODEL 1053~1119줄) 결과로 아래처럼 정정한다.
+
+완전 삭제(DOMAIN_MODEL이 이미 같은 내용을 문장 단위로 소유):
 
 - 통화 KRW 단일 가정 (DOMAIN_MODEL 공통 규약 19줄과 중복)
 - 크로스 트랜잭션 부분 실패 무손실 복구 범위 밖 (DOMAIN_MODEL "정합·보장 수준" 1134줄과 중복)
-- 아웃박스 발행 메커니즘 상세(발행-커밋 원자, at-least-once, dead letter, 대상 이벤트 2종) (DOMAIN_MODEL "아웃박스" 절 1120~1128줄과 중복)
-- 미확정 결제 리컨실·PENDING 스윕 담당 분리 설명 (DOMAIN_MODEL "미확정 결제 리컨실·웹훅 확정"·"PENDING 주문 스윕" 절과 중복)
+- 아웃박스 발행 메커니즘 상세 — 발행-커밋 원자, at-least-once, 재시도 상한 10회 dead letter, 대상 이벤트 2종 (DOMAIN_MODEL "아웃박스" 절 1120~1128줄과 중복. DOMAIN_MODEL 1122줄 자체가 "메커니즘 상세는 docs/architecture.md 소유"라 위임하므로 REQUIREMENTS가 재서술할 이유가 없다)
+
+유지(DOMAIN_MODEL이 명시적으로 REQUIREMENTS에 위임한 사실 — 스케줄 주기·유예 프로퍼티명·담당 앱):
+
+- "미확정 결제 확정은 배치 앱(app-batch)의 `@Scheduled` 리컨실 스윕이 담당... 유예(`payment.reconciliation.stale-after`)가 지난 결제만 손댄다" 문단은 그대로 둔다.
+
+트림(담당 앱·유예 프로퍼티명은 유지하되, DOMAIN_MODEL 1079줄이 이미 더 상세히 다루는 관할 판정 로직 재서술만 제거):
+
+- PENDING 스윕 문단에서 "REQUESTED 행이 있으면 미확정 결제 리컨실 관할로 두어 손대지 않으며(이중 개입 차단), 종결 기록된(APPROVED·FAILED) 행이 남긴 잔여는 결제 리컨실 확정 경로에 위임한다(결제 리컨실 스윕은 REQUESTED만 선별해 이를 보지 못하므로 발견은 이 스윕이 소유한다)" 부분을 잘라내고, "결제 요청 이전 중단으로 payment 행 없이 남은 PENDING 주문은 별도 `@Scheduled` 주문 기준 PENDING 스윕(app-batch)이 담당한다. 생성 후 유예(`order.reconciliation.stale-after`, 결제 리컨실 유예 이상)가 지난 주문 중 payment 행이 없는 주문만 직접 보상 종결한다(관할 판정 상세는 DOMAIN_MODEL.md 소유)."로 축약한다.
+
+## REQUIREMENTS.md 변경 — 중복 수치 제거 (기능요구사항 절)
+
+DOMAIN_MODEL.md와 대조해 확인된 숫자 중복 6건. DOMAIN_MODEL.md가 유일 소유자가 되므로 REQUIREMENTS.md 쪽 숫자를 지우고 서술만 남긴다.
+
+| 줄 | 현재 | 변경 |
+|---|---|---|
+| 42 | 배송지는 회원당 최대 10개까지 등록할 수 있다. | 배송지는 회원당 등록 한도까지 등록할 수 있다. |
+| 41 | 새 비밀번호는 가입과 같은 정책(8자 이상 72바이트 이하)을 따르고 | 새 비밀번호는 가입과 같은 패스워드 정책을 따르고 |
+| 56 | 패스워드는 8자 이상 72바이트(bcrypt 입력 한계) 이하다. | 패스워드는 정책이 정한 길이 범위(bcrypt 입력 한계 이내)를 따른다. |
+| 94 | jpeg·png·webp만 지원하고 장당 5MB를 넘을 수 없다. | jpeg·png·webp만 지원하고 장당 용량 상한을 넘을 수 없다. |
+| 162 | 별점(1~5)·본문(1~1000자) 리뷰를 쓸 수 있다. | 별점·본문(정책 범위 내) 리뷰를 쓸 수 있다. |
+| 171 | 상품에 문의를 남길 수 있다(본문 1~1000자, 공백 불가). | 상품에 문의를 남길 수 있다(본문은 정책 범위 내, 공백 불가). |
+
+`336시간(14일)`(리프레시 토큰)·`30분`(재설정 토큰)·`24시간`(이메일 인증 토큰)·`IP당 10회/5분`(레이트리밋)은 DOMAIN_MODEL.md에 대응 서술이 없다(인증 토큰·레이트리밋은 REQUIREMENTS.md 서두가 명시하듯 "앱 경계" 소관이라 member 도메인 모델 밖) — 그대로 둔다. 단 레이트리밋 근거·기각 대안 서술은 아래 ADR-4로 옮긴다.
 
 ## decisions.md — ADR 목록 (주제별 6묶음)
 
