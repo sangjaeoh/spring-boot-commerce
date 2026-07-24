@@ -10,6 +10,7 @@ dependencies {
     // 컨트롤러가 인증 주체(AuthUser)를 코드 참조한다. 경계 웹 빈(ProblemDetail 핸들러·인증/멱등 필터·
     // 아규먼트 리졸버)은 스테레오타입 스캔으로 조립된다.
     implementation(project(":module-common:common-web"))
+    implementation(project(":module-common:common-cache"))
     implementation(project(":module-domains:domain-shared"))
     implementation(project(":module-domains:domain-member"))
     implementation(project(":module-domains:domain-product"))
@@ -27,6 +28,7 @@ dependencies {
     implementation(libs.spring.boot.starter.validation)
     implementation(libs.spring.boot.starter.data.jpa)
     implementation(libs.spring.boot.starter.actuator)
+    implementation(libs.spring.boot.starter.data.redis)
     implementation(libs.springdoc.openapi.starter.webmvc.ui)
 
     // 스테레오타입 빈만 조립한다(코드 참조 없음): 아웃박스 발행 transport·멱등 키 저장소·JDBC 드라이버.
@@ -37,8 +39,6 @@ dependencies {
     testImplementation(libs.spring.boot.starter.test)
     testImplementation(libs.spring.security.test)
     testImplementation(libs.spring.boot.starter.webmvc.test)
-    // 웹 통합 테스트가 공유 Redis의 로그인 레이트리밋 카운터를 테스트 간 비운다(StringRedisTemplate).
-    testImplementation(libs.spring.boot.starter.data.redis)
     testImplementation(libs.testcontainers.postgresql)
     testImplementation(libs.testcontainers.redis)
     testImplementation(libs.testcontainers.junit.jupiter)
