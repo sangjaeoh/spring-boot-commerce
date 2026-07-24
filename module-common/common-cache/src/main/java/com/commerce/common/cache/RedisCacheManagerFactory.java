@@ -5,6 +5,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import org.springframework.data.redis.cache.RedisCacheConfiguration;
 import org.springframework.data.redis.cache.RedisCacheManager;
+import org.springframework.data.redis.cache.RedisCacheWriter;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.serializer.JacksonJsonRedisSerializer;
 import org.springframework.data.redis.serializer.RedisSerializationContext;
@@ -28,7 +29,11 @@ public final class RedisCacheManagerFactory {
                                 .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(
                                         new JacksonJsonRedisSerializer<>(mapper, registration.valueType())))));
 
-        return RedisCacheManager.builder(connectionFactory)
+        // Lettuce 커넥션 팩토리는 리액티브도 지원하므로 기본값은 put·evict·clear를 비동기로 흘려보낸다(즉시 반영을
+        // 보장하지 않음). evict 직후 조회가 갱신값을 즉시 봐야 하므로 즉시 쓰기(immediateWrites)로 강제한다.
+        RedisCacheWriter cacheWriter = RedisCacheWriter.create(connectionFactory, config -> config.immediateWrites());
+
+        return RedisCacheManager.builder(cacheWriter)
                 .cacheDefaults(RedisCacheConfiguration.defaultCacheConfig())
                 .withInitialCacheConfigurations(configurations)
                 .disableCreateOnMissingCache()
