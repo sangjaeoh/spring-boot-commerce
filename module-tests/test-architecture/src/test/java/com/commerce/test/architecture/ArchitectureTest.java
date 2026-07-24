@@ -1201,6 +1201,13 @@ class ArchitectureTest {
                     || packageName.matches("com\\.commerce\\.domain\\.[a-z]+\\.application\\.provided");
             boolean inQueryModule = packageName.startsWith(QUERY_BASE_PACKAGE_PREFIX);
             assertTrue(inDomainApplication || inQueryModule, "@Cacheable이 허용 계층 밖에 있다: " + method.getFullName());
+
+            // 쓰기 서비스는 도메인 application에 리더와 평탄 동거한다 — 패키지만으로는 리더 구현인지 가려내지
+            // 못한다. 클래스명이 쓰기 서비스 패턴이면 역할 위반이다.
+            String className = method.getOwner().getSimpleName();
+            assertTrue(
+                    !className.matches("Default(.*)(Appender|Modifier|Remover|Processor)"),
+                    "@Cacheable이 쓰기 서비스에 선언됐다: " + method.getFullName());
         }
     }
 
@@ -1416,6 +1423,9 @@ class ArchitectureTest {
         assertTrue(
                 declaredConstants.containsAll(usedNames),
                 "애노테이션이 이름 상수에 없는 값을 쓴다: " + usedNames + " vs " + declaredConstants);
+        assertTrue(
+                usedNames.containsAll(declaredConstants),
+                "이름 상수가 선언됐지만 어떤 애노테이션도 쓰지 않는다(고아 상수): " + declaredConstants + " vs " + usedNames);
     }
 
     // 실제 코드는 같은 모듈 내부에서도 provided 인터페이스(예: CategoryReader) 타입으로 주입받아 호출하므로 호출
