@@ -1,6 +1,6 @@
 # 기술 결정 기록 (Decisions)
 
-이 문서는 이 앱의 기술 결정 근거와 기각한 대안을 소유한다. "무엇을"은 [`REQUIREMENTS.md`](./REQUIREMENTS.md), "실현 모델"은 [`DOMAIN_MODEL.md`](./DOMAIN_MODEL.md)가 소유한다 — 이 문서는 그 둘의 특정 선택이 "왜" 그렇게 됐는지, 무엇을 기각했는지만 담는다. 이 문서의 판정 결정을 뒤집어도 REQUIREMENTS.md·DOMAIN_MODEL.md의 서술 자체는 바뀌지 않아야 한다(바뀐다면 그 내용은 이 문서가 아니라 그 두 문서가 소유해야 한다).
+이 문서는 이 앱의 기술 결정 근거와 기각한 대안을 소유한다. "무엇을"은 [`requirements.md`](./requirements.md), "실현 모델"은 [`domain_model.md`](./domain_model.md)가 소유한다 — 이 문서는 그 둘의 특정 선택이 "왜" 그렇게 됐는지, 무엇을 기각했는지만 담는다. 이 문서의 판정 결정을 뒤집어도 requirements.md·domain_model.md의 서술 자체는 바뀌지 않아야 한다(바뀐다면 그 내용은 이 문서가 아니라 그 두 문서가 소유해야 한다).
 
 각 항목은 Status·Context·Decision·Consequences·Alternatives Considered 5섹션을 쓴다. 현재 전부 Status: Accepted다(Superseded 이력 없음).
 
